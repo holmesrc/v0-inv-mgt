@@ -174,8 +174,8 @@ export function createLowStockAlertBlocks(items: any[]) {
           text: "Reorder",
         },
         style: "primary",
-        url: "https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031",
         action_id: "reorder_item",
+        url: "https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031",
       },
     })
   })
@@ -194,7 +194,7 @@ export function createLowStockAlertBlocks(items: any[]) {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "📄 *View Complete Report:* Click below to see all low stock items with individual reorder buttons.",
+        text: "📄 *View Complete Report:* Click below to see all low stock items.",
       },
       accessory: {
         type: "button",
@@ -204,7 +204,7 @@ export function createLowStockAlertBlocks(items: any[]) {
         },
         style: "danger",
         action_id: "show_all_low_stock",
-        value: "show_all_items",
+        value: "show_all",
       },
     })
   }
@@ -217,7 +217,7 @@ export function createLowStockAlertBlocks(items: any[]) {
     type: "section",
     text: {
       type: "mrkdwn",
-      text: "📋 *Next Steps:*\n• Click 'Reorder' buttons to create purchase requests\n• Send completed requests to #PHL10-hw-lab-requests\n\n💡 *Quick Actions:* Reply with \"approve [part-number]\" to fast-track items.",
+      text: "📋 *Instructions:*\n• Click 'Reorder' buttons to open the Purchase Request shortcut\n• Send completed requests to #PHL10-hw-lab-requests\n• Reply with \"approve [part-number]\" for quick actions",
     },
   })
 
@@ -246,9 +246,8 @@ export function createFullLowStockBlocks(items: any[]) {
     },
   ]
 
-  // Add ALL items with individual reorder buttons (Slack allows up to 50 blocks)
-  // We'll limit to 40 items to leave room for header/footer blocks
-  const displayItems = items.slice(0, 40)
+  // Add ALL items with reorder buttons (limit to 45 to stay under Slack's 50 block limit)
+  const displayItems = items.slice(0, 45)
 
   displayItems.forEach((item, index) => {
     // Truncate description to avoid Slack limits
@@ -267,18 +266,18 @@ export function createFullLowStockBlocks(items: any[]) {
           text: "Reorder",
         },
         style: "primary",
-        url: "https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031",
         action_id: "reorder_item",
+        url: "https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031",
       },
     })
   })
 
-  if (items.length > 40) {
+  if (items.length > 45) {
     blocks.push({
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `_...and ${items.length - 40} more items (showing first 40 due to Slack limits)_`,
+        text: `_...and ${items.length - 45} more items (showing first 45 due to Slack limits)_`,
       },
     })
   }
@@ -291,7 +290,7 @@ export function createFullLowStockBlocks(items: any[]) {
     type: "section",
     text: {
       type: "mrkdwn",
-      text: "📋 *Action Required:*\nClick the 'Reorder' buttons above to create purchase requests.\n\nSend completed requests to #PHL10-hw-lab-requests channel.",
+      text: "📋 *Action Required:*\nClick 'Reorder' buttons above to create purchase requests.\nSend completed requests to #PHL10-hw-lab-requests channel.",
     },
   })
 

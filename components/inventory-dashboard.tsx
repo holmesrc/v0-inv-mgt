@@ -199,14 +199,18 @@ export default function InventoryDashboard() {
     }))
 
     try {
-      // Try interactive message first
+      // Always try interactive message first
       await sendInteractiveLowStockAlert(formattedItems)
+      alert(
+        `Low stock alert sent successfully! Showing ${Math.min(3, formattedItems.length)} items with "Show All" button for ${formattedItems.length} total items.`,
+      )
     } catch (error) {
-      console.error("Failed to send interactive low stock alert, falling back to text message:", error)
+      console.error("Failed to send interactive low stock alert:", error)
       try {
-        // Fall back to plain text message
+        // Fall back to text message
         const message = createLowStockAlertMessage(formattedItems)
         await sendSlackMessage(message)
+        alert("Low stock alert sent as text message (interactive features unavailable)")
       } catch (fallbackError) {
         console.error("Failed to send fallback text message:", fallbackError)
         alert("Failed to send Slack alert. Please check your Slack webhook configuration.")
@@ -231,14 +235,17 @@ export default function InventoryDashboard() {
     }))
 
     try {
-      // Try interactive message first
       await sendInteractiveFullLowStockAlert(formattedItems)
+      alert(
+        `Full low stock alert sent successfully! Showing all ${formattedItems.length} items with individual reorder buttons.`,
+      )
     } catch (error) {
-      console.error("Failed to send interactive full alert, falling back to text message:", error)
+      console.error("Failed to send interactive full alert:", error)
       try {
-        // Fall back to plain text message
+        // Fall back to text message
         const message = createFullLowStockMessage(formattedItems)
         await sendSlackMessage(message)
+        alert("Full alert sent as text message (interactive features unavailable)")
       } catch (fallbackError) {
         console.error("Failed to send fallback text message:", fallbackError)
         alert("Failed to send full Slack alert. Please check your Slack webhook configuration.")
