@@ -191,19 +191,21 @@ export function createLowStockAlertBlocks(items: any[]) {
     })
 
     blocks.push({
-      type: "actions",
-      elements: [
-        {
-          type: "button",
-          text: {
-            type: "plain_text",
-            text: "Show All Low Stock Items",
-          },
-          style: "danger",
-          action_id: "show_all_low_stock",
-          value: "show_all_items",
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "📄 *View Complete Report:* Click below to see all low stock items with individual reorder buttons.",
+      },
+      accessory: {
+        type: "button",
+        text: {
+          type: "plain_text",
+          text: "Show All Items",
         },
-      ],
+        style: "danger",
+        action_id: "show_all_low_stock",
+        value: "show_all_items",
+      },
     })
   }
 
