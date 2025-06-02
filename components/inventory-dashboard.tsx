@@ -195,8 +195,18 @@ export default function InventoryDashboard() {
       try {
         await sendInteractiveLowStockAlert(formattedItems)
       } catch (error) {
-        console.error("Failed to send interactive low stock alert:", error)
-        alert("Failed to send Slack alert. Please check your Slack webhook configuration.")
+        console.error("Failed to send interactive low stock alert, trying simple version:", error)
+        try {
+          // Try the simple interactive version
+          const { sendSimpleInteractiveLowStockAlert } = await import("@/lib/slack")
+          await sendSimpleInteractiveLowStockAlert(formattedItems)
+        } catch (fallbackError) {
+          console.error("Failed to send simple interactive alert, using text fallback:", fallbackError)
+          // Final fallback to text message
+          const { createLowStockAlertMessage } = await import("@/lib/slack")
+          const message = createLowStockAlertMessage(formattedItems)
+          await sendSlackMessage(message)
+        }
       }
     } else {
       alert("No low stock items to report!")

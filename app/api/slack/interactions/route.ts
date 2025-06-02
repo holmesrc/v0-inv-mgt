@@ -39,12 +39,11 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function handleShowAllLowStock(itemsJson: string, responseUrl: string) {
+async function handleShowAllLowStock(value: string, responseUrl: string) {
   try {
-    const items = JSON.parse(itemsJson)
-    const { createFullLowStockBlocks } = await import("@/lib/slack")
-
-    const blocks = createFullLowStockBlocks(items)
+    // Since we're not passing the full items data in the button value anymore,
+    // we'll need to get the items from the original message or use a fallback
+    // For now, let's send a simple response directing users to the dashboard
 
     await fetch(responseUrl, {
       method: "POST",
@@ -53,7 +52,7 @@ async function handleShowAllLowStock(itemsJson: string, responseUrl: string) {
       },
       body: JSON.stringify({
         replace_original: true,
-        blocks: blocks,
+        text: "📋 *Complete Low Stock Report*\n\nTo view all low stock items with individual reorder buttons, please:\n\n1. Visit your inventory dashboard\n2. Use the 'Send Full Alert' button to get the complete interactive list\n\nOr use this shortcut directly: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031",
       }),
     })
   } catch (error) {
