@@ -18,20 +18,9 @@ export async function POST(request: NextRequest) {
       icon_emoji: ":package:",
     }
 
-    // Only add blocks if they're provided and seem valid
+    // Only add blocks if they're provided
     if (blocks && Array.isArray(blocks) && blocks.length > 0) {
-      // Validate blocks structure
-      const validBlocks = blocks.filter(
-        (block) =>
-          block &&
-          typeof block === "object" &&
-          block.type &&
-          (block.type === "section" || block.type === "actions" || block.type === "divider"),
-      )
-
-      if (validBlocks.length > 0) {
-        payload.blocks = validBlocks
-      }
+      payload.blocks = blocks
     }
 
     console.log("Sending payload to Slack:", JSON.stringify(payload, null, 2))
