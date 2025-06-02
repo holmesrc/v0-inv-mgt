@@ -10,14 +10,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Slack webhook URL not configured" }, { status: 500 })
     }
 
-    // Create a simple payload that should definitely work
+    // Create a payload that should work with webhooks
     const payload = {
       channel: channel || "#inventory-alerts",
       text: text || "Low stock alert",
+      username: "Inventory Bot",
+      icon_emoji: ":package:",
     }
 
-    // Only add blocks if they're provided
-    if (blocks && Array.isArray(blocks)) {
+    // Only add blocks if they're provided and valid
+    if (blocks && Array.isArray(blocks) && blocks.length > 0) {
       payload.blocks = blocks
     }
 
@@ -38,6 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     const responseText = await response.text()
+    console.log("Slack response:", responseText)
     return NextResponse.json({ success: true, response: responseText })
   } catch (error) {
     console.error("Error posting to Slack:", error)

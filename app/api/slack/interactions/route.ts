@@ -29,10 +29,13 @@ export async function POST(request: NextRequest) {
 
         default:
           console.log("Unknown action:", action.action_id)
+          // Return empty response to prevent "Action received" message
+          return NextResponse.json({})
       }
     }
 
-    return NextResponse.json({ success: true })
+    // Return empty response to prevent "Action received" message
+    return NextResponse.json({})
   } catch (error) {
     console.error("Error handling Slack interaction:", error)
     return NextResponse.json({ error: "Failed to handle interaction" }, { status: 500 })
@@ -41,17 +44,14 @@ export async function POST(request: NextRequest) {
 
 async function handleShowAllLowStock(value: string, responseUrl: string) {
   try {
-    // Since we're not passing the full items data in the button value anymore,
-    // we'll need to get the items from the original message or use a fallback
-    // For now, let's send a simple response directing users to the dashboard
-
+    // Send an ephemeral message directing users to use the dashboard
     await fetch(responseUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        replace_original: true,
+        response_type: "ephemeral",
         text: "📋 *Complete Low Stock Report*\n\nTo view all low stock items with individual reorder buttons, please:\n\n1. Visit your inventory dashboard\n2. Use the 'Send Full Alert' button to get the complete interactive list\n\nOr use this shortcut directly: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031",
       }),
     })
@@ -64,16 +64,15 @@ async function handleApproveReorder(itemJson: string, user: any, responseUrl: st
   try {
     const item = JSON.parse(itemJson)
 
-    // Update the message to show approval
+    // Send ephemeral response to the user
     await fetch(responseUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        text: `✅ *Reorder Approved by ${user.name}*\n\nPart: ${item.partNumber} - ${item.description}\n\nPlease use the Purchase Request shortcut to complete the order: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031`,
-        replace_original: false,
         response_type: "ephemeral",
+        text: `✅ *Reorder Approved by ${user.name}*\n\nPart: ${item.partNumber} - ${item.description}\n\nPlease use the Purchase Request shortcut to complete the order: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031`,
       }),
     })
 
@@ -116,16 +115,15 @@ async function handleDenyReorder(itemJson: string, user: any, responseUrl: strin
   try {
     const item = JSON.parse(itemJson)
 
-    // Update the message to show denial
+    // Send ephemeral response to the user
     await fetch(responseUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        text: `❌ *Reorder Denied by ${user.name}*\n\nPart: ${item.partNumber} - ${item.description}\n\nReason: Manual review required`,
-        replace_original: false,
         response_type: "ephemeral",
+        text: `❌ *Reorder Denied by ${user.name}*\n\nPart: ${item.partNumber} - ${item.description}\n\nReason: Manual review required`,
       }),
     })
 
@@ -152,18 +150,16 @@ async function handleDenyReorder(itemJson: string, user: any, responseUrl: strin
 
 async function handleReorderItem(itemJson: string, user: any, responseUrl: string) {
   try {
-    const item = JSON.parse(itemJson)
-
-    // Send ephemeral response to the user
+    // Since the button has a URL, this action might not be triggered
+    // But if it is, we'll send an ephemeral response
     await fetch(responseUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        text: `🛒 *Reorder Initiated for ${item.partNumber}*\n\nYou'll be redirected to the Purchase Request shortcut to complete the order.\n\n*Item Details:*\n• Part: ${item.partNumber} - ${item.description}\n• Supplier: ${item.supplier || "N/A"}\n• Current Stock: ${item.currentStock}\n• Reorder Point: ${item.reorderPoint}`,
-        replace_original: false,
         response_type: "ephemeral",
+        text: `🛒 *Reorder Button Clicked*\n\nYou should be redirected to the Purchase Request shortcut to complete the order.\n\nIf the shortcut didn't open, use this link: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031`,
       }),
     })
   } catch (error) {

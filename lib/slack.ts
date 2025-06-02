@@ -131,15 +131,24 @@ export function formatPurchaseRequest(request: any) {
   )
 }
 
-// Extremely simplified Block Kit message - following Slack's documentation exactly
-export function createBasicLowStockBlocks(items: any[]) {
-  // Start with a very simple structure
+// Enhanced Block Kit message with individual reorder buttons for first 3 items
+export function createLowStockAlertBlocks(items: any[]) {
+  const displayItems = items.slice(0, 3)
+  const remainingCount = items.length - displayItems.length
+
   const blocks = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: "🚨 Weekly Low Stock Alert",
+      },
+    },
     {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "🚨 *Weekly Low Stock Alert* 🚨\n\nThe following items are below their reorder points:",
+        text: "The following items are below their reorder points:",
       },
     },
     {
@@ -147,45 +156,87 @@ export function createBasicLowStockBlocks(items: any[]) {
     },
   ]
 
-  // Add up to 3 items (to keep it simple)
-  const displayItems = items.slice(0, 3)
-
+  // Add each item with individual reorder button
   displayItems.forEach((item) => {
+    // Truncate description to avoid Slack limits
+    const description = item.description.length > 80 ? item.description.substring(0, 77) + "..." : item.description
+
     blocks.push({
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `• *${item.partNumber}* - ${item.description}\n  Current: ${item.currentStock} | Reorder at: ${item.reorderPoint}`,
+        text: `*${item.partNumber}* - ${description}\nCurrent: ${item.currentStock} | Reorder at: ${item.reorderPoint}\nSupplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}`,
+      },
+      accessory: {
+        type: "button",
+        text: {
+          type: "plain_text",
+          text: "Reorder",
+        },
+        style: "primary",
+        url: "https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031",
+        action_id: "reorder_item",
       },
     })
   })
 
-  // Add a button that links to the shortcut
-  blocks.push({
-    type: "actions",
-    elements: [
-      {
-        type: "button",
-        text: {
-          type: "plain_text",
-          text: "Create Purchase Request",
-        },
-        url: "https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031",
+  // Add remaining count and show all button if needed
+  if (remainingCount > 0) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `_...and ${remainingCount} more items need attention_`,
       },
-    ],
+    })
+
+    blocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Show All Low Stock Items",
+          },
+          style: "danger",
+          action_id: "show_all_low_stock",
+          value: "show_all_items",
+        },
+      ],
+    })
+  }
+
+  blocks.push({
+    type: "divider",
+  })
+
+  blocks.push({
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: "📋 *Next Steps:*\n• Click 'Reorder' buttons to create purchase requests\n• Send completed requests to #PHL10-hw-lab-requests\n\n💡 *Quick Actions:* Reply with \"approve [part-number]\" to fast-track items.",
+    },
   })
 
   return blocks
 }
 
-export function createBasicFullLowStockBlocks(items: any[]) {
-  // Start with a very simple structure
+// Enhanced full alert with individual reorder buttons for ALL items
+export function createFullLowStockBlocks(items: any[]) {
   const blocks = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: "🚨 Complete Low Stock Report",
+      },
+    },
     {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "🚨 *Complete Low Stock Report* 🚨\n\n" + `*${items.length} items* are below their reorder points:`,
+        text: `*${items.length} items* are below their reorder points:`,
       },
     },
     {
@@ -193,42 +244,53 @@ export function createBasicFullLowStockBlocks(items: any[]) {
     },
   ]
 
-  // Add up to 10 items (to keep it simple)
-  const displayItems = items.slice(0, 10)
+  // Add ALL items with individual reorder buttons (Slack allows up to 50 blocks)
+  // We'll limit to 40 items to leave room for header/footer blocks
+  const displayItems = items.slice(0, 40)
 
   displayItems.forEach((item, index) => {
+    // Truncate description to avoid Slack limits
+    const description = item.description.length > 60 ? item.description.substring(0, 57) + "..." : item.description
+
     blocks.push({
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `${index + 1}. *${item.partNumber}* - ${item.description}\n   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}`,
+        text: `${index + 1}. *${item.partNumber}* - ${description}\nCurrent: ${item.currentStock} | Reorder: ${item.reorderPoint}\nSupplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}`,
+      },
+      accessory: {
+        type: "button",
+        text: {
+          type: "plain_text",
+          text: "Reorder",
+        },
+        style: "primary",
+        url: "https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031",
+        action_id: "reorder_item",
       },
     })
   })
 
-  if (items.length > 10) {
+  if (items.length > 40) {
     blocks.push({
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `_...and ${items.length - 10} more items (showing first 10)_`,
+        text: `_...and ${items.length - 40} more items (showing first 40 due to Slack limits)_`,
       },
     })
   }
 
-  // Add a button that links to the shortcut
   blocks.push({
-    type: "actions",
-    elements: [
-      {
-        type: "button",
-        text: {
-          type: "plain_text",
-          text: "Create Purchase Request",
-        },
-        url: "https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031",
-      },
-    ],
+    type: "divider",
+  })
+
+  blocks.push({
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: "📋 *Action Required:*\nClick the 'Reorder' buttons above to create purchase requests.\n\nSend completed requests to #PHL10-hw-lab-requests channel.",
+    },
   })
 
   return blocks
@@ -255,10 +317,10 @@ export async function postToSlack(text: string, blocks?: any[], channel = "#inve
   }
 }
 
-// Update the sendInteractiveLowStockAlert function to use the new API
+// Update the sendInteractiveLowStockAlert function to use enhanced blocks
 export async function sendInteractiveLowStockAlert(items: any[], channel = "#inventory-alerts") {
   try {
-    const blocks = createBasicLowStockBlocks(items)
+    const blocks = createLowStockAlertBlocks(items)
     const text = `🚨 Weekly Low Stock Alert: ${items.length} items below reorder point`
 
     return await postToSlack(text, blocks, channel)
@@ -270,10 +332,10 @@ export async function sendInteractiveLowStockAlert(items: any[], channel = "#inv
   }
 }
 
-// Update the sendInteractiveFullLowStockAlert function to use the new API
+// Update the sendInteractiveFullLowStockAlert function to use enhanced blocks
 export async function sendInteractiveFullLowStockAlert(items: any[], channel = "#inventory-alerts") {
   try {
-    const blocks = createBasicFullLowStockBlocks(items)
+    const blocks = createFullLowStockBlocks(items)
     const text = `🚨 Complete Low Stock Report: ${items.length} items below reorder point`
 
     return await postToSlack(text, blocks, channel)
