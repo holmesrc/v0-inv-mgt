@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Slack webhook URL not configured" }, { status: 500 })
     }
 
-    // Create a payload that should work with webhooks
+    // Create a simple payload
     const payload = {
       channel: channel || "#inventory-alerts",
       text: text || "Low stock alert",
@@ -18,12 +18,23 @@ export async function POST(request: NextRequest) {
       icon_emoji: ":package:",
     }
 
-    // Only add blocks if they're provided and valid
+    // Only add blocks if they're provided and seem valid
     if (blocks && Array.isArray(blocks) && blocks.length > 0) {
-      payload.blocks = blocks
+      // Validate blocks structure
+      const validBlocks = blocks.filter(
+        (block) =>
+          block &&
+          typeof block === "object" &&
+          block.type &&
+          (block.type === "section" || block.type === "actions" || block.type === "divider"),
+      )
+
+      if (validBlocks.length > 0) {
+        payload.blocks = validBlocks
+      }
     }
 
-    console.log("Sending to Slack:", JSON.stringify(payload, null, 2))
+    console.log("Sending payload to Slack:", JSON.stringify(payload, null, 2))
 
     const response = await fetch(webhookUrl, {
       method: "POST",
@@ -36,6 +47,25 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorText = await response.text()
       console.error("Slack API error response:", errorText)
+
+      // If blocks are causing the issue, try without them
+      if (payload.blocks && errorText.includes("invalid_blocks")) {
+        console.log("Retrying without blocks...")
+        delete payload.blocks
+
+        const retryResponse = await fetch(webhookUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        })
+
+        if (retryResponse.ok) {
+          return NextResponse.json({ success: true, fallback: true })
+        }
+      }
+
       throw new Error(`Slack API error: ${response.status} ${response.statusText} - ${errorText}`)
     }
 

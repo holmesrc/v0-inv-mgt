@@ -66,11 +66,10 @@ async function handleShowAllLowStock(responseUrl: string, channel: any) {
       }),
     })
 
-    // Send the full alert using our existing API
+    // Send the full alert using our webhook
     const webhookUrl = process.env.SLACK_WEBHOOK_URL
     if (webhookUrl) {
-      // Get current inventory from our mock data or use the dashboard's current state
-      // For now, we'll use mock data - in a real app this would come from your database
+      // Use mock data for now - in a real app this would come from your database
       const mockItems = [
         {
           partNumber: "490-12158-ND",
@@ -114,9 +113,9 @@ async function handleShowAllLowStock(responseUrl: string, channel: any) {
         },
       ]
 
-      // Import our function to create the blocks
-      const { createFullLowStockBlocks } = await import("@/lib/slack")
-      const blocks = createFullLowStockBlocks(mockItems)
+      // Import our function to create the simple blocks
+      const { createSimpleFullLowStockBlocks } = await import("@/lib/slack")
+      const blocks = createSimpleFullLowStockBlocks(mockItems)
 
       // Send the full report as a new message
       await fetch(webhookUrl, {
@@ -126,7 +125,7 @@ async function handleShowAllLowStock(responseUrl: string, channel: any) {
         },
         body: JSON.stringify({
           channel: channel?.id || "#inventory-alerts",
-          text: `🚨 Complete Low Stock Report: ${mockItems.length} items below reorder point`,
+          text: `Complete Low Stock Report: ${mockItems.length} items below reorder point`,
           blocks: blocks,
           username: "Inventory Bot",
           icon_emoji: ":package:",
