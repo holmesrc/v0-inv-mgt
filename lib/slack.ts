@@ -64,36 +64,152 @@ export function formatLowStockAlert(items: any[], showAll = false) {
   return message
 }
 
-export function createLowStockAlertMessage(items: any[]) {
+export function createLowStockAlertBlocks(items: any[]) {
   const displayItems = items.slice(0, 3)
   const remainingCount = items.length - displayItems.length
 
-  let message = `🚨 *Weekly Low Stock Alert* 🚨\n\nThe following items are below their reorder points:\n\n`
+  const blocks: any[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: "🚨 Weekly Low Stock Alert 🚨",
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "The following items are below their reorder points:",
+      },
+    },
+    {
+      type: "divider",
+    },
+  ]
 
-  // Add first 3 items
+  // Add each item with a reorder button
   displayItems.forEach((item) => {
-    message += `• *${item.partNumber}* - ${item.description}\n`
-    message += `  Current: ${item.currentStock} | Reorder at: ${item.reorderPoint}\n`
-    message += `  Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n\n`
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*${item.partNumber}* - ${item.description}\nCurrent: ${item.currentStock} | Reorder at: ${item.reorderPoint}\nSupplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}`,
+      },
+      accessory: {
+        type: "button",
+        text: {
+          type: "plain_text",
+          text: "Reorder",
+        },
+        style: "primary",
+        action_id: "reorder_item",
+        value: JSON.stringify(item),
+        url: "https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031",
+      },
+    })
   })
 
-  // Add remaining count and instructions
+  // Add remaining count and show all button if needed
   if (remainingCount > 0) {
-    message += `_...and ${remainingCount} more items need attention_\n\n`
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `_...and ${remainingCount} more items need attention_`,
+      },
+    })
+
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "📄 *View All Items:* Click the button below to see the complete list.",
+      },
+      accessory: {
+        type: "button",
+        text: {
+          type: "plain_text",
+          text: "Show All Low Stock Items",
+        },
+        style: "danger",
+        action_id: "show_all_low_stock",
+        value: JSON.stringify(items),
+      },
+    })
   }
 
-  message += `📋 *Next Steps:*\n`
-  message += `1. Review the items above\n`
-  message += `2. Use this shortcut to create purchase requests: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031\n`
-  message += `3. Send completed requests to #PHL10-hw-lab-requests\n\n`
+  blocks.push({
+    type: "divider",
+  })
 
-  if (remainingCount > 0) {
-    message += `📄 *View All Items:* Click the "Show All Low Stock Items" button below to see the complete list.\n\n`
-  }
+  blocks.push({
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: "📋 *Next Steps:*\n1. Review the items above\n2. Click 'Reorder' buttons to create purchase requests\n3. Send completed requests to #PHL10-hw-lab-requests\n\n💡 *Quick Actions:* Reply to this message with \"approve [part-number]\" to fast-track common items.",
+    },
+  })
 
-  message += `💡 *Quick Actions:* Reply to this message with "approve [part-number]" to fast-track common items.`
+  return blocks
+}
 
-  return message
+export function createFullLowStockBlocks(items: any[]) {
+  const blocks: any[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: "🚨 Complete Low Stock Report 🚨",
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*${items.length} items* are below their reorder points:`,
+      },
+    },
+    {
+      type: "divider",
+    },
+  ]
+
+  // Add each item with a reorder button
+  items.forEach((item, index) => {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `${index + 1}. *${item.partNumber}* - ${item.description}\nCurrent: ${item.currentStock} | Reorder: ${item.reorderPoint}\nSupplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}`,
+      },
+      accessory: {
+        type: "button",
+        text: {
+          type: "plain_text",
+          text: "Reorder",
+        },
+        style: "primary",
+        action_id: "reorder_item",
+        value: JSON.stringify(item),
+        url: "https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031",
+      },
+    })
+  })
+
+  blocks.push({
+    type: "divider",
+  })
+
+  blocks.push({
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: "📋 *Action Required:*\nClick the 'Reorder' buttons above to create purchase requests using the Purchase Request shortcut.\n\nSend completed requests to #PHL10-hw-lab-requests channel.",
+    },
+  })
+
+  return blocks
 }
 
 export function createFullLowStockMessage(items: any[]) {
@@ -129,4 +245,50 @@ export function formatPurchaseRequest(request: any) {
     `Date: ${new Date(request.requestDate).toLocaleDateString()}\n\n` +
     `Use this shortcut to process: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031`
   )
+}
+
+export async function sendInteractiveLowStockAlert(items: any[], channel = "#inventory-alerts") {
+  try {
+    const blocks = createLowStockAlertBlocks(items)
+
+    const response = await fetch("/api/slack/send-interactive-blocks", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ blocks, channel }),
+    })
+
+    if (!response.ok) {
+      throw new Error("Failed to send interactive Slack message")
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error("Error sending interactive Slack message:", error)
+    throw error
+  }
+}
+
+export async function sendInteractiveFullLowStockAlert(items: any[], channel = "#inventory-alerts") {
+  try {
+    const blocks = createFullLowStockBlocks(items)
+
+    const response = await fetch("/api/slack/send-interactive-blocks", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ blocks, channel }),
+    })
+
+    if (!response.ok) {
+      throw new Error("Failed to send interactive full alert")
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error("Error sending interactive full alert:", error)
+    throw error
+  }
 }

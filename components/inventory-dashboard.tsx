@@ -30,7 +30,12 @@ import {
   Download,
 } from "lucide-react"
 import type { InventoryItem, PurchaseRequest, AlertSettings } from "@/types/inventory"
-import { sendSlackMessage, formatPurchaseRequest, createLowStockAlertMessage, sendFullLowStockAlert } from "@/lib/slack"
+import {
+  sendSlackMessage,
+  formatPurchaseRequest,
+  sendInteractiveLowStockAlert,
+  sendInteractiveFullLowStockAlert,
+} from "@/lib/slack"
 import { downloadExcelFile } from "@/lib/excel-generator"
 import FileUpload from "./file-upload"
 import AddInventoryItem from "./add-inventory-item"
@@ -188,10 +193,9 @@ export default function InventoryDashboard() {
       }))
 
       try {
-        const message = createLowStockAlertMessage(formattedItems)
-        await sendSlackMessage(message)
+        await sendInteractiveLowStockAlert(formattedItems)
       } catch (error) {
-        console.error("Failed to send low stock alert:", error)
+        console.error("Failed to send interactive low stock alert:", error)
         alert("Failed to send Slack alert. Please check your Slack webhook configuration.")
       }
     } else {
@@ -212,9 +216,9 @@ export default function InventoryDashboard() {
       }))
 
       try {
-        await sendFullLowStockAlert(formattedItems)
+        await sendInteractiveFullLowStockAlert(formattedItems)
       } catch (error) {
-        console.error("Failed to send full low stock alert:", error)
+        console.error("Failed to send interactive full alert:", error)
         alert("Failed to send full Slack alert. Please check your Slack webhook configuration.")
       }
     } else {

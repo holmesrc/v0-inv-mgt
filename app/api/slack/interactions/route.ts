@@ -15,6 +15,10 @@ export async function POST(request: NextRequest) {
           await handleShowAllLowStock(action.value, response_url)
           break
 
+        case "reorder_item":
+          await handleReorderItem(action.value, user, response_url)
+          break
+
         case "approve_reorder":
           await handleApproveReorder(action.value, user, response_url)
           break
@@ -144,5 +148,26 @@ async function handleDenyReorder(itemJson: string, user: any, responseUrl: strin
     }
   } catch (error) {
     console.error("Error handling deny reorder:", error)
+  }
+}
+
+async function handleReorderItem(itemJson: string, user: any, responseUrl: string) {
+  try {
+    const item = JSON.parse(itemJson)
+
+    // Send ephemeral response to the user
+    await fetch(responseUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text: `🛒 *Reorder Initiated for ${item.partNumber}*\n\nYou'll be redirected to the Purchase Request shortcut to complete the order.\n\n*Item Details:*\n• Part: ${item.partNumber} - ${item.description}\n• Supplier: ${item.supplier || "N/A"}\n• Current Stock: ${item.currentStock}\n• Reorder Point: ${item.reorderPoint}`,
+        replace_original: false,
+        response_type: "ephemeral",
+      }),
+    })
+  } catch (error) {
+    console.error("Error handling reorder item:", error)
   }
 }

@@ -56,12 +56,12 @@ export default function SlackSetupGuide() {
           </div>
 
           <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <h5 className="font-medium text-blue-900 mb-1">Workflow Overview:</h5>
+            <h5 className="font-medium text-blue-900 mb-1">Interactive Workflow Overview:</h5>
             <ol className="text-sm text-blue-800 space-y-1">
-              <li>1. Low stock alert shows first 3 items with "Show All" button</li>
-              <li>2. Click "Show All" to see complete list with Approve/Deny buttons</li>
-              <li>3. Approve triggers the Purchase Request shortcut workflow</li>
-              <li>4. Notifications sent to requester and #PHL10-hw-lab-requests channel</li>
+              <li>1. Low stock alert shows first 3 items with individual "Reorder" buttons</li>
+              <li>2. Click "Show All Low Stock Items" to see complete list with reorder buttons</li>
+              <li>3. Click "Reorder" buttons to launch the Purchase Request shortcut</li>
+              <li>4. Complete purchase requests and send to #PHL10-hw-lab-requests channel</li>
             </ol>
           </div>
         </div>
