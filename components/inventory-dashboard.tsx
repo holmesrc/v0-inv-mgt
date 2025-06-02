@@ -35,6 +35,8 @@ import {
   formatPurchaseRequest,
   sendInteractiveLowStockAlert,
   sendInteractiveFullLowStockAlert,
+  createLowStockAlertMessage,
+  createFullLowStockMessage,
 } from "@/lib/slack"
 import { downloadExcelFile } from "@/lib/excel-generator"
 import FileUpload from "./file-upload"
@@ -182,57 +184,65 @@ export default function InventoryDashboard() {
 
   // Send low stock alert
   const sendLowStockAlert = async () => {
-    if (lowStockItems.length > 0) {
-      const formattedItems = lowStockItems.map((item) => ({
-        partNumber: item["Part number"],
-        description: item["Part description"],
-        supplier: item["Supplier"],
-        location: item["Location"],
-        currentStock: item["QTY"],
-        reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
-      }))
-
-      try {
-        await sendInteractiveLowStockAlert(formattedItems)
-      } catch (error) {
-        console.error("Failed to send interactive low stock alert, trying simple version:", error)
-        try {
-          // Try the simple interactive version
-          const { sendSimpleInteractiveLowStockAlert } = await import("@/lib/slack")
-          await sendSimpleInteractiveLowStockAlert(formattedItems)
-        } catch (fallbackError) {
-          console.error("Failed to send simple interactive alert, using text fallback:", fallbackError)
-          // Final fallback to text message
-          const { createLowStockAlertMessage } = await import("@/lib/slack")
-          const message = createLowStockAlertMessage(formattedItems)
-          await sendSlackMessage(message)
-        }
-      }
-    } else {
+    if (lowStockItems.length === 0) {
       alert("No low stock items to report!")
+      return
+    }
+
+    const formattedItems = lowStockItems.map((item) => ({
+      partNumber: item["Part number"],
+      description: item["Part description"],
+      supplier: item["Supplier"],
+      location: item["Location"],
+      currentStock: item["QTY"],
+      reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
+    }))
+
+    try {
+      // Try interactive message first
+      await sendInteractiveLowStockAlert(formattedItems)
+    } catch (error) {
+      console.error("Failed to send interactive low stock alert, falling back to text message:", error)
+      try {
+        // Fall back to plain text message
+        const message = createLowStockAlertMessage(formattedItems)
+        await sendSlackMessage(message)
+      } catch (fallbackError) {
+        console.error("Failed to send fallback text message:", fallbackError)
+        alert("Failed to send Slack alert. Please check your Slack webhook configuration.")
+      }
     }
   }
 
   // Send full low stock alert
   const sendFullAlert = async () => {
-    if (lowStockItems.length > 0) {
-      const formattedItems = lowStockItems.map((item) => ({
-        partNumber: item["Part number"],
-        description: item["Part description"],
-        supplier: item["Supplier"],
-        location: item["Location"],
-        currentStock: item["QTY"],
-        reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
-      }))
+    if (lowStockItems.length === 0) {
+      alert("No low stock items to report!")
+      return
+    }
 
+    const formattedItems = lowStockItems.map((item) => ({
+      partNumber: item["Part number"],
+      description: item["Part description"],
+      supplier: item["Supplier"],
+      location: item["Location"],
+      currentStock: item["QTY"],
+      reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
+    }))
+
+    try {
+      // Try interactive message first
+      await sendInteractiveFullLowStockAlert(formattedItems)
+    } catch (error) {
+      console.error("Failed to send interactive full alert, falling back to text message:", error)
       try {
-        await sendInteractiveFullLowStockAlert(formattedItems)
-      } catch (error) {
-        console.error("Failed to send interactive full alert:", error)
+        // Fall back to plain text message
+        const message = createFullLowStockMessage(formattedItems)
+        await sendSlackMessage(message)
+      } catch (fallbackError) {
+        console.error("Failed to send fallback text message:", fallbackError)
         alert("Failed to send full Slack alert. Please check your Slack webhook configuration.")
       }
-    } else {
-      alert("No low stock items to report!")
     }
   }
 

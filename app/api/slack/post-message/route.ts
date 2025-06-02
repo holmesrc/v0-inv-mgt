@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
   try {
-    const { blocks, channel } = await request.json()
+    const { text, blocks, channel } = await request.json()
 
     const webhookUrl = process.env.SLACK_WEBHOOK_URL
 
@@ -10,18 +10,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Slack webhook URL not configured" }, { status: 500 })
     }
 
-    console.log("Sending blocks to Slack:", JSON.stringify(blocks, null, 2))
+    // Create a simple payload that should definitely work
+    const payload = {
+      channel: channel || "#inventory-alerts",
+      text: text || "Low stock alert",
+    }
+
+    // Only add blocks if they're provided
+    if (blocks && Array.isArray(blocks)) {
+      payload.blocks = blocks
+    }
+
+    console.log("Sending to Slack:", JSON.stringify(payload, null, 2))
 
     const response = await fetch(webhookUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        channel: channel || "#inventory-alerts",
-        blocks: blocks,
-        text: "Low stock alert", // Fallback text for notifications
-      }),
+      body: JSON.stringify(payload),
     })
 
     if (!response.ok) {
@@ -30,12 +37,13 @@ export async function POST(request: NextRequest) {
       throw new Error(`Slack API error: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
-    return NextResponse.json({ success: true })
+    const responseText = await response.text()
+    return NextResponse.json({ success: true, response: responseText })
   } catch (error) {
-    console.error("Error sending interactive Slack message:", error)
+    console.error("Error posting to Slack:", error)
     return NextResponse.json(
       {
-        error: "Failed to send interactive message",
+        error: "Failed to post message",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
