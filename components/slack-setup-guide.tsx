@@ -81,16 +81,6 @@ export default function SlackSetupGuide() {
               <li>4. Complete purchase requests and send to #PHL10-hw-lab-requests channel</li>
             </ol>
           </div>
-
-          <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-            <h5 className="font-medium text-yellow-900 mb-1">Troubleshooting:</h5>
-            <ul className="text-sm text-yellow-800 space-y-1">
-              <li>• Slack doesn't always show green checkmarks for valid URLs</li>
-              <li>• Use the "Test Slack Integration" button above to verify your endpoints</li>
-              <li>• Check Vercel function logs to see if Slack is reaching your app</li>
-              <li>• Make sure you're using a Bot User OAuth Token, not just a webhook</li>
-            </ul>
-          </div>
         </div>
       </CardContent>
     </Card>
