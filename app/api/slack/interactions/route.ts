@@ -171,14 +171,24 @@ async function handleShowAllLowStock(channelId: string) {
 
     console.log("📦 Prepared", mockItems.length, "items for full alert")
 
-    // Import our function to create the blocks
-    const { createSimpleFullLowStockBlocks } = await import("@/lib/slack")
-    const blocks = createSimpleFullLowStockBlocks(mockItems)
+    // Create a simple text message instead of complex blocks to avoid parsing issues
+    let message = `🚨 *Complete Low Stock Report* 🚨\n\n`
+    message += `*${mockItems.length} items* are below their reorder points:\n\n`
 
-    console.log("🧱 Created", blocks.length, "blocks for Slack message")
+    mockItems.forEach((item, index) => {
+      message += `${index + 1}. *${item.partNumber}* - ${item.description}\n`
+      message += `   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n`
+      message += `   Supplier: ${item.supplier} | Location: ${item.location}\n`
+      message += `   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Reorder this item>\n\n`
+    })
+
+    message += `📋 *Action Required:*\n`
+    message += `Click the reorder links above to create purchase requests.\n`
+    message += `Send completed requests to #PHL10-hw-lab-requests channel.`
+
     console.log("📤 Sending to channel:", channelId)
 
-    // Send as a new message to the channel
+    // Send as a simple text message to avoid block parsing issues
     const response = await fetch(webhookUrl, {
       method: "POST",
       headers: {
@@ -186,8 +196,7 @@ async function handleShowAllLowStock(channelId: string) {
       },
       body: JSON.stringify({
         channel: channelId,
-        text: `🚨 Complete Low Stock Report: ${mockItems.length} items below reorder point`,
-        blocks: blocks,
+        text: message,
         username: "Inventory Bot",
         icon_emoji: ":package:",
       }),
