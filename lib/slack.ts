@@ -71,17 +71,13 @@ export function createLowStockAlertMessage(items: any[]) {
   // Add remaining count and instructions
   if (remainingCount > 0) {
     message += `_...and ${remainingCount} more items need attention_\n\n`
+    // Use the direct API endpoint link
+    message += `📄 <https://v0-inv-mgt.vercel.app/api/slack/show-all|📋 View All ${items.length} Low Stock Items>\n\n`
   }
 
   message += `📋 *Next Steps:*\n`
   message += `• Click the purchase request links above\n`
   message += `• Send completed requests to #PHL10-hw-lab-requests channel\n`
-
-  if (remainingCount > 0) {
-    // Use a direct link to our API endpoint instead of an interactive button
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin
-    message += `• <${appUrl}/api/slack/show-all|View All Low Stock Items>\n`
-  }
 
   return message
 }
@@ -304,17 +300,12 @@ export async function postToSlack(text: string, blocks?: any[], channel = "#inve
 // Simplified sendInteractiveLowStockAlert function with fallback
 export async function sendInteractiveLowStockAlert(items: any[], channel = "#inventory-alerts") {
   try {
-    console.log("🚀 Attempting to send interactive low stock alert")
-    const blocks = createSimpleLowStockBlocks(items)
-    const text = `Weekly Low Stock Alert: ${items.length} items below reorder point`
-
-    console.log("📤 Sending interactive alert with", blocks.length, "blocks")
-    return await postToSlack(text, blocks, channel)
+    console.log("🚀 Sending text-only low stock alert (no interactive components)")
+    const message = createLowStockAlertMessage(items)
+    return await sendSlackMessage(message, channel)
   } catch (error) {
-    console.error("❌ Interactive alert failed, falling back to text:", error)
-    // Fall back to simple text message
-    const message = createSimpleTextAlert(items)
-    return sendSlackMessage(message, channel)
+    console.error("❌ Error sending Slack message:", error)
+    throw error
   }
 }
 

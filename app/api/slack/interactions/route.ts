@@ -32,6 +32,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function GET() {
+  return NextResponse.json({
+    message: "Slack interactions endpoint is active",
+    timestamp: new Date().toISOString(),
+  })
+}
+
 async function sendSimpleMessage() {
   const webhookUrl = process.env.SLACK_WEBHOOK_URL
   if (!webhookUrl) {
