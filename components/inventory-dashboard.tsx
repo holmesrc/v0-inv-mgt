@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import Link from "next/link"
 import {
   AlertTriangle,
   Package,
@@ -317,6 +318,14 @@ export default function InventoryDashboard() {
               <List className="w-4 h-4 mr-2" />
               Send Full Alert
             </Button>
+          )}
+          {lowStockItems.length > 0 && (
+            <Link href="/low-stock">
+              <Button variant="outline">
+                <AlertTriangle className="w-4 h-4 mr-2" />
+                View Low Stock Items
+              </Button>
+            </Link>
           )}
           <Dialog>
             <DialogTrigger asChild>
