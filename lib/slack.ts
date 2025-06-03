@@ -148,12 +148,14 @@ export function createSimpleLowStockBlocks(items: any[]) {
 
   // Add each item as a separate section with its own button
   displayItems.forEach((item) => {
-    // Item description block
+    // Truncate description if too long
+    const description = item.description.length > 60 ? item.description.substring(0, 57) + "..." : item.description
+
     blocks.push({
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `• *${item.partNumber}* - ${item.description}\n  Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n  Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}`,
+        text: `• *${item.partNumber}* - ${description}\n  Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n  Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}`,
       },
       accessory: {
         type: "button",
@@ -175,10 +177,8 @@ export function createSimpleLowStockBlocks(items: any[]) {
         text: `_...and ${remainingCount} more items need attention_`,
       },
     })
-  }
 
-  // Add Show All button if there are more items
-  if (remainingCount > 0) {
+    // Add Show All button
     blocks.push({
       type: "actions",
       elements: [
@@ -190,6 +190,7 @@ export function createSimpleLowStockBlocks(items: any[]) {
           },
           action_id: "show_all_low_stock",
           value: "show_all",
+          style: "primary",
         },
       ],
     })
@@ -200,8 +201,8 @@ export function createSimpleLowStockBlocks(items: any[]) {
 
 // Updated to include individual reorder buttons for each item
 export function createSimpleFullLowStockBlocks(items: any[]) {
-  // Limit to 20 items to avoid Slack limits
-  const displayItems = items.slice(0, 20)
+  // Limit to 15 items to avoid Slack limits (each item = 1 block, plus header = 16 total)
+  const displayItems = items.slice(0, 15)
   const blocks = []
 
   // Header block
@@ -215,11 +216,14 @@ export function createSimpleFullLowStockBlocks(items: any[]) {
 
   // Add each item as a separate section with its own button
   displayItems.forEach((item, index) => {
+    // Truncate description if too long
+    const description = item.description.length > 50 ? item.description.substring(0, 47) + "..." : item.description
+
     blocks.push({
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `${index + 1}. *${item.partNumber}* - ${item.description}\n   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}`,
+        text: `${index + 1}. *${item.partNumber}* - ${description}\n   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}`,
       },
       accessory: {
         type: "button",
@@ -233,15 +237,24 @@ export function createSimpleFullLowStockBlocks(items: any[]) {
   })
 
   // Add note if there are more items than we can display
-  if (items.length > 20) {
+  if (items.length > 15) {
     blocks.push({
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `_...and ${items.length - 20} more items (showing first 20 due to Slack limits)_`,
+        text: `_...and ${items.length - 15} more items (showing first 15 due to Slack limits)_`,
       },
     })
   }
+
+  // Add instructions
+  blocks.push({
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: "📋 *Instructions:* Click the 'Reorder' buttons above to create purchase requests. Send completed requests to #PHL10-hw-lab-requests channel.",
+    },
+  })
 
   return blocks
 }
@@ -275,6 +288,7 @@ export async function sendInteractiveLowStockAlert(items: any[], channel = "#inv
     const blocks = createSimpleLowStockBlocks(items)
     const text = `Weekly Low Stock Alert: ${items.length} items below reorder point`
 
+    console.log("Sending interactive low stock alert with blocks:", JSON.stringify(blocks, null, 2))
     return await postToSlack(text, blocks, channel)
   } catch (error) {
     console.error("Error sending interactive Slack message, falling back to text:", error)
@@ -290,6 +304,7 @@ export async function sendInteractiveFullLowStockAlert(items: any[], channel = "
     const blocks = createSimpleFullLowStockBlocks(items)
     const text = `Complete Low Stock Report: ${items.length} items below reorder point`
 
+    console.log("Sending interactive full low stock alert with blocks:", JSON.stringify(blocks, null, 2))
     return await postToSlack(text, blocks, channel)
   } catch (error) {
     console.error("Error sending interactive full alert, falling back to text:", error)

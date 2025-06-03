@@ -15,7 +15,11 @@ export async function POST(request: NextRequest) {
       }
     } catch (parseError) {
       console.error("Error parsing payload:", parseError)
-      return new NextResponse("", { status: 200 })
+      // Return empty response immediately to prevent "Action received"
+      return new NextResponse("", {
+        status: 200,
+        headers: { "Content-Type": "text/plain" },
+      })
     }
 
     console.log("Parsed payload:", JSON.stringify(payload, null, 2))
@@ -23,21 +27,31 @@ export async function POST(request: NextRequest) {
 
     if (type === "block_actions" && actions && actions.length > 0) {
       const action = actions[0]
-      console.log("Handling action:", action.action_id)
+      console.log("Handling action:", action.action_id, "for user:", user?.name)
 
       if (action.action_id === "show_all_low_stock") {
-        // Handle this in a non-blocking way
-        handleShowAllLowStock(channel?.id || "#inventory-alerts")
-          .then(() => console.log("Show all low stock handled successfully"))
-          .catch((error) => console.error("Error handling show all low stock:", error))
+        // Handle this immediately and synchronously
+        try {
+          await handleShowAllLowStock(channel?.id || "#inventory-alerts")
+          console.log("Show all low stock handled successfully")
+        } catch (error) {
+          console.error("Error handling show all low stock:", error)
+        }
       }
     }
 
-    // Always return an empty 200 response immediately to prevent "Action received" message
-    return new NextResponse("", { status: 200 })
+    // Always return empty response immediately to prevent "Action received" message
+    return new NextResponse("", {
+      status: 200,
+      headers: { "Content-Type": "text/plain" },
+    })
   } catch (error) {
     console.error("Error handling Slack interaction:", error)
-    return new NextResponse("", { status: 200 })
+    // Even on error, return empty response to prevent "Action received"
+    return new NextResponse("", {
+      status: 200,
+      headers: { "Content-Type": "text/plain" },
+    })
   }
 }
 
@@ -45,7 +59,12 @@ async function handleShowAllLowStock(channelId: string) {
   try {
     console.log("Handling show all low stock for channel:", channelId)
 
-    // Use mock data for now - in a real app this would come from your database
+    const webhookUrl = process.env.SLACK_WEBHOOK_URL
+    if (!webhookUrl) {
+      throw new Error("Slack webhook URL not configured")
+    }
+
+    // Use mock data that matches what would be in the dashboard
     const mockItems = [
       {
         partNumber: "490-12158-ND",
@@ -87,17 +106,29 @@ async function handleShowAllLowStock(channelId: string) {
         currentStock: 4,
         reorderPoint: 25,
       },
+      {
+        partNumber: "BC547B-ND",
+        description: "TRANS NPN 45V 0.1A TO-92",
+        supplier: "ON Semiconductor",
+        location: "K11-L12",
+        currentStock: 2,
+        reorderPoint: 12,
+      },
+      {
+        partNumber: "LM358P-ND",
+        description: "IC OPAMP DUAL GP 8DIP",
+        supplier: "Texas Instruments",
+        location: "M13-N14",
+        currentStock: 3,
+        reorderPoint: 8,
+      },
     ]
-
-    // Send a new message with all items directly to the channel
-    const webhookUrl = process.env.SLACK_WEBHOOK_URL
-    if (!webhookUrl) {
-      throw new Error("Slack webhook URL not configured")
-    }
 
     // Import our function to create the blocks
     const { createSimpleFullLowStockBlocks } = await import("@/lib/slack")
     const blocks = createSimpleFullLowStockBlocks(mockItems)
+
+    console.log("Sending full alert with blocks:", JSON.stringify(blocks, null, 2))
 
     // Send as a new message to the channel
     const response = await fetch(webhookUrl, {
@@ -116,9 +147,12 @@ async function handleShowAllLowStock(channelId: string) {
 
     if (!response.ok) {
       const errorText = await response.text()
+      console.error("Slack webhook error:", errorText)
       throw new Error(`Slack API error: ${response.status} - ${errorText}`)
     }
 
+    const responseText = await response.text()
+    console.log("Slack webhook response:", responseText)
     console.log("Full alert sent successfully")
   } catch (error) {
     console.error("Error in handleShowAllLowStock:", error)

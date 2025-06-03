@@ -198,9 +198,12 @@ export default function InventoryDashboard() {
       reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
     }))
 
+    console.log("Sending low stock alert with items:", formattedItems)
+
     try {
       // Always try interactive message first
-      await sendInteractiveLowStockAlert(formattedItems)
+      const result = await sendInteractiveLowStockAlert(formattedItems)
+      console.log("Low stock alert result:", result)
       alert(
         `Low stock alert sent successfully! Showing ${Math.min(3, formattedItems.length)} items with "Show All" button for ${formattedItems.length} total items.`,
       )
@@ -234,8 +237,11 @@ export default function InventoryDashboard() {
       reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
     }))
 
+    console.log("Sending full alert with items:", formattedItems)
+
     try {
-      await sendInteractiveFullLowStockAlert(formattedItems)
+      const result = await sendInteractiveFullLowStockAlert(formattedItems)
+      console.log("Full alert result:", result)
       alert(
         `Full low stock alert sent successfully! Showing all ${formattedItems.length} items with individual reorder buttons.`,
       )
