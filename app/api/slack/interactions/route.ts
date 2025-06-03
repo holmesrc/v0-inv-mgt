@@ -3,6 +3,8 @@ import { type NextRequest, NextResponse } from "next/server"
 export async function POST(request: NextRequest) {
   console.log("=== SLACK INTERACTION RECEIVED ===")
   console.log("Timestamp:", new Date().toISOString())
+  console.log("URL:", request.url)
+  console.log("Method:", request.method)
   console.log("Headers:", Object.fromEntries(request.headers.entries()))
 
   try {
@@ -53,6 +55,19 @@ export async function POST(request: NextRequest) {
           console.log("✅ Show all low stock handled successfully")
         } catch (error) {
           console.error("❌ Error handling show all low stock:", error)
+        }
+      } else if (action.action_id?.startsWith("reorder_")) {
+        console.log("🛒 Processing reorder action")
+        // Handle reorder button clicks
+        const partNumber = action.value
+        console.log("Reorder requested for:", partNumber)
+
+        // You could send a response or trigger the purchase request shortcut
+        try {
+          await handleReorderAction(partNumber, user, channel?.id)
+          console.log("✅ Reorder action handled successfully")
+        } catch (error) {
+          console.error("❌ Error handling reorder action:", error)
         }
       } else {
         console.log("⚠️ Unknown action_id:", action.action_id)
@@ -192,6 +207,46 @@ async function handleShowAllLowStock(channelId: string) {
     console.log("🎉 Full alert sent successfully")
   } catch (error) {
     console.error("💥 Error in handleShowAllLowStock:", error)
+    throw error
+  }
+}
+
+async function handleReorderAction(partNumber: string, user: any, channelId: string) {
+  console.log("🛒 Processing reorder for part:", partNumber)
+
+  try {
+    const webhookUrl = process.env.SLACK_WEBHOOK_URL
+    if (!webhookUrl) {
+      throw new Error("Slack webhook URL not configured")
+    }
+
+    // Send a confirmation message
+    const message = `✅ Reorder initiated for *${partNumber}* by ${user?.name || user?.id}
+
+Please use this shortcut to complete the purchase request:
+https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031`
+
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        channel: channelId,
+        text: message,
+        username: "Inventory Bot",
+        icon_emoji: ":package:",
+      }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Slack API error: ${response.status} - ${errorText}`)
+    }
+
+    console.log("✅ Reorder confirmation sent")
+  } catch (error) {
+    console.error("❌ Error sending reorder confirmation:", error)
     throw error
   }
 }
