@@ -88,7 +88,7 @@ export function createLowStockAlertMessage(items: any[]) {
   message += `3. Send completed requests to #PHL10-hw-lab-requests channel.\n\n`
 
   if (remainingCount > 0) {
-    message += `📄 *View All Items:* Click the "Show All Low Stock Items" button below to see the complete list.\n\n`
+    message += `📄 *View All Items:* Use the dashboard or request a full report.\n\n`
   }
 
   message += `💡 *Quick Actions:* Reply to this message with "approve [part-number]" to fast-track common items.`
@@ -129,6 +129,34 @@ export function formatPurchaseRequest(request: any) {
     `Date: ${new Date(request.requestDate).toLocaleDateString()}\n\n` +
     `Use this shortcut to process: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031`
   )
+}
+
+// Simple text-only version for when interactive components don't work
+export function createSimpleTextAlert(items: any[]) {
+  const displayItems = items.slice(0, 3)
+  const remainingCount = items.length - displayItems.length
+
+  let message = `🚨 *Weekly Low Stock Alert* 🚨\n\n`
+  message += `The following items are below their reorder points:\n\n`
+
+  displayItems.forEach((item, index) => {
+    message += `${index + 1}. *${item.partNumber}* - ${item.description}\n`
+    message += `   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n`
+    message += `   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n`
+    message += `   🛒 Reorder: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031\n\n`
+  })
+
+  if (remainingCount > 0) {
+    message += `_...and ${remainingCount} more items need attention_\n\n`
+    message += `📄 *For complete list, reply with "show all" or use the dashboard.*\n\n`
+  }
+
+  message += `📋 *Instructions:*\n`
+  message += `• Click the reorder links above to create purchase requests\n`
+  message += `• Send completed requests to #PHL10-hw-lab-requests\n`
+  message += `• Reply "show all" for the complete list`
+
+  return message
 }
 
 // Updated to include individual reorder buttons for each item
@@ -282,32 +310,34 @@ export async function postToSlack(text: string, blocks?: any[], channel = "#inve
   }
 }
 
-// Simplified sendInteractiveLowStockAlert function
+// Simplified sendInteractiveLowStockAlert function with fallback
 export async function sendInteractiveLowStockAlert(items: any[], channel = "#inventory-alerts") {
   try {
+    console.log("🚀 Attempting to send interactive low stock alert")
     const blocks = createSimpleLowStockBlocks(items)
     const text = `Weekly Low Stock Alert: ${items.length} items below reorder point`
 
-    console.log("Sending interactive low stock alert with blocks:", JSON.stringify(blocks, null, 2))
+    console.log("📤 Sending interactive alert with", blocks.length, "blocks")
     return await postToSlack(text, blocks, channel)
   } catch (error) {
-    console.error("Error sending interactive Slack message, falling back to text:", error)
-    // Fall back to text message
-    const message = createLowStockAlertMessage(items)
+    console.error("❌ Interactive alert failed, falling back to text:", error)
+    // Fall back to simple text message
+    const message = createSimpleTextAlert(items)
     return sendSlackMessage(message, channel)
   }
 }
 
-// Simplified sendInteractiveFullLowStockAlert function
+// Simplified sendInteractiveFullLowStockAlert function with fallback
 export async function sendInteractiveFullLowStockAlert(items: any[], channel = "#inventory-alerts") {
   try {
+    console.log("🚀 Attempting to send interactive full alert")
     const blocks = createSimpleFullLowStockBlocks(items)
     const text = `Complete Low Stock Report: ${items.length} items below reorder point`
 
-    console.log("Sending interactive full low stock alert with blocks:", JSON.stringify(blocks, null, 2))
+    console.log("📤 Sending full interactive alert with", blocks.length, "blocks")
     return await postToSlack(text, blocks, channel)
   } catch (error) {
-    console.error("Error sending interactive full alert, falling back to text:", error)
+    console.error("❌ Interactive full alert failed, falling back to text:", error)
     // Fall back to text message
     const message = createFullLowStockMessage(items)
     return sendSlackMessage(message, channel)

@@ -1,20 +1,28 @@
 import { type NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
+  console.log("=== SLACK INTERACTION RECEIVED ===")
+  console.log("Timestamp:", new Date().toISOString())
+  console.log("Headers:", Object.fromEntries(request.headers.entries()))
+
   try {
     const body = await request.text()
-    console.log("Received interaction payload:", body)
+    console.log("Raw body length:", body.length)
+    console.log("Raw body preview:", body.substring(0, 200))
 
     // Parse the payload from Slack
     let payload
     try {
       if (body.startsWith("payload=")) {
-        payload = JSON.parse(decodeURIComponent(body.split("payload=")[1]))
+        const encodedPayload = body.split("payload=")[1]
+        console.log("Encoded payload preview:", encodedPayload.substring(0, 100))
+        payload = JSON.parse(decodeURIComponent(encodedPayload))
       } else {
         payload = JSON.parse(body)
       }
     } catch (parseError) {
-      console.error("Error parsing payload:", parseError)
+      console.error("❌ Error parsing payload:", parseError)
+      console.log("Body that failed to parse:", body)
       // Return empty response immediately to prevent "Action received"
       return new NextResponse("", {
         status: 200,
@@ -22,31 +30,51 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    console.log("Parsed payload:", JSON.stringify(payload, null, 2))
+    console.log("✅ Parsed payload successfully")
+    console.log("Payload type:", payload.type)
+    console.log("User:", payload.user?.name || payload.user?.id)
+    console.log("Channel:", payload.channel?.id || payload.channel?.name)
+
     const { type, actions, user, response_url, channel } = payload
 
     if (type === "block_actions" && actions && actions.length > 0) {
       const action = actions[0]
-      console.log("Handling action:", action.action_id, "for user:", user?.name)
+      console.log("🔘 Action details:")
+      console.log("  - action_id:", action.action_id)
+      console.log("  - value:", action.value)
+      console.log("  - user:", user?.name || user?.id)
 
       if (action.action_id === "show_all_low_stock") {
+        console.log("🚀 Processing show_all_low_stock action")
+
         // Handle this immediately and synchronously
         try {
           await handleShowAllLowStock(channel?.id || "#inventory-alerts")
-          console.log("Show all low stock handled successfully")
+          console.log("✅ Show all low stock handled successfully")
         } catch (error) {
-          console.error("Error handling show all low stock:", error)
+          console.error("❌ Error handling show all low stock:", error)
         }
+      } else {
+        console.log("⚠️ Unknown action_id:", action.action_id)
       }
+    } else {
+      console.log("⚠️ Not a block_actions type or no actions found")
+      console.log("Type:", type)
+      console.log("Actions:", actions)
     }
+
+    console.log("🔄 Returning empty response to prevent 'Action received'")
 
     // Always return empty response immediately to prevent "Action received" message
     return new NextResponse("", {
       status: 200,
-      headers: { "Content-Type": "text/plain" },
+      headers: {
+        "Content-Type": "text/plain",
+        "X-Slack-No-Retry": "1",
+      },
     })
   } catch (error) {
-    console.error("Error handling Slack interaction:", error)
+    console.error("❌ Critical error in interaction handler:", error)
     // Even on error, return empty response to prevent "Action received"
     return new NextResponse("", {
       status: 200,
@@ -56,13 +84,15 @@ export async function POST(request: NextRequest) {
 }
 
 async function handleShowAllLowStock(channelId: string) {
-  try {
-    console.log("Handling show all low stock for channel:", channelId)
+  console.log("📋 Starting handleShowAllLowStock for channel:", channelId)
 
+  try {
     const webhookUrl = process.env.SLACK_WEBHOOK_URL
     if (!webhookUrl) {
       throw new Error("Slack webhook URL not configured")
     }
+
+    console.log("🔗 Using webhook URL:", webhookUrl.substring(0, 50) + "...")
 
     // Use mock data that matches what would be in the dashboard
     const mockItems = [
@@ -124,11 +154,14 @@ async function handleShowAllLowStock(channelId: string) {
       },
     ]
 
+    console.log("📦 Prepared", mockItems.length, "items for full alert")
+
     // Import our function to create the blocks
     const { createSimpleFullLowStockBlocks } = await import("@/lib/slack")
     const blocks = createSimpleFullLowStockBlocks(mockItems)
 
-    console.log("Sending full alert with blocks:", JSON.stringify(blocks, null, 2))
+    console.log("🧱 Created", blocks.length, "blocks for Slack message")
+    console.log("📤 Sending to channel:", channelId)
 
     // Send as a new message to the channel
     const response = await fetch(webhookUrl, {
@@ -145,17 +178,20 @@ async function handleShowAllLowStock(channelId: string) {
       }),
     })
 
+    console.log("📡 Webhook response status:", response.status)
+    console.log("📡 Webhook response ok:", response.ok)
+
     if (!response.ok) {
       const errorText = await response.text()
-      console.error("Slack webhook error:", errorText)
+      console.error("❌ Slack webhook error:", errorText)
       throw new Error(`Slack API error: ${response.status} - ${errorText}`)
     }
 
     const responseText = await response.text()
-    console.log("Slack webhook response:", responseText)
-    console.log("Full alert sent successfully")
+    console.log("✅ Slack webhook response:", responseText)
+    console.log("🎉 Full alert sent successfully")
   } catch (error) {
-    console.error("Error in handleShowAllLowStock:", error)
+    console.error("💥 Error in handleShowAllLowStock:", error)
     throw error
   }
 }
