@@ -64,7 +64,8 @@ export function createLowStockAlertMessage(items: any[]) {
   displayItems.forEach((item) => {
     message += `• *${item.partNumber}* - ${item.description}\n`
     message += `  Current: ${item.currentStock} | Reorder at: ${item.reorderPoint}\n`
-    message += `  Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n\n`
+    message += `  Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n`
+    message += `  🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>\n\n`
   })
 
   // Add remaining count and instructions
@@ -73,15 +74,14 @@ export function createLowStockAlertMessage(items: any[]) {
   }
 
   message += `📋 *Next Steps:*\n`
-  message += `1. Review the items above\n`
-  message += `2. Use this shortcut to create purchase requests: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031\n`
-  message += `3. Send completed requests to #PHL10-hw-lab-requests channel.\n\n`
+  message += `• Click the purchase request links above\n`
+  message += `• Send completed requests to #PHL10-hw-lab-requests channel\n`
 
   if (remainingCount > 0) {
-    message += `📄 *View All Items:* Use the dashboard or request a full report.\n\n`
+    // Use a direct link to our API endpoint instead of an interactive button
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin
+    message += `• <${appUrl}/api/slack/show-all|View All Low Stock Items>\n`
   }
-
-  message += `💡 *Quick Actions:* Reply to this message with "approve [part-number]" to fast-track common items.`
 
   return message
 }
@@ -93,11 +93,12 @@ export function createFullLowStockMessage(items: any[]) {
   items.forEach((item, index) => {
     message += `${index + 1}. *${item.partNumber}* - ${item.description}\n`
     message += `   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n`
-    message += `   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n\n`
+    message += `   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n`
+    message += `   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>\n\n`
   })
 
   message += `📋 *Action Required:*\n`
-  message += `Use the Purchase Request shortcut for each item: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031\n\n`
+  message += `Click the purchase request links above to create orders.\n`
   message += `Send completed requests to #PHL10-hw-lab-requests channel.`
 
   return message
@@ -133,7 +134,7 @@ export function createSimpleTextAlert(items: any[]) {
     message += `${index + 1}. *${item.partNumber}* - ${item.description}\n`
     message += `   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n`
     message += `   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n`
-    message += `   🛒 Reorder: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031\n\n`
+    message += `   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Reorder this item>\n\n`
   })
 
   if (remainingCount > 0) {
