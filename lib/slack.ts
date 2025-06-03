@@ -196,7 +196,7 @@ export function createSimpleLowStockBlocks(items: any[]) {
       },
     })
 
-    // Add Show All button
+    // Add Show All button - SIMPLIFIED to avoid JSON parsing issues
     blocks.push({
       type: "actions",
       elements: [
@@ -207,8 +207,8 @@ export function createSimpleLowStockBlocks(items: any[]) {
             text: "Show All Items",
           },
           action_id: "show_all_low_stock",
+          // IMPORTANT: Use a simple string, not JSON
           value: "show_all",
-          style: "primary",
         },
       ],
     })
