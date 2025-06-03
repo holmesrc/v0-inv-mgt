@@ -375,6 +375,21 @@ export default function InventoryDashboard() {
                       }))
                     }
                   />
+                  <div className="mt-2 p-3 bg-gray-50 rounded text-sm">
+                    <p className="font-medium mb-2">Stock Status Levels:</p>
+                    <ul className="space-y-1 text-xs">
+                      <li>
+                        <strong>Low Stock:</strong> ≤ {alertSettings.defaultReorderPoint} units
+                      </li>
+                      <li>
+                        <strong>Approaching Low:</strong> {alertSettings.defaultReorderPoint + 1} -{" "}
+                        {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
+                      </li>
+                      <li>
+                        <strong>Normal:</strong> &gt; {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
+                      </li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             </DialogContent>
@@ -430,7 +445,7 @@ export default function InventoryDashboard() {
         </CardContent>
       </Card>
 
-      {/* Stats Cards - Removed Package Types and Pending Requests */}
+      {/* Stats Cards with Definitions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -439,6 +454,7 @@ export default function InventoryDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{inventory.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">All inventory items</p>
           </CardContent>
         </Card>
         <Card>
@@ -448,6 +464,9 @@ export default function InventoryDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-500">{lowStockItems.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              ≤ {alertSettings.defaultReorderPoint} units (at or below reorder point)
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -457,9 +476,67 @@ export default function InventoryDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-yellow-600">{approachingLowStockItems.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {alertSettings.defaultReorderPoint + 1} - {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units (50%
+              above reorder point)
+            </p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Stock Status Legend */}
+      <Card className="border-blue-200 bg-blue-50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Info className="w-5 h-5 text-blue-600" />
+            Stock Status Definitions
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex items-start gap-3">
+              <Badge variant="destructive" className="mt-1">
+                Low Stock
+              </Badge>
+              <div>
+                <p className="font-medium text-sm">≤ {alertSettings.defaultReorderPoint} units</p>
+                <p className="text-xs text-muted-foreground">
+                  At or below the reorder point. Immediate action required.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <Badge variant="secondary" className="mt-1">
+                Approaching Low
+              </Badge>
+              <div>
+                <p className="font-medium text-sm">
+                  {alertSettings.defaultReorderPoint + 1} - {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
+                </p>
+                <p className="text-xs text-muted-foreground">Within 50% above reorder point. Monitor closely.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <Badge variant="outline" className="mt-1">
+                Normal
+              </Badge>
+              <div>
+                <p className="font-medium text-sm">
+                  {"&gt;"} {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
+                </p>
+                <p className="text-xs text-muted-foreground">More than 50% above reorder point. Adequate stock.</p>
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 p-3 bg-white rounded border border-blue-200">
+            <p className="text-sm text-blue-800">
+              <strong>Note:</strong> These calculations are based on your default reorder point of{" "}
+              {alertSettings.defaultReorderPoint} units. Individual items may have custom reorder points that override
+              this default.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Search and Filters */}
       <Card>
@@ -547,7 +624,17 @@ export default function InventoryDashboard() {
                   <TableCell>
                     {(() => {
                       const stockStatus = getStockStatus(item)
-                      return <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>
+                      const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint
+                      const currentQty = item["QTY"]
+
+                      return (
+                        <div className="space-y-1">
+                          <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>
+                          <div className="text-xs text-muted-foreground">
+                            {currentQty} / {reorderPoint} units
+                          </div>
+                        </div>
+                      )
                     })()}
                   </TableCell>
                   <TableCell>
