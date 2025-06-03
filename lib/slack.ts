@@ -72,7 +72,7 @@ export function createLowStockAlertMessage(items: any[]) {
   if (remainingCount > 0) {
     message += `_...and ${remainingCount} more items need attention_\n\n`
     // Use the direct API endpoint link
-    message += `📄 <https://v0-inv-mgt.vercel.app/api/slack/show-all|📋 View All ${items.length} Low Stock Items>\n\n`
+    message += `📄 <https://v0-inv-mgt.vercel.app/low-stock|📋 View All ${items.length} Low Stock Items>\n\n`
   }
 
   message += `📋 *Next Steps:*\n`
