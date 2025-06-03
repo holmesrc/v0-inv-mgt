@@ -1,15 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
-  console.log("=== SLACK INTERACTION RECEIVED ===")
+  console.log("=== NEW SLACK INTERACTION HANDLER ===")
   console.log("Timestamp:", new Date().toISOString())
 
   try {
     const body = await request.text()
-    console.log("Raw body length:", body.length)
-    console.log("Raw body preview:", body.substring(0, 300))
+    console.log("Raw body received, length:", body.length)
 
-    // Parse the payload from Slack
+    // Parse the Slack payload
     let payload
     try {
       if (body.startsWith("payload=")) {
@@ -19,41 +18,44 @@ export async function POST(request: NextRequest) {
         payload = JSON.parse(body)
       }
     } catch (parseError) {
-      console.error("❌ Error parsing main payload:", parseError)
+      console.error("❌ Failed to parse Slack payload:", parseError)
       return new NextResponse("", { status: 200 })
     }
 
-    console.log("✅ Parsed payload successfully")
+    console.log("✅ Successfully parsed Slack payload")
     console.log("Payload type:", payload.type)
 
-    const { type, actions, user, channel } = payload
+    // Handle block actions
+    if (payload.type === "block_actions" && payload.actions && payload.actions.length > 0) {
+      const action = payload.actions[0]
+      console.log("🔘 Processing action:", action.action_id)
 
-    if (type === "block_actions" && actions && actions.length > 0) {
-      const action = actions[0]
-      console.log("🔘 Action received:")
-      console.log("  - action_id:", action.action_id)
-      console.log("  - value:", action.value)
-
+      // Handle show all low stock action
       if (action.action_id === "show_all_low_stock") {
-        console.log("🚀 Processing show_all_low_stock action")
-
-        // Handle the show all action
-        try {
-          await sendFullLowStockMessage(channel?.id || "#inventory-alerts")
-          console.log("✅ Full low stock message sent")
-        } catch (error) {
-          console.error("❌ Error sending full message:", error)
-        }
-      } else if (action.action_id?.startsWith("reorder_")) {
-        console.log("🛒 Processing reorder action")
-        const partNumber = action.value || "unknown"
+        console.log("📋 Handling show all low stock request")
 
         try {
-          await sendReorderConfirmation(partNumber, user, channel?.id)
-          console.log("✅ Reorder confirmation sent")
+          await sendCompleteReport(payload.channel?.id || "#inventory-alerts")
+          console.log("✅ Complete report sent successfully")
         } catch (error) {
-          console.error("❌ Error sending reorder confirmation:", error)
+          console.error("❌ Failed to send complete report:", error)
         }
+      }
+      // Handle reorder actions
+      else if (action.action_id && action.action_id.startsWith("reorder_")) {
+        console.log("🛒 Handling reorder request")
+
+        try {
+          const partNumber = action.value || "unknown"
+          await sendReorderResponse(partNumber, payload.user, payload.channel?.id)
+          console.log("✅ Reorder response sent successfully")
+        } catch (error) {
+          console.error("❌ Failed to send reorder response:", error)
+        }
+      }
+      // Unknown action
+      else {
+        console.log("⚠️ Unknown action received:", action.action_id)
       }
     }
 
@@ -63,76 +65,52 @@ export async function POST(request: NextRequest) {
       headers: { "Content-Type": "text/plain" },
     })
   } catch (error) {
-    console.error("❌ Critical error:", error)
+    console.error("❌ Critical error in interaction handler:", error)
     return new NextResponse("", { status: 200 })
   }
 }
 
-async function sendFullLowStockMessage(channelId: string) {
-  console.log("📋 Sending full low stock message to:", channelId)
+async function sendCompleteReport(channelId: string) {
+  console.log("📤 Sending complete low stock report to:", channelId)
 
   const webhookUrl = process.env.SLACK_WEBHOOK_URL
   if (!webhookUrl) {
     throw new Error("Slack webhook URL not configured")
   }
 
-  // Mock data for the full report
-  const items = [
-    {
-      partNumber: "490-12158-ND",
-      description: "CAP KIT CERAMIC 0.1PF-5PF 1000PC",
-      currentStock: 5,
-      reorderPoint: 10,
-      supplier: "Digi-Key",
-      location: "A1-B2",
-    },
-    {
-      partNumber: "311-1.00KCRCT-ND",
-      description: "RES 1.00K OHM 1/4W 1% AXIAL",
-      currentStock: 3,
-      reorderPoint: 15,
-      supplier: "Digi-Key",
-      location: "C3-D4",
-    },
-    {
-      partNumber: "296-8502-1-ND",
-      description: "IC MCU 8BIT 32KB FLASH 28DIP",
-      currentStock: 2,
-      reorderPoint: 8,
-      supplier: "Microchip",
-      location: "E5-F6",
-    },
-    {
-      partNumber: "445-173212-ND",
-      description: "CAP CERAMIC 10UF 25V X7R 0805",
-      currentStock: 1,
-      reorderPoint: 20,
-      supplier: "TDK",
-      location: "G7-H8",
-    },
-    {
-      partNumber: "RMCF0603FT10K0CT-ND",
-      description: "RES 10K OHM 1/10W 1% 0603 SMD",
-      currentStock: 4,
-      reorderPoint: 25,
-      supplier: "Stackpole",
-      location: "I9-J10",
-    },
-  ]
+  // Create a simple text message with all low stock items
+  const message = `🚨 *Complete Low Stock Report* 🚨
 
-  let message = `🚨 *Complete Low Stock Report* 🚨\n\n`
-  message += `*${items.length} items* are below their reorder points:\n\n`
+*5 items* are below their reorder points:
 
-  items.forEach((item, index) => {
-    message += `${index + 1}. *${item.partNumber}* - ${item.description}\n`
-    message += `   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n`
-    message += `   Supplier: ${item.supplier} | Location: ${item.location}\n`
-    message += `   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>\n\n`
-  })
+1. *490-12158-ND* - CAP KIT CERAMIC 0.1PF-5PF 1000PC
+   Current: 5 | Reorder: 10
+   Supplier: Digi-Key | Location: A1-B2
+   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>
 
-  message += `📋 *Next Steps:*\n`
-  message += `• Click the purchase request links above\n`
-  message += `• Send completed requests to #PHL10-hw-lab-requests`
+2. *311-1.00KCRCT-ND* - RES 1.00K OHM 1/4W 1% AXIAL
+   Current: 3 | Reorder: 15
+   Supplier: Digi-Key | Location: C3-D4
+   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>
+
+3. *296-8502-1-ND* - IC MCU 8BIT 32KB FLASH 28DIP
+   Current: 2 | Reorder: 8
+   Supplier: Microchip | Location: E5-F6
+   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>
+
+4. *445-173212-ND* - CAP CERAMIC 10UF 25V X7R 0805
+   Current: 1 | Reorder: 20
+   Supplier: TDK | Location: G7-H8
+   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>
+
+5. *RMCF0603FT10K0CT-ND* - RES 10K OHM 1/10W 1% 0603 SMD
+   Current: 4 | Reorder: 25
+   Supplier: Stackpole | Location: I9-J10
+   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>
+
+📋 *Action Required:*
+Click the purchase request links above to create orders.
+Send completed requests to #PHL10-hw-lab-requests channel.`
 
   const response = await fetch(webhookUrl, {
     method: "POST",
@@ -147,19 +125,24 @@ async function sendFullLowStockMessage(channelId: string) {
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`Slack API error: ${response.status} - ${errorText}`)
+    throw new Error(`Slack webhook failed: ${response.status} - ${errorText}`)
   }
 
-  console.log("✅ Full message sent successfully")
+  console.log("✅ Complete report sent to Slack")
 }
 
-async function sendReorderConfirmation(partNumber: string, user: any, channelId: string) {
+async function sendReorderResponse(partNumber: string, user: any, channelId: string) {
+  console.log("🛒 Sending reorder response for:", partNumber)
+
   const webhookUrl = process.env.SLACK_WEBHOOK_URL
   if (!webhookUrl) {
     throw new Error("Slack webhook URL not configured")
   }
 
-  const message = `✅ Reorder initiated for *${partNumber}* by ${user?.name || user?.id}\n\nUse this shortcut to complete: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031`
+  const message = `✅ Reorder initiated for *${partNumber}* by ${user?.name || user?.id}
+
+Please complete the purchase request using this shortcut:
+https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031`
 
   const response = await fetch(webhookUrl, {
     method: "POST",
@@ -174,6 +157,8 @@ async function sendReorderConfirmation(partNumber: string, user: any, channelId:
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`Slack API error: ${response.status} - ${errorText}`)
+    throw new Error(`Slack webhook failed: ${response.status} - ${errorText}`)
   }
+
+  console.log("✅ Reorder response sent to Slack")
 }

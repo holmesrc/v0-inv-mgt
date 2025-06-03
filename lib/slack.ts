@@ -321,16 +321,12 @@ export async function sendInteractiveLowStockAlert(items: any[], channel = "#inv
 export async function sendInteractiveFullLowStockAlert(items: any[], channel = "#inventory-alerts") {
   try {
     console.log("🚀 Attempting to send interactive full alert")
-    const blocks = createSimpleFullLowStockBlocks(items)
-    const text = `Complete Low Stock Report: ${items.length} items below reorder point`
-
-    console.log("📤 Sending full interactive alert with", blocks.length, "blocks")
-    return await postToSlack(text, blocks, channel)
+    // For full alerts, just use text to avoid complexity
+    const message = createTextOnlyFullLowStockAlert(items)
+    return await sendSlackMessage(message, channel)
   } catch (error) {
-    console.error("❌ Interactive full alert failed, falling back to text:", error)
-    // Fall back to text message
-    const message = createFullLowStockMessage(items)
-    return sendSlackMessage(message, channel)
+    console.error("❌ Full alert failed:", error)
+    throw error
   }
 }
 
