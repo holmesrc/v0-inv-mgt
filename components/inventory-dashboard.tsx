@@ -318,7 +318,6 @@ export default function InventoryDashboard() {
               Send Full Alert
             </Button>
           )}
-          {/* REMOVED: View Low Stock Items button */}
           <Dialog>
             <DialogTrigger asChild>
               <Button variant="outline">
@@ -404,53 +403,9 @@ export default function InventoryDashboard() {
         </div>
       </div>
 
-      {/* Package Sorting Note */}
-      {packageNote && (
-        <Card className="border-yellow-200 bg-yellow-50">
-          <CardContent className="pt-4">
-            <div className="flex items-start gap-2">
-              <Info className="w-5 h-5 text-yellow-600 mt-0.5" />
-              <div>
-                <h3 className="font-medium text-yellow-800 mb-1">Package Sorting Information</h3>
-                <p className="text-sm text-yellow-700">{packageNote}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* File Management Info */}
-      <Card className="border-green-200 bg-green-50">
-        <CardContent className="pt-4">
-          <div className="flex items-start gap-2">
-            <Info className="w-5 h-5 text-green-600 mt-0.5" />
-            <div>
-              <h3 className="font-medium text-green-800 mb-1">File Management</h3>
-              <p className="text-sm text-green-700">
-                You can add new items using the "Add New Item" button and download an updated Excel file with all your
-                changes. The downloaded file will include all original data plus any new entries you've added.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Slack Integration Status */}
-      <Card className="border-blue-200 bg-blue-50">
-        <CardContent className="pt-4">
-          <div className="flex items-start gap-2">
-            <Info className="w-5 h-5 text-blue-600 mt-0.5" />
-            <div>
-              <h3 className="font-medium text-blue-800 mb-1">Slack Integration Active</h3>
-              <p className="text-sm text-blue-700">
-                Low stock alerts will be sent to #inventory-alerts with links to your Purchase Request shortcut.
-                {lowStockItems.length > 0 && ` Currently ${lowStockItems.length} items need attention.`}
-                {lowStockItems.length > 3 && " Use 'Send Full Alert' to see all items in Slack."}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* REMOVED: Package Sorting Note */}
+      {/* REMOVED: File Management Info */}
+      {/* REMOVED: Slack Integration Status */}
 
       {/* Stats Cards with Definitions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
