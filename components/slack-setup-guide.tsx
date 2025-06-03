@@ -3,7 +3,9 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Info, ExternalLink } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Info, ExternalLink, TestTube } from "lucide-react"
+import Link from "next/link"
 
 export default function SlackSetupGuide() {
   return (
@@ -23,6 +25,21 @@ export default function SlackSetupGuide() {
           </AlertDescription>
         </Alert>
 
+        <div className="flex gap-2 mb-4">
+          <Link href="/verify-slack">
+            <Button variant="outline" size="sm">
+              <TestTube className="w-4 h-4 mr-2" />
+              Test Slack Integration
+            </Button>
+          </Link>
+          <a href="https://v0-inv-mgt.vercel.app/api/slack/test" target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" size="sm">
+              <ExternalLink className="w-4 h-4 mr-2" />
+              Test Endpoint
+            </Button>
+          </a>
+        </div>
+
         <div className="space-y-3">
           <div>
             <h4 className="font-medium mb-2">Required Slack App Configuration:</h4>
@@ -34,7 +51,7 @@ export default function SlackSetupGuide() {
               <li className="flex items-center gap-2">
                 <Badge variant="outline">2</Badge>
                 Set Request URL to:{" "}
-                <code className="bg-gray-100 px-1 rounded">your-domain.com/api/slack/interactions</code>
+                <code className="bg-gray-100 px-1 rounded">https://v0-inv-mgt.vercel.app/api/slack/interactions</code>
               </li>
               <li className="flex items-center gap-2">
                 <Badge variant="outline">3</Badge>
@@ -63,6 +80,16 @@ export default function SlackSetupGuide() {
               <li>3. Click "Reorder" buttons to launch the Purchase Request shortcut</li>
               <li>4. Complete purchase requests and send to #PHL10-hw-lab-requests channel</li>
             </ol>
+          </div>
+
+          <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+            <h5 className="font-medium text-yellow-900 mb-1">Troubleshooting:</h5>
+            <ul className="text-sm text-yellow-800 space-y-1">
+              <li>• Slack doesn't always show green checkmarks for valid URLs</li>
+              <li>• Use the "Test Slack Integration" button above to verify your endpoints</li>
+              <li>• Check Vercel function logs to see if Slack is reaching your app</li>
+              <li>• Make sure you're using a Bot User OAuth Token, not just a webhook</li>
+            </ul>
           </div>
         </div>
       </CardContent>
