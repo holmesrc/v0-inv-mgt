@@ -71,8 +71,9 @@ export function createLowStockAlertMessage(items: any[]) {
   // Add remaining count and instructions
   if (remainingCount > 0) {
     message += `_...and ${remainingCount} more items need attention_\n\n`
-    // Use the direct API endpoint link
-    message += `📄 <https://v0-inv-mgt.vercel.app/low-stock|📋 View All ${items.length} Low Stock Items>\n\n`
+    // Use the correct deployment URL
+    const deploymentUrl = "https://v0-inv-mgt-git-test-holmesrc-amazoncoms-projects.vercel.app"
+    message += `📄 <${deploymentUrl}/low-stock|📋 View All ${items.length} Low Stock Items>\n\n`
   }
 
   message += `📋 *Next Steps:*\n`
