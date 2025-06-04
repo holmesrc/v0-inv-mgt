@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   AlertTriangle,
   Package,
@@ -28,6 +29,8 @@ import {
   Info,
   List,
   Download,
+  RefreshCw,
+  Database,
 } from "lucide-react"
 import type { InventoryItem, PurchaseRequest, AlertSettings } from "@/types/inventory"
 import {
@@ -55,9 +58,132 @@ export default function InventoryDashboard() {
     time: "09:00",
     defaultReorderPoint: 10,
   })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
 
   // Show upload screen if no inventory data
-  const [showUpload, setShowUpload] = useState(inventory.length === 0)
+  const [showUpload, setShowUpload] = useState(false)
+
+  // Load data from database on component mount
+  useEffect(() => {
+    loadInventoryFromDatabase()
+    loadSettingsFromDatabase()
+  }, [])
+
+  const loadInventoryFromDatabase = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch("/api/inventory")
+      const result = await response.json()
+
+      if (result.success && result.data.length > 0) {
+        setInventory(result.data)
+        setShowUpload(false)
+
+        // Also save to localStorage as backup
+        localStorage.setItem("inventory", JSON.stringify(result.data))
+      } else {
+        // Try to load from localStorage as fallback
+        const localData = localStorage.getItem("inventory")
+        if (localData) {
+          const parsedData = JSON.parse(localData)
+          setInventory(parsedData)
+          setShowUpload(false)
+        } else {
+          setShowUpload(true)
+        }
+      }
+    } catch (error) {
+      console.error("Error loading inventory:", error)
+      setError("Failed to load inventory from database")
+
+      // Try localStorage fallback
+      const localData = localStorage.getItem("inventory")
+      if (localData) {
+        const parsedData = JSON.parse(localData)
+        setInventory(parsedData)
+        setShowUpload(false)
+      } else {
+        setShowUpload(true)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadSettingsFromDatabase = async () => {
+    try {
+      const response = await fetch("/api/settings")
+      const result = await response.json()
+
+      if (result.success && result.data.alert_settings) {
+        setAlertSettings(result.data.alert_settings)
+        localStorage.setItem("alertSettings", JSON.stringify(result.data.alert_settings))
+      }
+    } catch (error) {
+      console.error("Error loading settings:", error)
+      // Use localStorage fallback
+      const localSettings = localStorage.getItem("alertSettings")
+      if (localSettings) {
+        setAlertSettings(JSON.parse(localSettings))
+      }
+    }
+  }
+
+  const saveInventoryToDatabase = async (inventoryData: InventoryItem[], note = "", filename = "") => {
+    try {
+      setSyncing(true)
+      const response = await fetch("/api/inventory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inventory: inventoryData,
+          packageNote: note,
+          filename,
+        }),
+      })
+
+      const result = await response.json()
+      if (!result.success) {
+        throw new Error(result.error || "Failed to save inventory")
+      }
+
+      // Also save to localStorage as backup
+      localStorage.setItem("inventory", JSON.stringify(inventoryData))
+      if (note) localStorage.setItem("packageNote", note)
+
+      return result
+    } catch (error) {
+      console.error("Error saving inventory:", error)
+      throw error
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  const saveSettingsToDatabase = async (settings: AlertSettings) => {
+    try {
+      const response = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key: "alert_settings",
+          value: settings,
+        }),
+      })
+
+      const result = await response.json()
+      if (!result.success) {
+        throw new Error(result.error || "Failed to save settings")
+      }
+
+      localStorage.setItem("alertSettings", JSON.stringify(settings))
+    } catch (error) {
+      console.error("Error saving settings:", error)
+      throw error
+    }
+  }
 
   // Filter and search logic
   const filteredInventory = useMemo(() => {
@@ -128,30 +254,65 @@ export default function InventoryDashboard() {
   }
 
   // Add new inventory item
-  const addInventoryItem = (newItem: Omit<InventoryItem, "id" | "lastUpdated">) => {
+  const addInventoryItem = async (newItem: Omit<InventoryItem, "id" | "lastUpdated">) => {
     const item: InventoryItem = {
       ...newItem,
       id: `item-${Date.now()}`,
       lastUpdated: new Date(),
     }
-    setInventory((prev) => [...prev, item])
+    const updatedInventory = [...inventory, item]
+    setInventory(updatedInventory)
+
+    try {
+      await saveInventoryToDatabase(updatedInventory, packageNote)
+    } catch (error) {
+      console.error("Failed to save new item to database:", error)
+      // Item is still added locally, just show a warning
+      setError("Item added locally but failed to sync to database")
+    }
   }
 
   // Update reorder point
-  const updateReorderPoint = (itemId: string, newReorderPoint: number) => {
-    setInventory((prev) => prev.map((item) => (item.id === itemId ? { ...item, reorderPoint: newReorderPoint } : item)))
+  const updateReorderPoint = async (itemId: string, newReorderPoint: number) => {
+    const updatedInventory = inventory.map((item) =>
+      item.id === itemId ? { ...item, reorderPoint: newReorderPoint } : item,
+    )
+    setInventory(updatedInventory)
+
+    try {
+      await saveInventoryToDatabase(updatedInventory, packageNote)
+    } catch (error) {
+      console.error("Failed to save reorder point to database:", error)
+      setError("Update saved locally but failed to sync to database")
+    }
   }
 
   // Update inventory item quantity
-  const updateItemQuantity = (itemId: string, newQuantity: number) => {
-    setInventory((prev) =>
-      prev.map((item) => (item.id === itemId ? { ...item, QTY: newQuantity, lastUpdated: new Date() } : item)),
+  const updateItemQuantity = async (itemId: string, newQuantity: number) => {
+    const updatedInventory = inventory.map((item) =>
+      item.id === itemId ? { ...item, QTY: newQuantity, lastUpdated: new Date() } : item,
     )
+    setInventory(updatedInventory)
+
+    try {
+      await saveInventoryToDatabase(updatedInventory, packageNote)
+    } catch (error) {
+      console.error("Failed to save quantity to database:", error)
+      setError("Update saved locally but failed to sync to database")
+    }
   }
 
   // Delete inventory item
-  const deleteInventoryItem = (itemId: string) => {
-    setInventory((prev) => prev.filter((item) => item.id !== itemId))
+  const deleteInventoryItem = async (itemId: string) => {
+    const updatedInventory = inventory.filter((item) => item.id !== itemId)
+    setInventory(updatedInventory)
+
+    try {
+      await saveInventoryToDatabase(updatedInventory, packageNote)
+    } catch (error) {
+      console.error("Failed to delete item from database:", error)
+      setError("Item deleted locally but failed to sync to database")
+    }
   }
 
   // Download Excel file
@@ -260,7 +421,7 @@ export default function InventoryDashboard() {
   }
 
   // Handle data loading
-  const handleDataLoaded = (data: any[], note: string) => {
+  const handleDataLoaded = async (data: any[], note: string) => {
     const transformedData: InventoryItem[] = data.map((row, index) => ({
       id: `item-${index + 1}`,
       "Part number": row["Part number"] || "",
@@ -277,6 +438,54 @@ export default function InventoryDashboard() {
     setInventory(transformedData)
     setPackageNote(note)
     setShowUpload(false)
+
+    // Save to database
+    try {
+      await saveInventoryToDatabase(transformedData, note, "inventory.xlsx")
+      alert(`Inventory uploaded and saved! ${transformedData.length} items stored permanently.`)
+    } catch (error) {
+      console.error("Failed to save to database:", error)
+      alert("Inventory uploaded locally but failed to save to database. Data will be lost on refresh.")
+    }
+  }
+
+  // Handle settings update
+  const handleSettingsUpdate = async (newSettings: AlertSettings) => {
+    setAlertSettings(newSettings)
+    try {
+      await saveSettingsToDatabase(newSettings)
+    } catch (error) {
+      console.error("Failed to save settings:", error)
+      setError("Settings updated locally but failed to sync to database")
+    }
+  }
+
+  // Manual sync function
+  const handleManualSync = async () => {
+    try {
+      setSyncing(true)
+      await saveInventoryToDatabase(inventory, packageNote)
+      await saveSettingsToDatabase(alertSettings)
+      setError(null)
+      alert("Data synced successfully!")
+    } catch (error) {
+      console.error("Sync failed:", error)
+      setError("Failed to sync data to database")
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  // Show loading screen
+  if (loading) {
+    return (
+      <div className="container mx-auto p-6 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p>Loading inventory data...</p>
+        </div>
+      </div>
+    )
   }
 
   // Show upload screen if no data
@@ -308,6 +517,10 @@ export default function InventoryDashboard() {
             <Upload className="w-4 h-4 mr-2" />
             Upload New File
           </Button>
+          <Button onClick={handleManualSync} variant="outline" disabled={syncing}>
+            {syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
+            {syncing ? "Syncing..." : "Sync to Database"}
+          </Button>
           <Button onClick={sendLowStockAlert} variant="outline">
             <Bell className="w-4 h-4 mr-2" />
             Send Alert Now
@@ -335,7 +548,7 @@ export default function InventoryDashboard() {
                   <input
                     type="checkbox"
                     checked={alertSettings.enabled}
-                    onChange={(e) => setAlertSettings((prev) => ({ ...prev, enabled: e.target.checked }))}
+                    onChange={(e) => handleSettingsUpdate({ ...alertSettings, enabled: e.target.checked })}
                   />
                   <Label>Enable weekly alerts</Label>
                 </div>
@@ -344,7 +557,7 @@ export default function InventoryDashboard() {
                   <Select
                     value={alertSettings.dayOfWeek.toString()}
                     onValueChange={(value) =>
-                      setAlertSettings((prev) => ({ ...prev, dayOfWeek: Number.parseInt(value) }))
+                      handleSettingsUpdate({ ...alertSettings, dayOfWeek: Number.parseInt(value) })
                     }
                   >
                     <SelectTrigger>
@@ -366,7 +579,7 @@ export default function InventoryDashboard() {
                   <Input
                     type="time"
                     value={alertSettings.time}
-                    onChange={(e) => setAlertSettings((prev) => ({ ...prev, time: e.target.value }))}
+                    onChange={(e) => handleSettingsUpdate({ ...alertSettings, time: e.target.value })}
                   />
                 </div>
                 <div>
@@ -375,10 +588,10 @@ export default function InventoryDashboard() {
                     type="number"
                     value={alertSettings.defaultReorderPoint}
                     onChange={(e) =>
-                      setAlertSettings((prev) => ({
-                        ...prev,
+                      handleSettingsUpdate({
+                        ...alertSettings,
                         defaultReorderPoint: Number.parseInt(e.target.value),
-                      }))
+                      })
                     }
                   />
                   <div className="mt-2 p-3 bg-gray-50 rounded text-sm">
@@ -403,9 +616,34 @@ export default function InventoryDashboard() {
         </div>
       </div>
 
-      {/* REMOVED: Package Sorting Note */}
-      {/* REMOVED: File Management Info */}
-      {/* REMOVED: Slack Integration Status */}
+      {/* Error Alert */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            {error}
+            <Button variant="outline" size="sm" className="ml-2" onClick={() => setError(null)}>
+              Dismiss
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Database Status */}
+      <Card className="border-blue-200 bg-blue-50">
+        <CardContent className="pt-4">
+          <div className="flex items-start gap-2">
+            <Database className="w-5 h-5 text-blue-600 mt-0.5" />
+            <div>
+              <h3 className="font-medium text-blue-800 mb-1">Persistent Storage Active</h3>
+              <p className="text-sm text-blue-700">
+                Your inventory data is automatically saved to the database. Changes are synced in real-time, and your
+                data will persist across sessions and devices.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats Cards with Definitions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

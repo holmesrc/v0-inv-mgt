@@ -14,32 +14,50 @@ export default function LowStockPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Try to get inventory data from localStorage (where the dashboard stores it)
+    loadLowStockItems()
+  }, [])
+
+  const loadLowStockItems = async () => {
     try {
-      const storedInventory = localStorage.getItem("inventory")
-      const storedSettings = localStorage.getItem("alertSettings")
+      setLoading(true)
 
-      if (storedInventory) {
-        const inventory = JSON.parse(storedInventory)
-        const settings = storedSettings ? JSON.parse(storedSettings) : { defaultReorderPoint: 10 }
+      // Try to load from database first
+      const response = await fetch("/api/inventory")
+      const result = await response.json()
 
+      if (result.success && result.data.length > 0) {
         // Filter for low stock items
-        const lowStock = inventory.filter((item: any) => {
-          const reorderPoint = item.reorderPoint || settings.defaultReorderPoint
+        const lowStock = result.data.filter((item: any) => {
+          const reorderPoint = item.reorderPoint || 10
           return item.QTY <= reorderPoint
         })
-
         setLowStockItems(lowStock)
       } else {
-        setError("No inventory data found. Please upload your inventory file first.")
+        // Fallback to localStorage
+        const storedInventory = localStorage.getItem("inventory")
+        const storedSettings = localStorage.getItem("alertSettings")
+
+        if (storedInventory) {
+          const inventory = JSON.parse(storedInventory)
+          const settings = storedSettings ? JSON.parse(storedSettings) : { defaultReorderPoint: 10 }
+
+          const lowStock = inventory.filter((item: any) => {
+            const reorderPoint = item.reorderPoint || settings.defaultReorderPoint
+            return item.QTY <= reorderPoint
+          })
+
+          setLowStockItems(lowStock)
+        } else {
+          setError("No inventory data found. Please upload your inventory file first.")
+        }
       }
     } catch (err) {
+      console.error("Error loading low stock items:", err)
       setError("Error loading inventory data")
-      console.error("Error loading inventory:", err)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }
 
   if (loading) {
     return (
