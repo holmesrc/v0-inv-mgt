@@ -63,6 +63,7 @@ export default function InventoryDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
+  const [supabaseConfigured, setSupabaseConfigured] = useState<boolean | null>(null)
 
   // Show upload screen if no inventory data
   const [showUpload, setShowUpload] = useState(false)
@@ -83,12 +84,18 @@ export default function InventoryDashboard() {
       if (fileMetadata.exists) {
         // Read directly from the Excel file in storage
         const result = await fetch("/api/excel", { method: "PUT" })
+
+        if (!result.ok) {
+          throw new Error(`HTTP ${result.status}: ${result.statusText}`)
+        }
+
         const data = await result.json()
 
         if (data.success && data.inventory.length > 0) {
           setInventory(data.inventory)
           setPackageNote(data.packageNote || "")
           setShowUpload(false)
+          setSupabaseConfigured(true)
 
           // Also save to localStorage as backup
           localStorage.setItem("inventory", JSON.stringify(data.inventory))
@@ -101,15 +108,23 @@ export default function InventoryDashboard() {
 
       // If no Excel file or error reading it, try API fallback
       const response = await fetch("/api/inventory")
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
       const result = await response.json()
 
       if (result.success && result.data.length > 0) {
         setInventory(result.data)
         setShowUpload(false)
+        setSupabaseConfigured(true)
 
         // Also save to localStorage as backup
         localStorage.setItem("inventory", JSON.stringify(result.data))
-      } else {
+      } else if (result.configured === false) {
+        // Supabase not configured
+        setSupabaseConfigured(false)
         // Try to load from localStorage as fallback
         const localData = localStorage.getItem("inventory")
         if (localData) {
@@ -119,10 +134,22 @@ export default function InventoryDashboard() {
         } else {
           setShowUpload(true)
         }
+      } else {
+        // Try to load from localStorage as fallback
+        const localData = localStorage.getItem("inventory")
+        if (localData) {
+          const parsedData = JSON.parse(localData)
+          setInventory(parsedData)
+          setShowUpload(false)
+          setSupabaseConfigured(true)
+        } else {
+          setShowUpload(true)
+        }
       }
     } catch (error) {
       console.error("Error loading inventory:", error)
-      setError("Failed to load inventory from Excel file")
+      setError(`Failed to load inventory: ${error instanceof Error ? error.message : "Unknown error"}`)
+      setSupabaseConfigured(false)
 
       // Try localStorage fallback
       const localData = localStorage.getItem("inventory")
@@ -141,18 +168,44 @@ export default function InventoryDashboard() {
   const loadSettingsFromDatabase = async () => {
     try {
       const response = await fetch("/api/settings")
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Server returned non-JSON response")
+      }
+
       const result = await response.json()
 
       if (result.success && result.data.alert_settings) {
         setAlertSettings(result.data.alert_settings)
         localStorage.setItem("alertSettings", JSON.stringify(result.data.alert_settings))
+        setSupabaseConfigured(true)
+      } else if (result.configured === false) {
+        // Supabase not configured, use defaults
+        setSupabaseConfigured(false)
+        const localSettings = localStorage.getItem("alertSettings")
+        if (localSettings) {
+          setAlertSettings(JSON.parse(localSettings))
+        }
       }
     } catch (error) {
       console.error("Error loading settings:", error)
+      setSupabaseConfigured(false)
+
       // Use localStorage fallback
       const localSettings = localStorage.getItem("alertSettings")
       if (localSettings) {
-        setAlertSettings(JSON.parse(localSettings))
+        try {
+          setAlertSettings(JSON.parse(localSettings))
+        } catch (parseError) {
+          console.error("Error parsing local settings:", parseError)
+          // Use default settings if localStorage is corrupted
+        }
       }
     }
   }
@@ -170,6 +223,10 @@ export default function InventoryDashboard() {
         }),
       })
 
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
       const result = await response.json()
       if (!result.success) {
         throw new Error(result.error || "Failed to save inventory")
@@ -182,6 +239,9 @@ export default function InventoryDashboard() {
       return result
     } catch (error) {
       console.error("Error saving inventory:", error)
+      // Still save to localStorage even if database fails
+      localStorage.setItem("inventory", JSON.stringify(inventoryData))
+      if (note) localStorage.setItem("packageNote", note)
       throw error
     } finally {
       setSyncing(false)
@@ -199,6 +259,10 @@ export default function InventoryDashboard() {
         }),
       })
 
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
       const result = await response.json()
       if (!result.success) {
         throw new Error(result.error || "Failed to save settings")
@@ -207,6 +271,8 @@ export default function InventoryDashboard() {
       localStorage.setItem("alertSettings", JSON.stringify(settings))
     } catch (error) {
       console.error("Error saving settings:", error)
+      // Still save to localStorage even if database fails
+      localStorage.setItem("alertSettings", JSON.stringify(settings))
       throw error
     }
   }
@@ -659,20 +725,40 @@ export default function InventoryDashboard() {
       )}
 
       {/* Database Status */}
-      <Card className="border-blue-200 bg-blue-50">
-        <CardContent className="pt-4">
-          <div className="flex items-start gap-2">
-            <Database className="w-5 h-5 text-blue-600 mt-0.5" />
-            <div>
-              <h3 className="font-medium text-blue-800 mb-1">Persistent Storage Active</h3>
-              <p className="text-sm text-blue-700">
-                Your inventory data is automatically saved to the database. Changes are synced in real-time, and your
-                data will persist across sessions and devices.
-              </p>
+      {supabaseConfigured === true && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="pt-4">
+            <div className="flex items-start gap-2">
+              <Database className="w-5 h-5 text-blue-600 mt-0.5" />
+              <div>
+                <h3 className="font-medium text-blue-800 mb-1">Persistent Storage Active</h3>
+                <p className="text-sm text-blue-700">
+                  Your inventory data is automatically saved to the database. Changes are synced in real-time, and your
+                  data will persist across sessions and devices.
+                </p>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Supabase Not Configured Warning */}
+      {supabaseConfigured === false && (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardContent className="pt-4">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 text-orange-600 mt-0.5" />
+              <div>
+                <h3 className="font-medium text-orange-800 mb-1">Database Not Available</h3>
+                <p className="text-sm text-orange-700">
+                  Supabase database connection failed. Your data is being stored locally in your browser only. Please
+                  check your environment variables and database setup.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Cards with Definitions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -735,7 +821,7 @@ export default function InventoryDashboard() {
                 </Badge>
                 <div>
                   <p className="font-medium text-sm">
-                    {"&gt;"} {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
+                    {">"} {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
                   </p>
                   <p className="text-xs text-muted-foreground">More than 50% above reorder point. Adequate stock.</p>
                 </div>
