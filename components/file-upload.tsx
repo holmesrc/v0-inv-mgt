@@ -6,18 +6,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Upload, FileSpreadsheet, AlertCircle, Database } from "lucide-react"
+import { Upload, FileSpreadsheet, AlertCircle, RefreshCw } from "lucide-react"
 import { parseExcelFile } from "@/lib/excel-parser"
 
 interface FileUploadProps {
-  onDataLoaded: (data: any[], packageNote: string) => void
+  onDataLoaded: (data: any[], packageNote: string, excelUrl?: string, filename?: string) => void
+  onCancel?: () => void
+  isReplacement?: boolean
 }
 
-export default function FileUpload({ onDataLoaded }: FileUploadProps) {
+export default function FileUpload({ onDataLoaded, onCancel, isReplacement = false }: FileUploadProps) {
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -36,34 +38,36 @@ export default function FileUpload({ onDataLoaded }: FileUploadProps) {
     if (!file) return
 
     setLoading(true)
+    setUploadProgress(0)
     setError(null)
-    setUploadSuccess(null)
 
     try {
-      // First, parse the file locally to get the data
-      const { data, packageNote } = await parseExcelFile(file)
-
-      // Then, upload the file to storage
+      // First upload file to blob storage
+      setUploadProgress(10)
       const formData = new FormData()
       formData.append("file", file)
 
-      const response = await fetch("/api/excel", {
+      const uploadResponse = await fetch("/api/excel/upload-to-blob", {
         method: "POST",
         body: formData,
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to upload file")
+      if (!uploadResponse.ok) {
+        throw new Error("Failed to upload Excel file to storage")
       }
 
-      const result = await response.json()
-      setUploadSuccess(`File uploaded successfully! ${result.inventoryCount} items stored permanently.`)
+      const { url } = await uploadResponse.json()
+      setUploadProgress(50)
 
-      // Pass the data to the parent component
-      onDataLoaded(data, packageNote)
+      // Then parse the file for immediate use
+      const { data, packageNote } = await parseExcelFile(file)
+      setUploadProgress(100)
+
+      // Pass the data, package note, and the blob URL to the parent component
+      onDataLoaded(data, packageNote, url, file.name)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to process file")
+      setUploadProgress(0)
     } finally {
       setLoading(false)
     }
@@ -89,14 +93,18 @@ export default function FileUpload({ onDataLoaded }: FileUploadProps) {
       <div className="max-w-2xl w-full mx-auto p-6">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">Inventory Management System</h1>
-          <p className="text-lg text-gray-600">Upload your Excel file to get started</p>
+          <p className="text-lg text-gray-600">
+            {isReplacement
+              ? "Upload a new Excel file to replace your current inventory"
+              : "Upload your Excel file to get started"}
+          </p>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5" />
-              Upload Your Inventory Excel File
+              {isReplacement ? "Replace Inventory Excel File" : "Upload Your Inventory Excel File"}
             </CardTitle>
             <CardDescription>
               Upload your Excel file with columns: Part number, MFG Part number, QTY, Part description, Supplier,
@@ -134,7 +142,14 @@ export default function FileUpload({ onDataLoaded }: FileUploadProps) {
                   </div>
                 </div>
                 <Button onClick={handleUpload} disabled={loading}>
-                  {loading ? "Processing..." : "Upload & Process"}
+                  {loading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      {uploadProgress < 100 ? `Uploading... ${uploadProgress}%` : "Processing..."}
+                    </>
+                  ) : (
+                    "Upload & Process"
+                  )}
                 </Button>
               </div>
             )}
@@ -146,11 +161,12 @@ export default function FileUpload({ onDataLoaded }: FileUploadProps) {
               </Alert>
             )}
 
-            {uploadSuccess && (
-              <Alert className="bg-green-50 border-green-200">
-                <Database className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-green-700">{uploadSuccess}</AlertDescription>
-              </Alert>
+            {isReplacement && (
+              <div className="flex justify-end mt-4">
+                <Button variant="ghost" onClick={onCancel}>
+                  Cancel
+                </Button>
+              </div>
             )}
 
             <div className="mt-6 p-4 bg-gray-50 rounded-lg">
@@ -167,18 +183,13 @@ export default function FileUpload({ onDataLoaded }: FileUploadProps) {
               </div>
             </div>
 
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="flex items-start gap-2">
-                <Database className="w-5 h-5 text-blue-600 mt-0.5" />
-                <div>
-                  <h3 className="font-medium text-blue-800 mb-1">Persistent Excel Storage</h3>
-                  <p className="text-sm text-blue-700">
-                    Your Excel file will be stored securely in the cloud. The system will always use this file as the
-                    source of truth for your inventory data.
-                  </p>
-                </div>
-              </div>
-            </div>
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Important:</strong> Your Excel file will be stored as the persistent source of truth for your
+                inventory. The system will always read directly from this file when loading data.
+              </AlertDescription>
+            </Alert>
           </CardContent>
         </Card>
       </div>
