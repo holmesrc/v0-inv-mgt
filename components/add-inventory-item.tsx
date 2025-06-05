@@ -43,6 +43,7 @@ export default function AddInventoryItem({
     location: "",
     package: "",
     reorderPoint: defaultReorderPoint,
+    requester: "",
   })
 
   // Track if we're using custom input values
@@ -117,6 +118,7 @@ export default function AddInventoryItem({
       location: "",
       package: "",
       reorderPoint: defaultReorderPoint,
+      requester: "",
     })
     setUseCustomSupplier(false)
     setUseCustomLocation(false)
@@ -220,6 +222,15 @@ export default function AddInventoryItem({
                 onChange={(e) => handleInputChange("description", e.target.value)}
                 placeholder="e.g., CAP KIT CERAMIC 0.1PF-5PF 1000PC"
                 required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="requester">Requested By</Label>
+              <Input
+                id="requester"
+                value={formData.requester}
+                onChange={(e) => handleInputChange("requester", e.target.value)}
+                placeholder="Your name or department"
               />
             </div>
             <div className="space-y-2">

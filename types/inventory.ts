@@ -9,6 +9,7 @@ export interface InventoryItem {
   Package: string
   lastUpdated?: Date
   reorderPoint?: number
+  requester?: string // ADD THIS LINE
 }
 
 export interface PurchaseRequest {

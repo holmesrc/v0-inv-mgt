@@ -316,7 +316,10 @@ export default function InventoryDashboard() {
 
   const locations = useMemo(() => {
     const uniqueLocations = Array.from(new Set(inventory.map((item) => item["Location"]).filter(Boolean)))
-    return uniqueLocations.sort() // Sort alphabetically for consistency
+    // Use natural sorting to handle H2-1, H2-2, H2-10 correctly
+    return uniqueLocations.sort((a, b) => {
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
+    })
   }, [inventory])
 
   // Get low stock items
@@ -415,14 +418,19 @@ export default function InventoryDashboard() {
   }
 
   // Create purchase request
-  const createPurchaseRequest = async (item: InventoryItem, quantity: number, urgency: "low" | "medium" | "high") => {
+  const createPurchaseRequest = async (
+    item: InventoryItem,
+    quantity: number,
+    urgency: "low" | "medium" | "high",
+    requester = "System User",
+  ) => {
     const request: PurchaseRequest = {
       id: Date.now().toString(),
       partNumber: item["Part number"],
       description: item["Part description"],
       quantity,
       urgency,
-      requestedBy: "System User",
+      requestedBy: requester || "System User", // Use the provided requester
       requestDate: new Date(),
       status: "pending",
     }
@@ -558,13 +566,19 @@ export default function InventoryDashboard() {
   const handleManualSync = async () => {
     try {
       setSyncing(true)
+      setError(null) // Clear any previous errors
+
+      console.log("Starting manual sync...")
       await saveInventoryToDatabase(inventory, packageNote)
       await saveSettingsToDatabase(alertSettings)
-      setError(null)
+
+      console.log("Manual sync completed successfully")
       alert("Data synced successfully!")
     } catch (error) {
       console.error("Sync failed:", error)
-      setError("Failed to sync data to database")
+      const errorMessage = error instanceof Error ? error.message : "Unknown sync error"
+      setError(`Failed to sync data to database: ${errorMessage}`)
+      alert(`Sync failed: ${errorMessage}`)
     } finally {
       setSyncing(false)
     }
@@ -1014,7 +1028,8 @@ export default function InventoryDashboard() {
                               const formData = new FormData(e.currentTarget)
                               const quantity = Number.parseInt(formData.get("quantity") as string)
                               const urgency = formData.get("urgency") as "low" | "medium" | "high"
-                              createPurchaseRequest(item, quantity, urgency)
+                              const requester = formData.get("requester") as string
+                              createPurchaseRequest(item, quantity, urgency, requester)
                             }}
                           >
                             <div className="space-y-4">
@@ -1034,6 +1049,10 @@ export default function InventoryDashboard() {
                                     <SelectItem value="high">High</SelectItem>
                                   </SelectContent>
                                 </Select>
+                              </div>
+                              <div>
+                                <Label>Requested By</Label>
+                                <Input name="requester" placeholder="Your name or department" />
                               </div>
                             </div>
                             <DialogFooter className="mt-4">
