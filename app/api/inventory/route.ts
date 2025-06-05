@@ -68,8 +68,19 @@ export async function POST(request: NextRequest) {
     const { inventory, packageNote, filename } = await request.json()
     const supabase = createServerSupabaseClient()
 
+    console.log("Starting inventory save to database...")
+    console.log("Inventory items to save:", inventory.length)
+
     // Clear existing inventory
-    await supabase.from("inventory").delete().neq("id", "00000000-0000-0000-0000-000000000000")
+    const { error: deleteError } = await supabase
+      .from("inventory")
+      .delete()
+      .neq("id", "00000000-0000-0000-0000-000000000000")
+
+    if (deleteError) {
+      console.error("Error clearing existing inventory:", deleteError)
+      return NextResponse.json({ error: "Failed to clear existing inventory" }, { status: 500 })
+    }
 
     // Transform and insert new inventory data
     const inventoryData = inventory.map((item: any) => ({
@@ -81,19 +92,47 @@ export async function POST(request: NextRequest) {
       location: item.Location,
       package: item.Package,
       reorder_point: item.reorderPoint || 10,
+      // Don't include requester field in inventory table - it's only for purchase requests
     }))
+
+    console.log("Transformed inventory data sample:", inventoryData[0])
 
     const { error: inventoryError } = await supabase.from("inventory").insert(inventoryData)
 
     if (inventoryError) {
       console.error("Error inserting inventory:", inventoryError)
-      return NextResponse.json({ error: "Failed to save inventory" }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: "Failed to save inventory",
+          details: inventoryError.message,
+        },
+        { status: 500 },
+      )
     }
+
+    console.log("Inventory saved successfully")
 
     // Save package note if provided
     if (packageNote) {
-      await supabase.from("package_notes").delete().neq("id", "00000000-0000-0000-0000-000000000000")
-      await supabase.from("package_notes").insert({ note: packageNote, filename: filename || "inventory.xlsx" })
+      console.log("Saving package note...")
+      const { error: deleteNoteError } = await supabase
+        .from("package_notes")
+        .delete()
+        .neq("id", "00000000-0000-0000-0000-000000000000")
+
+      if (deleteNoteError) {
+        console.warn("Warning: Could not clear existing package notes:", deleteNoteError)
+      }
+
+      const { error: noteError } = await supabase.from("package_notes").insert({
+        note: packageNote,
+        filename: filename || "inventory.xlsx",
+      })
+
+      if (noteError) {
+        console.warn("Warning: Could not save package note:", noteError)
+        // Don't fail the whole operation for package note issues
+      }
     }
 
     return NextResponse.json({
@@ -105,10 +144,11 @@ export async function POST(request: NextRequest) {
     console.error("Error saving inventory:", error)
     return NextResponse.json(
       {
-        error: "Supabase configuration error",
+        error: "Failed to save inventory",
+        details: error instanceof Error ? error.message : "Unknown error",
         configured: false,
       },
-      { status: 503 },
+      { status: 500 },
     )
   }
 }

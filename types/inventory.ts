@@ -9,7 +9,7 @@ export interface InventoryItem {
   Package: string
   lastUpdated?: Date
   reorderPoint?: number
-  requester?: string // ADD THIS LINE
+  // Removed requester field from InventoryItem - it's only for PurchaseRequest
 }
 
 export interface PurchaseRequest {
