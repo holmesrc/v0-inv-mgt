@@ -277,14 +277,16 @@ export default function InventoryDashboard() {
     }
   }
 
-  // Filter and search logic
+  // Filter and search logic - FIXED to include Location field
   const filteredInventory = useMemo(() => {
     return inventory.filter((item) => {
       const matchesSearch =
         item["Part number"].toLowerCase().includes(searchTerm.toLowerCase()) ||
         item["MFG Part number"].toLowerCase().includes(searchTerm.toLowerCase()) ||
         item["Part description"].toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item["Supplier"].toLowerCase().includes(searchTerm.toLowerCase())
+        item["Supplier"].toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item["Location"].toLowerCase().includes(searchTerm.toLowerCase()) || // ADDED THIS LINE
+        item["Package"].toLowerCase().includes(searchTerm.toLowerCase()) // ADDED THIS LINE TOO
 
       const matchesCategory = categoryFilter === "all" || item["Package"] === categoryFilter
 
@@ -842,6 +844,9 @@ export default function InventoryDashboard() {
       <Card>
         <CardHeader>
           <CardTitle>Search & Filter</CardTitle>
+          <CardDescription>
+            Search across part numbers, descriptions, suppliers, locations, and package types
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col md:flex-row gap-4">
@@ -849,7 +854,7 @@ export default function InventoryDashboard() {
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search by part number, MFG part number, description, or supplier..."
+                  placeholder="Search by part number, description, supplier, location, or package type..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-8"
