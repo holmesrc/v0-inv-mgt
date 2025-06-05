@@ -24,31 +24,41 @@ export async function initializeStorage() {
 
     if (listError) {
       console.error("Error listing buckets:", listError)
-      throw listError
+      // Don't throw here - maybe the bucket exists but we can't list it
+      console.log("Cannot list buckets, but continuing anyway...")
+      return true
     }
 
     const bucketExists = buckets?.some((bucket) => bucket.name === BUCKET_NAME)
     console.log("Bucket exists:", bucketExists)
 
     if (!bucketExists) {
-      console.log("Creating bucket:", BUCKET_NAME)
-      const { error: createError } = await supabase.storage.createBucket(BUCKET_NAME, {
-        public: false,
-        fileSizeLimit: 10485760, // 10MB
-      })
+      console.log("Attempting to create bucket:", BUCKET_NAME)
+      try {
+        const { error: createError } = await supabase.storage.createBucket(BUCKET_NAME, {
+          public: false,
+          fileSizeLimit: 10485760, // 10MB
+        })
 
-      if (createError) {
-        console.error("Error creating bucket:", createError)
-        throw createError
+        if (createError) {
+          console.error("Error creating bucket:", createError)
+          // Don't throw - maybe the bucket exists but we can't see it
+          console.log("Bucket creation failed, but continuing anyway...")
+        } else {
+          console.log("Bucket created successfully")
+        }
+      } catch (createError) {
+        console.error("Exception creating bucket:", createError)
+        console.log("Bucket creation failed, but continuing anyway...")
       }
-
-      console.log("Bucket created successfully")
     }
 
     return true
   } catch (error) {
     console.error("Error in initializeStorage:", error)
-    throw error
+    // Don't throw - let's try to upload anyway
+    console.log("Storage initialization failed, but continuing anyway...")
+    return true
   }
 }
 
@@ -64,7 +74,7 @@ export async function uploadExcelFile(file: File): Promise<{ success: boolean; m
 
     console.log("Starting file upload:", { name: file.name, size: file.size })
 
-    // Upload the file
+    // Try to upload directly without worrying about bucket creation
     const { data, error } = await supabase.storage.from(BUCKET_NAME).upload(DEFAULT_FILE_NAME, file, {
       upsert: true, // Replace if exists
       contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -72,6 +82,15 @@ export async function uploadExcelFile(file: File): Promise<{ success: boolean; m
 
     if (error) {
       console.error("Supabase upload error:", error)
+
+      // If bucket doesn't exist, provide a helpful message
+      if (error.message.includes("bucket") || error.message.includes("not found")) {
+        return {
+          success: false,
+          message: `Storage bucket '${BUCKET_NAME}' doesn't exist. Please create it manually in your Supabase dashboard.`,
+        }
+      }
+
       return {
         success: false,
         message: `Upload failed: ${error.message}`,
