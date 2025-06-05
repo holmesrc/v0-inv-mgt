@@ -19,46 +19,38 @@ export async function initializeStorage() {
   console.log("Checking if bucket exists:", BUCKET_NAME)
 
   try {
-    // Check if bucket exists
-    const { data: buckets, error: listError } = await supabase.storage.listBuckets()
+    // First, check if we can access the bucket directly
+    const { data: files, error: listError } = await supabase.storage.from(BUCKET_NAME).list()
 
-    if (listError) {
-      console.error("Error listing buckets:", listError)
-      // Don't throw here - maybe the bucket exists but we can't list it
-      console.log("Cannot list buckets, but continuing anyway...")
+    if (!listError) {
+      console.log("Bucket exists and is accessible")
       return true
     }
 
-    const bucketExists = buckets?.some((bucket) => bucket.name === BUCKET_NAME)
-    console.log("Bucket exists:", bucketExists)
+    console.log("Could not list files, error:", listError)
 
-    if (!bucketExists) {
-      console.log("Attempting to create bucket:", BUCKET_NAME)
-      try {
-        const { error: createError } = await supabase.storage.createBucket(BUCKET_NAME, {
-          public: false,
-          fileSizeLimit: 10485760, // 10MB
-        })
+    // Try to create the bucket
+    console.log("Attempting to create bucket:", BUCKET_NAME)
+    const { error: createError } = await supabase.storage.createBucket(BUCKET_NAME, {
+      public: false,
+      fileSizeLimit: 10485760, // 10MB
+    })
 
-        if (createError) {
-          console.error("Error creating bucket:", createError)
-          // Don't throw - maybe the bucket exists but we can't see it
-          console.log("Bucket creation failed, but continuing anyway...")
-        } else {
-          console.log("Bucket created successfully")
-        }
-      } catch (createError) {
-        console.error("Exception creating bucket:", createError)
-        console.log("Bucket creation failed, but continuing anyway...")
+    if (createError) {
+      if (createError.message.includes("already exists")) {
+        console.log("Bucket already exists but we couldn't access it. Check policies.")
+        return true
       }
+
+      console.error("Error creating bucket:", createError)
+      throw new Error(`Failed to create storage bucket: ${createError.message}`)
     }
 
+    console.log("Bucket created successfully")
     return true
   } catch (error) {
     console.error("Error in initializeStorage:", error)
-    // Don't throw - let's try to upload anyway
-    console.log("Storage initialization failed, but continuing anyway...")
-    return true
+    throw new Error(`Storage initialization failed: ${error instanceof Error ? error.message : "Unknown error"}`)
   }
 }
 
@@ -74,7 +66,18 @@ export async function uploadExcelFile(file: File): Promise<{ success: boolean; m
 
     console.log("Starting file upload:", { name: file.name, size: file.size })
 
-    // Try to upload directly without worrying about bucket creation
+    // Try to initialize storage first
+    try {
+      await initializeStorage()
+    } catch (initError) {
+      console.error("Storage initialization failed:", initError)
+      return {
+        success: false,
+        message: `Storage initialization failed: ${initError instanceof Error ? initError.message : "Unknown error"}`,
+      }
+    }
+
+    // Try to upload the file
     const { data, error } = await supabase.storage.from(BUCKET_NAME).upload(DEFAULT_FILE_NAME, file, {
       upsert: true, // Replace if exists
       contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -82,15 +85,6 @@ export async function uploadExcelFile(file: File): Promise<{ success: boolean; m
 
     if (error) {
       console.error("Supabase upload error:", error)
-
-      // If bucket doesn't exist, provide a helpful message
-      if (error.message.includes("bucket") || error.message.includes("not found")) {
-        return {
-          success: false,
-          message: `Storage bucket '${BUCKET_NAME}' doesn't exist. Please create it manually in your Supabase dashboard.`,
-        }
-      }
-
       return {
         success: false,
         message: `Upload failed: ${error.message}`,
