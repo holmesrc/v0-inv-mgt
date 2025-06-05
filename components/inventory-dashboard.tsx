@@ -44,6 +44,8 @@ import {
 import { downloadExcelFile } from "@/lib/excel-generator"
 import FileUpload from "./file-upload"
 import AddInventoryItem from "./add-inventory-item"
+import { getExcelFileMetadata } from "@/lib/storage"
+import ExcelFileInfo from "./excel-file-info"
 
 export default function InventoryDashboard() {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
@@ -74,6 +76,30 @@ export default function InventoryDashboard() {
   const loadInventoryFromDatabase = async () => {
     try {
       setLoading(true)
+
+      // Check if Excel file exists in storage
+      const fileMetadata = await getExcelFileMetadata()
+
+      if (fileMetadata.exists) {
+        // Read directly from the Excel file in storage
+        const result = await fetch("/api/excel", { method: "PUT" })
+        const data = await result.json()
+
+        if (data.success && data.inventory.length > 0) {
+          setInventory(data.inventory)
+          setPackageNote(data.packageNote || "")
+          setShowUpload(false)
+
+          // Also save to localStorage as backup
+          localStorage.setItem("inventory", JSON.stringify(data.inventory))
+          if (data.packageNote) localStorage.setItem("packageNote", data.packageNote)
+
+          setError(null)
+          return
+        }
+      }
+
+      // If no Excel file or error reading it, try API fallback
       const response = await fetch("/api/inventory")
       const result = await response.json()
 
@@ -96,7 +122,7 @@ export default function InventoryDashboard() {
       }
     } catch (error) {
       console.error("Error loading inventory:", error)
-      setError("Failed to load inventory from database")
+      setError("Failed to load inventory from Excel file")
 
       // Try localStorage fallback
       const localData = localStorage.getItem("inventory")
@@ -616,6 +642,9 @@ export default function InventoryDashboard() {
         </div>
       </div>
 
+      {/* Excel File Information */}
+      <ExcelFileInfo onUploadNew={() => setShowUpload(true)} />
+
       {/* Error Alert */}
       {error && (
         <Alert variant="destructive">
@@ -670,73 +699,58 @@ export default function InventoryDashboard() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Approaching Low</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-yellow-500" />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Info className="w-5 h-5 text-blue-600" />
+              Stock Status Definitions
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{approachingLowStockItems.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {alertSettings.defaultReorderPoint + 1} - {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units (50%
-              above reorder point)
-            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex items-start gap-3">
+                <Badge variant="destructive" className="mt-1">
+                  Low Stock
+                </Badge>
+                <div>
+                  <p className="font-medium text-sm">≤ {alertSettings.defaultReorderPoint} units</p>
+                  <p className="text-xs text-muted-foreground">
+                    At or below the reorder point. Immediate action required.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Badge variant="secondary" className="mt-1">
+                  Approaching Low
+                </Badge>
+                <div>
+                  <p className="font-medium text-sm">
+                    {alertSettings.defaultReorderPoint + 1} - {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
+                  </p>
+                  <p className="text-xs text-muted-foreground">Within 50% above reorder point. Monitor closely.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Badge variant="outline" className="mt-1">
+                  Normal
+                </Badge>
+                <div>
+                  <p className="font-medium text-sm">
+                    {"&gt;"} {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
+                  </p>
+                  <p className="text-xs text-muted-foreground">More than 50% above reorder point. Adequate stock.</p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 p-3 bg-white rounded border border-blue-200">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> These calculations are based on your default reorder point of{" "}
+                {alertSettings.defaultReorderPoint} units. Individual items may have custom reorder points that override
+                this default.
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
-
-      {/* Stock Status Legend */}
-      <Card className="border-blue-200 bg-blue-50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Info className="w-5 h-5 text-blue-600" />
-            Stock Status Definitions
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-start gap-3">
-              <Badge variant="destructive" className="mt-1">
-                Low Stock
-              </Badge>
-              <div>
-                <p className="font-medium text-sm">≤ {alertSettings.defaultReorderPoint} units</p>
-                <p className="text-xs text-muted-foreground">
-                  At or below the reorder point. Immediate action required.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Badge variant="secondary" className="mt-1">
-                Approaching Low
-              </Badge>
-              <div>
-                <p className="font-medium text-sm">
-                  {alertSettings.defaultReorderPoint + 1} - {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
-                </p>
-                <p className="text-xs text-muted-foreground">Within 50% above reorder point. Monitor closely.</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Badge variant="outline" className="mt-1">
-                Normal
-              </Badge>
-              <div>
-                <p className="font-medium text-sm">
-                  {"&gt;"} {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
-                </p>
-                <p className="text-xs text-muted-foreground">More than 50% above reorder point. Adequate stock.</p>
-              </div>
-            </div>
-          </div>
-          <div className="mt-4 p-3 bg-white rounded border border-blue-200">
-            <p className="text-sm text-blue-800">
-              <strong>Note:</strong> These calculations are based on your default reorder point of{" "}
-              {alertSettings.defaultReorderPoint} units. Individual items may have custom reorder points that override
-              this default.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Search and Filters */}
       <Card>

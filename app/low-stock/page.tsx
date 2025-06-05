@@ -21,34 +21,47 @@ export default function LowStockPage() {
     try {
       setLoading(true)
 
-      // Try to load from database first
-      const response = await fetch("/api/inventory")
+      // Try to load from Excel file first
+      const response = await fetch("/api/excel", { method: "PUT" })
       const result = await response.json()
 
-      if (result.success && result.data.length > 0) {
+      if (result.success && result.inventory.length > 0) {
         // Filter for low stock items
-        const lowStock = result.data.filter((item: any) => {
+        const lowStock = result.inventory.filter((item: any) => {
           const reorderPoint = item.reorderPoint || 10
           return item.QTY <= reorderPoint
         })
         setLowStockItems(lowStock)
       } else {
-        // Fallback to localStorage
-        const storedInventory = localStorage.getItem("inventory")
-        const storedSettings = localStorage.getItem("alertSettings")
+        // Fallback to database API
+        const dbResponse = await fetch("/api/inventory")
+        const dbResult = await dbResponse.json()
 
-        if (storedInventory) {
-          const inventory = JSON.parse(storedInventory)
-          const settings = storedSettings ? JSON.parse(storedSettings) : { defaultReorderPoint: 10 }
-
-          const lowStock = inventory.filter((item: any) => {
-            const reorderPoint = item.reorderPoint || settings.defaultReorderPoint
+        if (dbResult.success && dbResult.data.length > 0) {
+          // Filter for low stock items
+          const lowStock = dbResult.data.filter((item: any) => {
+            const reorderPoint = item.reorderPoint || 10
             return item.QTY <= reorderPoint
           })
-
           setLowStockItems(lowStock)
         } else {
-          setError("No inventory data found. Please upload your inventory file first.")
+          // Fallback to localStorage
+          const storedInventory = localStorage.getItem("inventory")
+          const storedSettings = localStorage.getItem("alertSettings")
+
+          if (storedInventory) {
+            const inventory = JSON.parse(storedInventory)
+            const settings = storedSettings ? JSON.parse(storedSettings) : { defaultReorderPoint: 10 }
+
+            const lowStock = inventory.filter((item: any) => {
+              const reorderPoint = item.reorderPoint || settings.defaultReorderPoint
+              return item.QTY <= reorderPoint
+            })
+
+            setLowStockItems(lowStock)
+          } else {
+            setError("No inventory data found. Please upload your inventory file first.")
+          }
         }
       }
     } catch (err) {
