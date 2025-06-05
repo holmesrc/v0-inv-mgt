@@ -16,15 +16,39 @@ export async function initializeStorage() {
     throw new Error("Supabase is not configured. Please set up your environment variables.")
   }
 
-  // Check if bucket exists, create if not
-  const { data: buckets } = await supabase.storage.listBuckets()
-  const bucketExists = buckets?.some((bucket) => bucket.name === BUCKET_NAME)
+  console.log("Checking if bucket exists:", BUCKET_NAME)
 
-  if (!bucketExists) {
-    await supabase.storage.createBucket(BUCKET_NAME, {
-      public: false,
-      fileSizeLimit: 10485760, // 10MB
-    })
+  try {
+    // Check if bucket exists
+    const { data: buckets, error: listError } = await supabase.storage.listBuckets()
+
+    if (listError) {
+      console.error("Error listing buckets:", listError)
+      throw listError
+    }
+
+    const bucketExists = buckets?.some((bucket) => bucket.name === BUCKET_NAME)
+    console.log("Bucket exists:", bucketExists)
+
+    if (!bucketExists) {
+      console.log("Creating bucket:", BUCKET_NAME)
+      const { error: createError } = await supabase.storage.createBucket(BUCKET_NAME, {
+        public: false,
+        fileSizeLimit: 10485760, // 10MB
+      })
+
+      if (createError) {
+        console.error("Error creating bucket:", createError)
+        throw createError
+      }
+
+      console.log("Bucket created successfully")
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error in initializeStorage:", error)
+    throw error
   }
 }
 
@@ -38,19 +62,26 @@ export async function uploadExcelFile(file: File): Promise<{ success: boolean; m
       }
     }
 
-    await initializeStorage()
+    console.log("Starting file upload:", { name: file.name, size: file.size })
 
     // Upload the file
-    const { error } = await supabase.storage.from(BUCKET_NAME).upload(DEFAULT_FILE_NAME, file, {
+    const { data, error } = await supabase.storage.from(BUCKET_NAME).upload(DEFAULT_FILE_NAME, file, {
       upsert: true, // Replace if exists
       contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     })
 
-    if (error) throw error
+    if (error) {
+      console.error("Supabase upload error:", error)
+      return {
+        success: false,
+        message: `Upload failed: ${error.message}`,
+      }
+    }
 
+    console.log("Upload successful:", data)
     return { success: true, message: "Excel file uploaded successfully" }
   } catch (error) {
-    console.error("Error uploading Excel file:", error)
+    console.error("Error in uploadExcelFile:", error)
     return {
       success: false,
       message: error instanceof Error ? error.message : "Unknown error uploading file",

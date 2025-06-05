@@ -5,6 +5,7 @@ import {
   getExcelFileMetadata,
   excelFileExists,
   isStorageAvailable,
+  initializeStorage,
 } from "@/lib/storage"
 
 // Get Excel file status and metadata
@@ -76,25 +77,74 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Upload the file
-    const result = await uploadExcelFile(file)
+    console.log("File received:", { name: file.name, size: file.size, type: file.type })
 
-    if (!result.success) {
-      return NextResponse.json({ error: result.message }, { status: 500 })
+    // Make sure the bucket exists before trying to upload
+    try {
+      await initializeStorage()
+      console.log("Storage bucket initialized successfully")
+    } catch (bucketError) {
+      console.error("Error initializing storage bucket:", bucketError)
+      return NextResponse.json(
+        {
+          error: "Failed to initialize storage bucket",
+          details: bucketError instanceof Error ? bucketError.message : "Unknown error",
+        },
+        { status: 500 },
+      )
+    }
+
+    // Upload the file with more detailed error handling
+    try {
+      const result = await uploadExcelFile(file)
+
+      if (!result.success) {
+        return NextResponse.json({ error: result.message }, { status: 500 })
+      }
+
+      console.log("File uploaded successfully")
+    } catch (uploadError) {
+      console.error("Error in uploadExcelFile:", uploadError)
+      return NextResponse.json(
+        {
+          error: "Failed to upload Excel file",
+          details: uploadError instanceof Error ? uploadError.message : "Unknown error",
+        },
+        { status: 500 },
+      )
     }
 
     // Read the inventory data from the uploaded file
-    const inventoryData = await readInventoryFromExcel()
+    try {
+      const inventoryData = await readInventoryFromExcel()
+      console.log("Inventory data read successfully:", { count: inventoryData.inventory.length })
 
-    return NextResponse.json({
-      success: true,
-      message: "Excel file uploaded successfully",
-      inventoryCount: inventoryData.inventory.length,
-      packageNote: inventoryData.packageNote,
-    })
+      return NextResponse.json({
+        success: true,
+        message: "Excel file uploaded successfully",
+        inventoryCount: inventoryData.inventory.length,
+        packageNote: inventoryData.packageNote,
+      })
+    } catch (readError) {
+      console.error("Error reading inventory data:", readError)
+      return NextResponse.json(
+        {
+          error: "File uploaded but failed to read inventory data",
+          details: readError instanceof Error ? readError.message : "Unknown error",
+        },
+        { status: 500 },
+      )
+    }
   } catch (error) {
-    console.error("Error uploading Excel file:", error)
-    return NextResponse.json({ error: "Failed to upload Excel file" }, { status: 500 })
+    console.error("Unhandled error in Excel upload:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to process Excel file",
+        details: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      { status: 500 },
+    )
   }
 }
 
