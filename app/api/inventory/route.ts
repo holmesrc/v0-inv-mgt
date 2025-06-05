@@ -1,8 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase"
+import { createServerSupabaseClient, canUseSupabase } from "@/lib/supabase"
 
 export async function GET() {
   try {
+    if (!canUseSupabase()) {
+      return NextResponse.json(
+        {
+          error: "Supabase is not configured. Please set up your environment variables.",
+          configured: false,
+        },
+        { status: 503 },
+      )
+    }
+
     const supabase = createServerSupabaseClient()
 
     const { data: inventory, error } = await supabase.from("inventory").select("*").order("part_number")
@@ -33,12 +43,28 @@ export async function GET() {
     })
   } catch (error) {
     console.error("Error fetching inventory:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Supabase configuration error",
+        configured: false,
+      },
+      { status: 503 },
+    )
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    if (!canUseSupabase()) {
+      return NextResponse.json(
+        {
+          error: "Supabase is not configured. Data will be stored locally only.",
+          configured: false,
+        },
+        { status: 503 },
+      )
+    }
+
     const { inventory, packageNote, filename } = await request.json()
     const supabase = createServerSupabaseClient()
 
@@ -77,6 +103,12 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Error saving inventory:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Supabase configuration error",
+        configured: false,
+      },
+      { status: 503 },
+    )
   }
 }

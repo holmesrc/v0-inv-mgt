@@ -1,141 +1,75 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ShoppingCart, AlertTriangle, Upload, FileSpreadsheet } from "lucide-react"
+import { ShoppingCart, AlertTriangle, Upload } from "lucide-react"
 import Link from "next/link"
-import { parseExcelFile } from "@/lib/excel-parser"
 
 export default function LowStockPage() {
   const [lowStockItems, setLowStockItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [excelFile, setExcelFile] = useState<{
-    url: string | null
-    filename: string | null
-    uploadedAt: string | null
-  }>({
-    url: null,
-    filename: null,
-    uploadedAt: null,
-  })
 
-  const loadExcelFile = useCallback(async () => {
+  useEffect(() => {
+    loadLowStockItems()
+  }, [])
+
+  const loadLowStockItems = async () => {
     try {
       setLoading(true)
-      const response = await fetch("/api/excel/get-current")
-      const data = await response.json()
 
-      if (data.success && data.url) {
-        setExcelFile({
-          url: data.url,
-          filename: data.filename || "inventory.xlsx",
-          uploadedAt: data.uploadedAt || new Date().toISOString(),
+      // Try to load from Excel file first
+      const response = await fetch("/api/excel", { method: "PUT" })
+      const result = await response.json()
+
+      if (result.success && result.inventory.length > 0) {
+        // Filter for low stock items
+        const lowStock = result.inventory.filter((item: any) => {
+          const reorderPoint = item.reorderPoint || 10
+          return item.QTY <= reorderPoint
         })
-
-        // Download and parse the Excel file
-        const fileResponse = await fetch(data.url)
-        const fileBlob = await fileResponse.blob()
-        const file = new File([fileBlob], data.filename || "inventory.xlsx", { type: fileBlob.type })
-
-        const { data: inventoryData } = await parseExcelFile(file)
-
-        // Get default reorder point from localStorage or use default
-        const storedSettings = localStorage.getItem("alertSettings")
-        const defaultReorderPoint = storedSettings ? JSON.parse(storedSettings).defaultReorderPoint : 10
-
-        // Transform and filter for low stock items
-        const transformedData = inventoryData.map((row, index) => ({
-          id: `item-${index + 1}`,
-          "Part number": row["Part number"] || "",
-          "MFG Part number": row["MFG Part number"] || "",
-          QTY: Number(row["QTY"]) || 0,
-          "Part description": row["Part description"] || "",
-          Supplier: row["Supplier"] || "",
-          Location: row["Location"] || "",
-          Package: row["Package"] || "",
-          reorderPoint: defaultReorderPoint,
-        }))
-
-        const lowStock = transformedData.filter((item) => item.QTY <= (item.reorderPoint || defaultReorderPoint))
-
         setLowStockItems(lowStock)
       } else {
-        // No Excel file found, try localStorage
-        const storedInventory = localStorage.getItem("inventory")
-        const storedSettings = localStorage.getItem("alertSettings")
+        // Fallback to database API
+        const dbResponse = await fetch("/api/inventory")
+        const dbResult = await dbResponse.json()
 
-        if (storedInventory) {
-          const inventory = JSON.parse(storedInventory)
-          const settings = storedSettings ? JSON.parse(storedSettings) : { defaultReorderPoint: 10 }
-
-          const lowStock = inventory.filter((item: any) => {
-            const reorderPoint = item.reorderPoint || settings.defaultReorderPoint
+        if (dbResult.success && dbResult.data.length > 0) {
+          // Filter for low stock items
+          const lowStock = dbResult.data.filter((item: any) => {
+            const reorderPoint = item.reorderPoint || 10
             return item.QTY <= reorderPoint
           })
-
           setLowStockItems(lowStock)
         } else {
-          setError("No inventory data found. Please upload your inventory file first.")
+          // Fallback to localStorage
+          const storedInventory = localStorage.getItem("inventory")
+          const storedSettings = localStorage.getItem("alertSettings")
+
+          if (storedInventory) {
+            const inventory = JSON.parse(storedInventory)
+            const settings = storedSettings ? JSON.parse(storedSettings) : { defaultReorderPoint: 10 }
+
+            const lowStock = inventory.filter((item: any) => {
+              const reorderPoint = item.reorderPoint || settings.defaultReorderPoint
+              return item.QTY <= reorderPoint
+            })
+
+            setLowStockItems(lowStock)
+          } else {
+            setError("No inventory data found. Please upload your inventory file first.")
+          }
         }
       }
     } catch (err) {
-      console.error("Error loading Excel file:", err)
-
-      // Try localStorage fallback
-      const storedInventory = localStorage.getItem("inventory")
-      const storedSettings = localStorage.getItem("alertSettings")
-
-      if (storedInventory) {
-        const inventory = JSON.parse(storedInventory)
-        const settings = storedSettings ? JSON.parse(storedSettings) : { defaultReorderPoint: 10 }
-
-        const lowStock = inventory.filter((item: any) => {
-          const reorderPoint = item.reorderPoint || settings.defaultReorderPoint
-          return item.QTY <= reorderPoint
-        })
-
-        setLowStockItems(lowStock)
-      } else {
-        setError("Error loading inventory data")
-      }
+      console.error("Error loading low stock items:", err)
+      setError("Error loading inventory data")
     } finally {
       setLoading(false)
     }
-  }, [])
-
-  useEffect(() => {
-    loadExcelFile()
-  }, [loadExcelFile])
-
-  const ExcelInfoCard = () => {
-    if (!excelFile.url) return null
-
-    return (
-      <Card className="border-green-200 bg-green-50">
-        <CardContent className="pt-4">
-          <div className="flex items-start gap-2">
-            <FileSpreadsheet className="w-5 h-5 text-green-600 mt-0.5" />
-            <div>
-              <h3 className="font-medium text-green-800 mb-1">Data Source: Excel File</h3>
-              <p className="text-sm text-green-700">
-                This data is reading directly from: <strong>{excelFile.filename}</strong>
-                <br />
-                Last uploaded: {new Date(excelFile.uploadedAt || "").toLocaleString()}
-              </p>
-              <div className="mt-2">
-                <Button variant="outline" size="sm" onClick={() => window.open(excelFile.url || "#", "_blank")}>
-                  View/Download Excel File
-                </Button>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    )
   }
 
   if (loading) {
@@ -193,8 +127,6 @@ export default function LowStockPage() {
           </Link>
         </div>
 
-        <ExcelInfoCard />
-
         <Card className="border-green-200 bg-green-50">
           <CardContent className="pt-4">
             <div className="flex items-start gap-2">
@@ -223,8 +155,6 @@ export default function LowStockPage() {
           <Button>Back to Dashboard</Button>
         </Link>
       </div>
-
-      <ExcelInfoCard />
 
       <Card className="border-red-200 bg-red-50">
         <CardContent className="pt-4">

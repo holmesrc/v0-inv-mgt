@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect, useCallback } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -31,7 +31,6 @@ import {
   Download,
   RefreshCw,
   Database,
-  FileSpreadsheet,
 } from "lucide-react"
 import type { InventoryItem, PurchaseRequest, AlertSettings } from "@/types/inventory"
 import {
@@ -45,7 +44,8 @@ import {
 import { downloadExcelFile } from "@/lib/excel-generator"
 import FileUpload from "./file-upload"
 import AddInventoryItem from "./add-inventory-item"
-import { parseExcelFile } from "@/lib/excel-parser"
+import { getExcelFileMetadata } from "@/lib/storage"
+import ExcelFileInfo from "./excel-file-info"
 
 export default function InventoryDashboard() {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
@@ -63,99 +63,80 @@ export default function InventoryDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
-  const [excelFile, setExcelFile] = useState<{
-    url: string | null
-    filename: string | null
-    uploadedAt: string | null
-  }>({
-    url: null,
-    filename: null,
-    uploadedAt: null,
-  })
-  const [loadingExcel, setLoadingExcel] = useState(true)
-  const [replacing, setReplacing] = useState(false)
 
   // Show upload screen if no inventory data
   const [showUpload, setShowUpload] = useState(false)
 
   // Load data from database on component mount
-  const loadExcelFile = useCallback(async () => {
+  useEffect(() => {
+    loadInventoryFromDatabase()
+    loadSettingsFromDatabase()
+  }, [])
+
+  const loadInventoryFromDatabase = async () => {
     try {
-      setLoadingExcel(true)
-      const response = await fetch("/api/excel/get-current")
-      const data = await response.json()
+      setLoading(true)
 
-      if (data.success && data.url) {
-        setExcelFile({
-          url: data.url,
-          filename: data.filename || "inventory.xlsx",
-          uploadedAt: data.uploadedAt || new Date().toISOString(),
-        })
+      // Check if Excel file exists in storage
+      const fileMetadata = await getExcelFileMetadata()
 
-        // Download and parse the Excel file
-        const fileResponse = await fetch(data.url)
-        const fileBlob = await fileResponse.blob()
-        const file = new File([fileBlob], data.filename || "inventory.xlsx", { type: fileBlob.type })
+      if (fileMetadata.exists) {
+        // Read directly from the Excel file in storage
+        const result = await fetch("/api/excel", { method: "PUT" })
+        const data = await result.json()
 
-        const { data: inventoryData, packageNote } = await parseExcelFile(file)
+        if (data.success && data.inventory.length > 0) {
+          setInventory(data.inventory)
+          setPackageNote(data.packageNote || "")
+          setShowUpload(false)
 
-        // Transform the data and update state
-        const transformedData = inventoryData.map((row, index) => ({
-          id: `item-${index + 1}`,
-          "Part number": row["Part number"] || "",
-          "MFG Part number": row["MFG Part number"] || "",
-          QTY: Number(row["QTY"]) || 0,
-          "Part description": row["Part description"] || "",
-          Supplier: row["Supplier"] || "",
-          Location: row["Location"] || "",
-          Package: row["Package"] || "",
-          lastUpdated: new Date(),
-          reorderPoint: alertSettings.defaultReorderPoint,
-        }))
+          // Also save to localStorage as backup
+          localStorage.setItem("inventory", JSON.stringify(data.inventory))
+          if (data.packageNote) localStorage.setItem("packageNote", data.packageNote)
 
-        setInventory(transformedData)
-        setPackageNote(packageNote)
+          setError(null)
+          return
+        }
+      }
+
+      // If no Excel file or error reading it, try API fallback
+      const response = await fetch("/api/inventory")
+      const result = await response.json()
+
+      if (result.success && result.data.length > 0) {
+        setInventory(result.data)
         setShowUpload(false)
 
-        // Cache in localStorage as backup
-        localStorage.setItem("inventory", JSON.stringify(transformedData))
-        localStorage.setItem("packageNote", packageNote)
+        // Also save to localStorage as backup
+        localStorage.setItem("inventory", JSON.stringify(result.data))
       } else {
-        // No Excel file found, try localStorage
+        // Try to load from localStorage as fallback
         const localData = localStorage.getItem("inventory")
-        const localNote = localStorage.getItem("packageNote")
-
         if (localData) {
-          setInventory(JSON.parse(localData))
-          if (localNote) setPackageNote(localNote)
+          const parsedData = JSON.parse(localData)
+          setInventory(parsedData)
           setShowUpload(false)
         } else {
           setShowUpload(true)
         }
       }
     } catch (error) {
-      console.error("Error loading Excel file:", error)
+      console.error("Error loading inventory:", error)
+      setError("Failed to load inventory from Excel file")
 
       // Try localStorage fallback
       const localData = localStorage.getItem("inventory")
-      const localNote = localStorage.getItem("packageNote")
-
       if (localData) {
-        setInventory(JSON.parse(localData))
-        if (localNote) setPackageNote(localNote)
+        const parsedData = JSON.parse(localData)
+        setInventory(parsedData)
         setShowUpload(false)
       } else {
         setShowUpload(true)
       }
     } finally {
-      setLoadingExcel(false)
+      setLoading(false)
     }
-  }, [alertSettings.defaultReorderPoint])
-
-  useEffect(() => {
-    loadExcelFile()
-    loadSettingsFromDatabase()
-  }, [loadExcelFile])
+  }
 
   const loadSettingsFromDatabase = async () => {
     try {
@@ -466,7 +447,7 @@ export default function InventoryDashboard() {
   }
 
   // Handle data loading
-  const handleDataLoaded = async (data: any[], note: string, excelUrl?: string, filename?: string) => {
+  const handleDataLoaded = async (data: any[], note: string) => {
     const transformedData: InventoryItem[] = data.map((row, index) => ({
       id: `item-${index + 1}`,
       "Part number": row["Part number"] || "",
@@ -484,17 +465,14 @@ export default function InventoryDashboard() {
     setPackageNote(note)
     setShowUpload(false)
 
-    if (excelUrl) {
-      setExcelFile({
-        url: excelUrl,
-        filename: filename || "inventory.xlsx",
-        uploadedAt: new Date().toISOString(),
-      })
+    // Save to database
+    try {
+      await saveInventoryToDatabase(transformedData, note, "inventory.xlsx")
+      alert(`Inventory uploaded and saved! ${transformedData.length} items stored permanently.`)
+    } catch (error) {
+      console.error("Failed to save to database:", error)
+      alert("Inventory uploaded locally but failed to save to database. Data will be lost on refresh.")
     }
-
-    // Cache in localStorage as backup
-    localStorage.setItem("inventory", JSON.stringify(transformedData))
-    localStorage.setItem("packageNote", note)
   }
 
   // Handle settings update
@@ -525,7 +503,7 @@ export default function InventoryDashboard() {
   }
 
   // Show loading screen
-  if (loading || loadingExcel) {
+  if (loading) {
     return (
       <div className="container mx-auto p-6 flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -564,10 +542,6 @@ export default function InventoryDashboard() {
           <Button onClick={() => setShowUpload(true)} variant="outline">
             <Upload className="w-4 h-4 mr-2" />
             Upload New File
-          </Button>
-          <Button onClick={() => setReplacing(true)} variant="outline">
-            <Upload className="w-4 h-4 mr-2" />
-            Replace Excel File
           </Button>
           <Button onClick={handleManualSync} variant="outline" disabled={syncing}>
             {syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
@@ -668,6 +642,9 @@ export default function InventoryDashboard() {
         </div>
       </div>
 
+      {/* Excel File Information */}
+      <ExcelFileInfo onUploadNew={() => setShowUpload(true)} />
+
       {/* Error Alert */}
       {error && (
         <Alert variant="destructive">
@@ -697,30 +674,6 @@ export default function InventoryDashboard() {
         </CardContent>
       </Card>
 
-      {/* Excel File Source */}
-      {excelFile.url && (
-        <Card className="border-green-200 bg-green-50">
-          <CardContent className="pt-4">
-            <div className="flex items-start gap-2">
-              <FileSpreadsheet className="w-5 h-5 text-green-600 mt-0.5" />
-              <div>
-                <h3 className="font-medium text-green-800 mb-1">Excel File Source</h3>
-                <p className="text-sm text-green-700">
-                  Your inventory data is reading from the Excel file: <strong>{excelFile.filename}</strong>
-                  <br />
-                  Uploaded on: {new Date(excelFile.uploadedAt || "").toLocaleString()}
-                </p>
-                <div className="mt-2">
-                  <Button variant="outline" size="sm" onClick={() => window.open(excelFile.url || "#", "_blank")}>
-                    View/Download Excel File
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Stats Cards with Definitions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
@@ -746,73 +699,58 @@ export default function InventoryDashboard() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Approaching Low</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-yellow-500" />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Info className="w-5 h-5 text-blue-600" />
+              Stock Status Definitions
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{approachingLowStockItems.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {alertSettings.defaultReorderPoint + 1} - {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units (50%
-              above reorder point)
-            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex items-start gap-3">
+                <Badge variant="destructive" className="mt-1">
+                  Low Stock
+                </Badge>
+                <div>
+                  <p className="font-medium text-sm">≤ {alertSettings.defaultReorderPoint} units</p>
+                  <p className="text-xs text-muted-foreground">
+                    At or below the reorder point. Immediate action required.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Badge variant="secondary" className="mt-1">
+                  Approaching Low
+                </Badge>
+                <div>
+                  <p className="font-medium text-sm">
+                    {alertSettings.defaultReorderPoint + 1} - {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
+                  </p>
+                  <p className="text-xs text-muted-foreground">Within 50% above reorder point. Monitor closely.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Badge variant="outline" className="mt-1">
+                  Normal
+                </Badge>
+                <div>
+                  <p className="font-medium text-sm">
+                    {"&gt;"} {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
+                  </p>
+                  <p className="text-xs text-muted-foreground">More than 50% above reorder point. Adequate stock.</p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 p-3 bg-white rounded border border-blue-200">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> These calculations are based on your default reorder point of{" "}
+                {alertSettings.defaultReorderPoint} units. Individual items may have custom reorder points that override
+                this default.
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
-
-      {/* Stock Status Legend */}
-      <Card className="border-blue-200 bg-blue-50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Info className="w-5 h-5 text-blue-600" />
-            Stock Status Definitions
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-start gap-3">
-              <Badge variant="destructive" className="mt-1">
-                Low Stock
-              </Badge>
-              <div>
-                <p className="font-medium text-sm">≤ {alertSettings.defaultReorderPoint} units</p>
-                <p className="text-xs text-muted-foreground">
-                  At or below the reorder point. Immediate action required.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Badge variant="secondary" className="mt-1">
-                Approaching Low
-              </Badge>
-              <div>
-                <p className="font-medium text-sm">
-                  {alertSettings.defaultReorderPoint + 1} - {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
-                </p>
-                <p className="text-xs text-muted-foreground">Within 50% above reorder point. Monitor closely.</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Badge variant="outline" className="mt-1">
-                Normal
-              </Badge>
-              <div>
-                <p className="font-medium text-sm">
-                  {"&gt;"} {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
-                </p>
-                <p className="text-xs text-muted-foreground">More than 50% above reorder point. Adequate stock.</p>
-              </div>
-            </div>
-          </div>
-          <div className="mt-4 p-3 bg-white rounded border border-blue-200">
-            <p className="text-sm text-blue-800">
-              <strong>Note:</strong> These calculations are based on your default reorder point of{" "}
-              {alertSettings.defaultReorderPoint} units. Individual items may have custom reorder points that override
-              this default.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Search and Filters */}
       <Card>
