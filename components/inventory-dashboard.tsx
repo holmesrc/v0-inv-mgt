@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   AlertTriangle,
   Package,
@@ -28,12 +29,23 @@ import {
   Info,
   List,
   Download,
+  RefreshCw,
+  Database,
 } from "lucide-react"
 import type { InventoryItem, PurchaseRequest, AlertSettings } from "@/types/inventory"
-import { sendSlackMessage, formatPurchaseRequest, createLowStockAlertMessage, sendFullLowStockAlert } from "@/lib/slack"
+import {
+  sendSlackMessage,
+  formatPurchaseRequest,
+  sendInteractiveLowStockAlert,
+  sendInteractiveFullLowStockAlert,
+  createLowStockAlertMessage,
+  createFullLowStockMessage,
+} from "@/lib/slack"
 import { downloadExcelFile } from "@/lib/excel-generator"
 import FileUpload from "./file-upload"
 import AddInventoryItem from "./add-inventory-item"
+import { getExcelFileMetadata } from "@/lib/storage"
+import ExcelFileInfo from "./excel-file-info"
 
 export default function InventoryDashboard() {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
@@ -48,18 +60,309 @@ export default function InventoryDashboard() {
     time: "09:00",
     defaultReorderPoint: 10,
   })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [supabaseConfigured, setSupabaseConfigured] = useState<boolean | null>(null)
 
   // Show upload screen if no inventory data
-  const [showUpload, setShowUpload] = useState(inventory.length === 0)
+  const [showUpload, setShowUpload] = useState(false)
 
-  // Filter and search logic
+  // Load data from database on component mount
+  useEffect(() => {
+    loadInventoryFromDatabase()
+    loadSettingsFromDatabase()
+  }, [])
+
+  const loadInventoryFromDatabase = async () => {
+    try {
+      setLoading(true)
+
+      // First try to load from localStorage as a quick fallback
+      const localData = localStorage.getItem("inventory")
+      let localInventory = null
+      if (localData) {
+        try {
+          localInventory = JSON.parse(localData)
+        } catch (e) {
+          console.error("Error parsing local inventory data:", e)
+        }
+      }
+
+      // Check if Supabase is configured by making a simple request
+      const configCheck = await fetch("/api/debug/supabase", {
+        method: "GET",
+        headers: { "Cache-Control": "no-cache" },
+      })
+
+      const configResult = await configCheck.json()
+      const isSupabaseConfigured = configResult.status === "success"
+      setSupabaseConfigured(isSupabaseConfigured)
+
+      if (!isSupabaseConfigured) {
+        console.log("Supabase not configured, using localStorage data")
+        if (localInventory) {
+          setInventory(localInventory)
+          const localNote = localStorage.getItem("packageNote")
+          if (localNote) setPackageNote(localNote)
+          setShowUpload(false)
+        } else {
+          setShowUpload(true)
+        }
+        return
+      }
+
+      // If Supabase is configured, try to load from Excel file in storage
+      try {
+        const fileMetadata = await getExcelFileMetadata()
+
+        if (fileMetadata.exists) {
+          // Read directly from the Excel file in storage
+          const result = await fetch("/api/excel", {
+            method: "PUT",
+            headers: { "Cache-Control": "no-cache" },
+          })
+
+          if (result.ok) {
+            const data = await result.json()
+
+            if (data.success && data.inventory.length > 0) {
+              setInventory(data.inventory)
+              setPackageNote(data.packageNote || "")
+              setShowUpload(false)
+
+              // Also save to localStorage as backup
+              localStorage.setItem("inventory", JSON.stringify(data.inventory))
+              if (data.packageNote) localStorage.setItem("packageNote", data.packageNote)
+
+              setError(null)
+              return
+            }
+          }
+        }
+
+        // If no Excel file or error reading it, try API fallback
+        const response = await fetch("/api/inventory", {
+          headers: { "Cache-Control": "no-cache" },
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+
+          if (result.success && result.data.length > 0) {
+            setInventory(result.data)
+            setShowUpload(false)
+
+            // Also save to localStorage as backup
+            localStorage.setItem("inventory", JSON.stringify(result.data))
+          } else {
+            // If API returns no data but was successful, use localStorage
+            if (localInventory) {
+              setInventory(localInventory)
+              setShowUpload(false)
+            } else {
+              setShowUpload(true)
+            }
+          }
+        } else {
+          // API error, fall back to localStorage
+          if (localInventory) {
+            setInventory(localInventory)
+            setShowUpload(false)
+          } else {
+            setShowUpload(true)
+          }
+        }
+      } catch (error) {
+        console.error("Error accessing Supabase storage:", error)
+        // Fall back to localStorage on any error
+        if (localInventory) {
+          setInventory(localInventory)
+          setShowUpload(false)
+        } else {
+          setShowUpload(true)
+        }
+      }
+    } catch (error) {
+      console.error("Error loading inventory:", error)
+      setError(`Failed to load inventory: ${error instanceof Error ? error.message : "Unknown error"}`)
+
+      // Final fallback - try localStorage
+      const localData = localStorage.getItem("inventory")
+      if (localData) {
+        try {
+          const parsedData = JSON.parse(localData)
+          setInventory(parsedData)
+          setShowUpload(false)
+        } catch (e) {
+          console.error("Error parsing local inventory data:", e)
+          setShowUpload(true)
+        }
+      } else {
+        setShowUpload(true)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadSettingsFromDatabase = async () => {
+    try {
+      const response = await fetch("/api/settings")
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Server returned non-JSON response")
+      }
+
+      const result = await response.json()
+
+      if (result.success && result.data.alert_settings) {
+        setAlertSettings(result.data.alert_settings)
+        localStorage.setItem("alertSettings", JSON.stringify(result.data.alert_settings))
+        setSupabaseConfigured(true)
+      } else if (result.configured === false) {
+        // Supabase not configured, use defaults
+        setSupabaseConfigured(false)
+        const localSettings = localStorage.getItem("alertSettings")
+        if (localSettings) {
+          setAlertSettings(JSON.parse(localSettings))
+        }
+      }
+    } catch (error) {
+      console.error("Error loading settings:", error)
+      setSupabaseConfigured(false)
+
+      // Use localStorage fallback
+      const localSettings = localStorage.getItem("alertSettings")
+      if (localSettings) {
+        try {
+          setAlertSettings(JSON.parse(localSettings))
+        } catch (parseError) {
+          console.error("Error parsing local settings:", parseError)
+          // Use default settings if localStorage is corrupted
+        }
+      }
+    }
+  }
+
+  const saveInventoryToDatabase = async (inventoryData: InventoryItem[], note = "", filename = "") => {
+    try {
+      setSyncing(true)
+      setError(null) // Clear any previous errors
+
+      console.log("🚀 Starting inventory sync...")
+      console.log("Items to sync:", inventoryData.length)
+
+      const response = await fetch("/api/inventory", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+        },
+        body: JSON.stringify({
+          inventory: inventoryData,
+          packageNote: note,
+          filename,
+        }),
+      })
+
+      console.log("📡 Response status:", response.status)
+      console.log("📡 Response headers:", Object.fromEntries(response.headers.entries()))
+
+      // Get response text first to handle both JSON and non-JSON responses
+      const responseText = await response.text()
+      console.log("📡 Raw response:", responseText.substring(0, 500))
+
+      if (!response.ok) {
+        let errorDetails = `HTTP ${response.status}: ${response.statusText}`
+
+        try {
+          const errorData = JSON.parse(responseText)
+          errorDetails = errorData.details || errorData.error || errorDetails
+          console.error("❌ Detailed error:", errorData)
+        } catch (parseError) {
+          console.error("❌ Could not parse error response as JSON")
+          errorDetails += ` - Response: ${responseText.substring(0, 200)}`
+        }
+
+        throw new Error(errorDetails)
+      }
+
+      let result
+      try {
+        result = JSON.parse(responseText)
+      } catch (parseError) {
+        console.error("❌ Could not parse success response as JSON:", parseError)
+        throw new Error("Server returned invalid JSON response")
+      }
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to save inventory")
+      }
+
+      console.log("✅ Sync successful:", result)
+
+      // Also save to localStorage as backup
+      localStorage.setItem("inventory", JSON.stringify(inventoryData))
+      if (note) localStorage.setItem("packageNote", note)
+
+      return result
+    } catch (error) {
+      console.error("❌ Error saving inventory:", error)
+      // Still save to localStorage even if database fails
+      localStorage.setItem("inventory", JSON.stringify(inventoryData))
+      if (note) localStorage.setItem("packageNote", note)
+      throw error
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  const saveSettingsToDatabase = async (settings: AlertSettings) => {
+    try {
+      const response = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key: "alert_settings",
+          value: settings,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      if (!result.success) {
+        throw new Error(result.error || "Failed to save settings")
+      }
+
+      localStorage.setItem("alertSettings", JSON.stringify(settings))
+    } catch (error) {
+      console.error("Error saving settings:", error)
+      // Still save to localStorage even if database fails
+      localStorage.setItem("alertSettings", JSON.stringify(settings))
+      throw error
+    }
+  }
+
+  // Filter and search logic - FIXED to include Location field
   const filteredInventory = useMemo(() => {
     return inventory.filter((item) => {
       const matchesSearch =
         item["Part number"].toLowerCase().includes(searchTerm.toLowerCase()) ||
         item["MFG Part number"].toLowerCase().includes(searchTerm.toLowerCase()) ||
         item["Part description"].toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item["Supplier"].toLowerCase().includes(searchTerm.toLowerCase())
+        item["Supplier"].toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item["Location"].toLowerCase().includes(searchTerm.toLowerCase()) || // ADDED THIS LINE
+        item["Package"].toLowerCase().includes(searchTerm.toLowerCase()) // ADDED THIS LINE TOO
 
       const matchesCategory = categoryFilter === "all" || item["Package"] === categoryFilter
 
@@ -87,9 +390,61 @@ export default function InventoryDashboard() {
     return uniqueSuppliers.sort() // Sort alphabetically for consistency
   }, [inventory])
 
-  const locations = useMemo(() => {
+  const uniqueLocations = useMemo(() => {
     const uniqueLocations = Array.from(new Set(inventory.map((item) => item["Location"]).filter(Boolean)))
-    return uniqueLocations.sort() // Sort alphabetically for consistency
+
+    // Enhanced natural sorting for locations like H1-1, H1-2, H1-10, etc.
+    return uniqueLocations.sort((a, b) => {
+      // Split by common separators (-, _, space)
+      const aParts = a.split(/[-_\s]+/)
+      const bParts = b.split(/[-_\s]+/)
+
+      // Compare each part
+      for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+        const aPart = aParts[i] || ""
+        const bPart = bParts[i] || ""
+
+        // Extract numeric and non-numeric portions from each part
+        const aMatch = aPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
+        const bMatch = bPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
+
+        if (aMatch && bMatch) {
+          const [, aPrefix, aNumber, aSuffix] = aMatch
+          const [, bPrefix, bNumber, bSuffix] = bMatch
+
+          // First compare the letter prefix (H1 vs H2)
+          if (aPrefix !== bPrefix) {
+            return aPrefix.localeCompare(bPrefix)
+          }
+
+          // Then compare the numeric part
+          if (aNumber && bNumber) {
+            const aNum = Number.parseInt(aNumber, 10)
+            const bNum = Number.parseInt(bNumber, 10)
+            if (aNum !== bNum) {
+              return aNum - bNum
+            }
+          } else if (aNumber && !bNumber) {
+            return 1 // Numbers come after non-numbers
+          } else if (!aNumber && bNumber) {
+            return -1 // Non-numbers come before numbers
+          }
+
+          // Finally compare any suffix
+          if (aSuffix !== bSuffix) {
+            return aSuffix.localeCompare(bSuffix)
+          }
+        } else {
+          // Fallback to string comparison if regex doesn't match
+          const comparison = aPart.toLowerCase().localeCompare(bPart.toLowerCase())
+          if (comparison !== 0) {
+            return comparison
+          }
+        }
+      }
+
+      return 0
+    })
   }, [inventory])
 
   // Get low stock items
@@ -121,30 +476,65 @@ export default function InventoryDashboard() {
   }
 
   // Add new inventory item
-  const addInventoryItem = (newItem: Omit<InventoryItem, "id" | "lastUpdated">) => {
+  const addInventoryItem = async (newItem: Omit<InventoryItem, "id" | "lastUpdated">) => {
     const item: InventoryItem = {
       ...newItem,
       id: `item-${Date.now()}`,
       lastUpdated: new Date(),
     }
-    setInventory((prev) => [...prev, item])
+    const updatedInventory = [...inventory, item]
+    setInventory(updatedInventory)
+
+    try {
+      await saveInventoryToDatabase(updatedInventory, packageNote)
+    } catch (error) {
+      console.error("Failed to save new item to database:", error)
+      // Item is still added locally, just show a warning
+      setError("Item added locally but failed to sync to database")
+    }
   }
 
   // Update reorder point
-  const updateReorderPoint = (itemId: string, newReorderPoint: number) => {
-    setInventory((prev) => prev.map((item) => (item.id === itemId ? { ...item, reorderPoint: newReorderPoint } : item)))
+  const updateReorderPoint = async (itemId: string, newReorderPoint: number) => {
+    const updatedInventory = inventory.map((item) =>
+      item.id === itemId ? { ...item, reorderPoint: newReorderPoint } : item,
+    )
+    setInventory(updatedInventory)
+
+    try {
+      await saveInventoryToDatabase(updatedInventory, packageNote)
+    } catch (error) {
+      console.error("Failed to save reorder point to database:", error)
+      setError("Update saved locally but failed to sync to database")
+    }
   }
 
   // Update inventory item quantity
-  const updateItemQuantity = (itemId: string, newQuantity: number) => {
-    setInventory((prev) =>
-      prev.map((item) => (item.id === itemId ? { ...item, QTY: newQuantity, lastUpdated: new Date() } : item)),
+  const updateItemQuantity = async (itemId: string, newQuantity: number) => {
+    const updatedInventory = inventory.map((item) =>
+      item.id === itemId ? { ...item, QTY: newQuantity, lastUpdated: new Date() } : item,
     )
+    setInventory(updatedInventory)
+
+    try {
+      await saveInventoryToDatabase(updatedInventory, packageNote)
+    } catch (error) {
+      console.error("Failed to save quantity to database:", error)
+      setError("Update saved locally but failed to sync to database")
+    }
   }
 
   // Delete inventory item
-  const deleteInventoryItem = (itemId: string) => {
-    setInventory((prev) => prev.filter((item) => item.id !== itemId))
+  const deleteInventoryItem = async (itemId: string) => {
+    const updatedInventory = inventory.filter((item) => item.id !== itemId)
+    setInventory(updatedInventory)
+
+    try {
+      await saveInventoryToDatabase(updatedInventory, packageNote)
+    } catch (error) {
+      console.error("Failed to delete item from database:", error)
+      setError("Item deleted locally but failed to sync to database")
+    }
   }
 
   // Download Excel file
@@ -153,14 +543,19 @@ export default function InventoryDashboard() {
   }
 
   // Create purchase request
-  const createPurchaseRequest = async (item: InventoryItem, quantity: number, urgency: "low" | "medium" | "high") => {
+  const createPurchaseRequest = async (
+    item: InventoryItem,
+    quantity: number,
+    urgency: "low" | "medium" | "high",
+    requester = "System User",
+  ) => {
     const request: PurchaseRequest = {
       id: Date.now().toString(),
       partNumber: item["Part number"],
       description: item["Part description"],
       quantity,
       urgency,
-      requestedBy: "System User",
+      requestedBy: requester || "System User", // Use the provided requester
       requestDate: new Date(),
       status: "pending",
     }
@@ -177,53 +572,83 @@ export default function InventoryDashboard() {
 
   // Send low stock alert
   const sendLowStockAlert = async () => {
-    if (lowStockItems.length > 0) {
-      const formattedItems = lowStockItems.map((item) => ({
-        partNumber: item["Part number"],
-        description: item["Part description"],
-        supplier: item["Supplier"],
-        location: item["Location"],
-        currentStock: item["QTY"],
-        reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
-      }))
+    if (lowStockItems.length === 0) {
+      alert("No low stock items to report!")
+      return
+    }
 
+    const formattedItems = lowStockItems.map((item) => ({
+      partNumber: item["Part number"],
+      description: item["Part description"],
+      supplier: item["Supplier"],
+      location: item["Location"],
+      currentStock: item["QTY"],
+      reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
+    }))
+
+    console.log("Sending low stock alert with items:", formattedItems)
+
+    try {
+      // Always try interactive message first
+      const result = await sendInteractiveLowStockAlert(formattedItems)
+      console.log("Low stock alert result:", result)
+      alert(
+        `Low stock alert sent successfully! Showing ${Math.min(3, formattedItems.length)} items with "Show All" button for ${formattedItems.length} total items.`,
+      )
+    } catch (error) {
+      console.error("Failed to send interactive low stock alert:", error)
       try {
+        // Fall back to text message
         const message = createLowStockAlertMessage(formattedItems)
         await sendSlackMessage(message)
-      } catch (error) {
-        console.error("Failed to send low stock alert:", error)
+        alert("Low stock alert sent as text message (interactive features unavailable)")
+      } catch (fallbackError) {
+        console.error("Failed to send fallback text message:", fallbackError)
         alert("Failed to send Slack alert. Please check your Slack webhook configuration.")
       }
-    } else {
-      alert("No low stock items to report!")
     }
   }
 
   // Send full low stock alert
   const sendFullAlert = async () => {
-    if (lowStockItems.length > 0) {
-      const formattedItems = lowStockItems.map((item) => ({
-        partNumber: item["Part number"],
-        description: item["Part description"],
-        supplier: item["Supplier"],
-        location: item["Location"],
-        currentStock: item["QTY"],
-        reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
-      }))
+    if (lowStockItems.length === 0) {
+      alert("No low stock items to report!")
+      return
+    }
 
+    const formattedItems = lowStockItems.map((item) => ({
+      partNumber: item["Part number"],
+      description: item["Part description"],
+      supplier: item["Supplier"],
+      location: item["Location"],
+      currentStock: item["QTY"],
+      reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
+    }))
+
+    console.log("Sending full alert with items:", formattedItems)
+
+    try {
+      const result = await sendInteractiveFullLowStockAlert(formattedItems)
+      console.log("Full alert result:", result)
+      alert(
+        `Full low stock alert sent successfully! Showing all ${formattedItems.length} items with individual reorder buttons.`,
+      )
+    } catch (error) {
+      console.error("Failed to send interactive full alert:", error)
       try {
-        await sendFullLowStockAlert(formattedItems)
-      } catch (error) {
-        console.error("Failed to send full low stock alert:", error)
+        // Fall back to text message
+        const message = createFullLowStockMessage(formattedItems)
+        await sendSlackMessage(message)
+        alert("Full alert sent as text message (interactive features unavailable)")
+      } catch (fallbackError) {
+        console.error("Failed to send fallback text message:", fallbackError)
         alert("Failed to send full Slack alert. Please check your Slack webhook configuration.")
       }
-    } else {
-      alert("No low stock items to report!")
     }
   }
 
   // Handle data loading
-  const handleDataLoaded = (data: any[], note: string) => {
+  const handleDataLoaded = async (data: any[], note: string) => {
     const transformedData: InventoryItem[] = data.map((row, index) => ({
       id: `item-${index + 1}`,
       "Part number": row["Part number"] || "",
@@ -240,6 +665,67 @@ export default function InventoryDashboard() {
     setInventory(transformedData)
     setPackageNote(note)
     setShowUpload(false)
+
+    // Save to database
+    try {
+      await saveInventoryToDatabase(transformedData, note, "inventory.xlsx")
+      alert(`Inventory uploaded and saved! ${transformedData.length} items stored permanently.`)
+    } catch (error) {
+      console.error("Failed to save to database:", error)
+      alert("Inventory uploaded locally but failed to save to database. Data will be lost on refresh.")
+    }
+  }
+
+  // Handle settings update
+  const handleSettingsUpdate = async (newSettings: AlertSettings) => {
+    setAlertSettings(newSettings)
+    try {
+      await saveSettingsToDatabase(newSettings)
+    } catch (error) {
+      console.error("Failed to save settings:", error)
+      setError("Settings updated locally but failed to sync to database")
+    }
+  }
+
+  // Manual sync function with enhanced error reporting
+  const handleManualSync = async () => {
+    try {
+      setSyncing(true)
+      setError(null) // Clear any previous errors
+
+      console.log("🚀 Starting manual sync...")
+      await saveInventoryToDatabase(inventory, packageNote)
+      await saveSettingsToDatabase(alertSettings)
+
+      console.log("✅ Manual sync completed successfully")
+      alert("Data synced successfully!")
+    } catch (error) {
+      console.error("❌ Sync failed:", error)
+      const errorMessage = error instanceof Error ? error.message : "Unknown sync error"
+      setError(`Failed to sync data to database: ${errorMessage}`)
+
+      // Show more detailed error in alert
+      const detailedError =
+        error instanceof Error
+          ? `${error.message}\n\nCheck the browser console for more details.`
+          : "Unknown sync error - check the browser console for details."
+
+      alert(`Sync failed: ${detailedError}`)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  // Show loading screen
+  if (loading) {
+    return (
+      <div className="container mx-auto p-6 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p>Loading inventory data...</p>
+        </div>
+      </div>
+    )
   }
 
   // Show upload screen if no data
@@ -260,7 +746,7 @@ export default function InventoryDashboard() {
             onAddItem={addInventoryItem}
             packageTypes={packageTypes}
             suppliers={suppliers}
-            locations={locations}
+            locations={uniqueLocations} // Updated here
             defaultReorderPoint={alertSettings.defaultReorderPoint}
           />
           <Button onClick={handleDownloadExcel} variant="outline">
@@ -270,6 +756,10 @@ export default function InventoryDashboard() {
           <Button onClick={() => setShowUpload(true)} variant="outline">
             <Upload className="w-4 h-4 mr-2" />
             Upload New File
+          </Button>
+          <Button onClick={handleManualSync} variant="outline" disabled={syncing}>
+            {syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
+            {syncing ? "Syncing..." : "Sync to Database"}
           </Button>
           <Button onClick={sendLowStockAlert} variant="outline">
             <Bell className="w-4 h-4 mr-2" />
@@ -298,7 +788,7 @@ export default function InventoryDashboard() {
                   <input
                     type="checkbox"
                     checked={alertSettings.enabled}
-                    onChange={(e) => setAlertSettings((prev) => ({ ...prev, enabled: e.target.checked }))}
+                    onChange={(e) => handleSettingsUpdate({ ...alertSettings, enabled: e.target.checked })}
                   />
                   <Label>Enable weekly alerts</Label>
                 </div>
@@ -307,7 +797,7 @@ export default function InventoryDashboard() {
                   <Select
                     value={alertSettings.dayOfWeek.toString()}
                     onValueChange={(value) =>
-                      setAlertSettings((prev) => ({ ...prev, dayOfWeek: Number.parseInt(value) }))
+                      handleSettingsUpdate({ ...alertSettings, dayOfWeek: Number.parseInt(value) })
                     }
                   >
                     <SelectTrigger>
@@ -329,7 +819,7 @@ export default function InventoryDashboard() {
                   <Input
                     type="time"
                     value={alertSettings.time}
-                    onChange={(e) => setAlertSettings((prev) => ({ ...prev, time: e.target.value }))}
+                    onChange={(e) => handleSettingsUpdate({ ...alertSettings, time: e.target.value })}
                   />
                 </div>
                 <div>
@@ -338,12 +828,27 @@ export default function InventoryDashboard() {
                     type="number"
                     value={alertSettings.defaultReorderPoint}
                     onChange={(e) =>
-                      setAlertSettings((prev) => ({
-                        ...prev,
+                      handleSettingsUpdate({
+                        ...alertSettings,
                         defaultReorderPoint: Number.parseInt(e.target.value),
-                      }))
+                      })
                     }
                   />
+                  <div className="mt-2 p-3 bg-gray-50 rounded text-sm">
+                    <p className="font-medium mb-2">Stock Status Levels:</p>
+                    <ul className="space-y-1 text-xs">
+                      <li>
+                        <strong>Low Stock:</strong> ≤ {alertSettings.defaultReorderPoint} units
+                      </li>
+                      <li>
+                        <strong>Approaching Low:</strong> {alertSettings.defaultReorderPoint + 1} -{" "}
+                        {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
+                      </li>
+                      <li>
+                        <strong>Normal:</strong> &gt; {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
+                      </li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             </DialogContent>
@@ -351,55 +856,59 @@ export default function InventoryDashboard() {
         </div>
       </div>
 
-      {/* Package Sorting Note */}
-      {packageNote && (
-        <Card className="border-yellow-200 bg-yellow-50">
+      {/* Excel File Information */}
+      <ExcelFileInfo onUploadNew={() => setShowUpload(true)} />
+
+      {/* Error Alert */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            {error}
+            <Button variant="outline" size="sm" className="ml-2" onClick={() => setError(null)}>
+              Dismiss
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Database Status */}
+      {supabaseConfigured === true && (
+        <Card className="border-blue-200 bg-blue-50">
           <CardContent className="pt-4">
             <div className="flex items-start gap-2">
-              <Info className="w-5 h-5 text-yellow-600 mt-0.5" />
+              <Database className="w-5 h-5 text-blue-600 mt-0.5" />
               <div>
-                <h3 className="font-medium text-yellow-800 mb-1">Package Sorting Information</h3>
-                <p className="text-sm text-yellow-700">{packageNote}</p>
+                <h3 className="font-medium text-blue-800 mb-1">Persistent Storage Active</h3>
+                <p className="text-sm text-blue-700">
+                  Your inventory data is automatically saved to the database. Changes are synced in real-time, and your
+                  data will persist across sessions and devices.
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* File Management Info */}
-      <Card className="border-green-200 bg-green-50">
-        <CardContent className="pt-4">
-          <div className="flex items-start gap-2">
-            <Info className="w-5 h-5 text-green-600 mt-0.5" />
-            <div>
-              <h3 className="font-medium text-green-800 mb-1">File Management</h3>
-              <p className="text-sm text-green-700">
-                You can add new items using the "Add New Item" button and download an updated Excel file with all your
-                changes. The downloaded file will include all original data plus any new entries you've added.
-              </p>
+      {/* Supabase Not Configured Warning */}
+      {supabaseConfigured === false && (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardContent className="pt-4">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 text-orange-600 mt-0.5" />
+              <div>
+                <h3 className="font-medium text-orange-800 mb-1">Database Not Available</h3>
+                <p className="text-sm text-orange-700">
+                  Supabase database connection failed. Your data is being stored locally in your browser only. Please
+                  check your environment variables and database setup.
+                </p>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Slack Integration Status */}
-      <Card className="border-blue-200 bg-blue-50">
-        <CardContent className="pt-4">
-          <div className="flex items-start gap-2">
-            <Info className="w-5 h-5 text-blue-600 mt-0.5" />
-            <div>
-              <h3 className="font-medium text-blue-800 mb-1">Slack Integration Active</h3>
-              <p className="text-sm text-blue-700">
-                Low stock alerts will be sent to #inventory-alerts with links to your Purchase Request shortcut.
-                {lowStockItems.length > 0 && ` Currently ${lowStockItems.length} items need attention.`}
-                {lowStockItems.length > 3 && " Use 'Send Full Alert' to see all items in Slack."}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Stats Cards - Removed Package Types and Pending Requests */}
+      {/* Stats Cards with Definitions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -408,6 +917,7 @@ export default function InventoryDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{inventory.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">All inventory items</p>
           </CardContent>
         </Card>
         <Card>
@@ -417,15 +927,61 @@ export default function InventoryDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-500">{lowStockItems.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              ≤ {alertSettings.defaultReorderPoint} units (at or below reorder point)
+            </p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Approaching Low</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-yellow-500" />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Info className="w-5 h-5 text-blue-600" />
+              Stock Status Definitions
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{approachingLowStockItems.length}</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex items-start gap-3">
+                <Badge variant="destructive" className="mt-1">
+                  Low Stock
+                </Badge>
+                <div>
+                  <p className="font-medium text-sm">≤ {alertSettings.defaultReorderPoint} units</p>
+                  <p className="text-xs text-muted-foreground">
+                    At or below the reorder point. Immediate action required.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Badge variant="secondary" className="mt-1">
+                  Approaching Low
+                </Badge>
+                <div>
+                  <p className="font-medium text-sm">
+                    {alertSettings.defaultReorderPoint + 1} - {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
+                  </p>
+                  <p className="text-xs text-muted-foreground">Within 50% above reorder point. Monitor closely.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Badge variant="outline" className="mt-1">
+                  Normal
+                </Badge>
+                <div>
+                  <p className="font-medium text-sm">
+                    {">"} {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
+                  </p>
+                  <p className="text-xs text-muted-foreground">More than 50% above reorder point. Adequate stock.</p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 p-3 bg-white rounded border border-blue-200">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> These calculations are based on your default reorder point of{" "}
+                {alertSettings.defaultReorderPoint} units. Individual items may have custom reorder points that override
+                this default.
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -434,6 +990,9 @@ export default function InventoryDashboard() {
       <Card>
         <CardHeader>
           <CardTitle>Search & Filter</CardTitle>
+          <CardDescription>
+            Search across part numbers, descriptions, suppliers, locations, and package types
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col md:flex-row gap-4">
@@ -441,7 +1000,7 @@ export default function InventoryDashboard() {
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search by part number, MFG part number, description, or supplier..."
+                  placeholder="Search by part number, description, supplier, location, or package type..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-8"
@@ -516,7 +1075,17 @@ export default function InventoryDashboard() {
                   <TableCell>
                     {(() => {
                       const stockStatus = getStockStatus(item)
-                      return <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>
+                      const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint
+                      const currentQty = item["QTY"]
+
+                      return (
+                        <div className="space-y-1">
+                          <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>
+                          <div className="text-xs text-muted-foreground">
+                            {currentQty} / {reorderPoint} units
+                          </div>
+                        </div>
+                      )
                     })()}
                   </TableCell>
                   <TableCell>
@@ -591,7 +1160,8 @@ export default function InventoryDashboard() {
                               const formData = new FormData(e.currentTarget)
                               const quantity = Number.parseInt(formData.get("quantity") as string)
                               const urgency = formData.get("urgency") as "low" | "medium" | "high"
-                              createPurchaseRequest(item, quantity, urgency)
+                              const requester = formData.get("requester") as string
+                              createPurchaseRequest(item, quantity, urgency, requester)
                             }}
                           >
                             <div className="space-y-4">
@@ -611,6 +1181,10 @@ export default function InventoryDashboard() {
                                     <SelectItem value="high">High</SelectItem>
                                   </SelectContent>
                                 </Select>
+                              </div>
+                              <div>
+                                <Label>Requested By</Label>
+                                <Input name="requester" placeholder="Your name or department" />
                               </div>
                             </div>
                             <DialogFooter className="mt-4">

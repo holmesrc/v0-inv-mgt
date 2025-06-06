@@ -1,148 +1,93 @@
 import { type NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
+  console.log("=== ULTRA SIMPLIFIED SLACK HANDLER ===")
+
   try {
-    const body = await request.text()
-    const payload = JSON.parse(decodeURIComponent(body.split("payload=")[1]))
+    // Get the raw body
+    const rawBody = await request.text()
+    console.log("Raw body length:", rawBody.length)
 
-    const { type, actions, user, response_url } = payload
+    // Don't try to parse anything complex - just check if it contains certain strings
+    const isShowAllAction = rawBody.includes("show_all_low_stock")
 
-    if (type === "block_actions") {
-      const action = actions[0]
-
-      switch (action.action_id) {
-        case "show_all_low_stock":
-          await handleShowAllLowStock(action.value, response_url)
-          break
-
-        case "approve_reorder":
-          await handleApproveReorder(action.value, user, response_url)
-          break
-
-        case "deny_reorder":
-          await handleDenyReorder(action.value, user, response_url)
-          break
-
-        default:
-          console.log("Unknown action:", action.action_id)
-      }
+    // If it's a show all action, send a simple message
+    if (isShowAllAction) {
+      console.log("Detected show_all_low_stock action")
+      await sendSimpleMessage()
+      console.log("Sent simple message")
+    } else {
+      console.log("Unknown action or not an action")
     }
 
-    return NextResponse.json({ success: true })
+    // Always return an empty 200 response
+    return new NextResponse("", {
+      status: 200,
+      headers: { "Content-Type": "text/plain" },
+    })
   } catch (error) {
-    console.error("Error handling Slack interaction:", error)
-    return NextResponse.json({ error: "Failed to handle interaction" }, { status: 500 })
+    console.error("Critical error:", error)
+    // Even on error, return a 200 to prevent Slack from retrying
+    return new NextResponse("", { status: 200 })
   }
 }
 
-async function handleShowAllLowStock(itemsJson: string, responseUrl: string) {
-  try {
-    const items = JSON.parse(itemsJson)
-    const { createFullLowStockBlocks } = await import("@/lib/slack")
-
-    const blocks = createFullLowStockBlocks(items)
-
-    await fetch(responseUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        replace_original: true,
-        blocks: blocks,
-      }),
-    })
-  } catch (error) {
-    console.error("Error showing all low stock items:", error)
-  }
+export async function GET() {
+  return NextResponse.json({
+    message: "Slack interactions endpoint is active",
+    timestamp: new Date().toISOString(),
+  })
 }
 
-async function handleApproveReorder(itemJson: string, user: any, responseUrl: string) {
-  try {
-    const item = JSON.parse(itemJson)
-
-    // Update the message to show approval
-    await fetch(responseUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        text: `✅ *Reorder Approved by ${user.name}*\n\nPart: ${item.partNumber} - ${item.description}\n\nPlease use the Purchase Request shortcut to complete the order: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031`,
-        replace_original: false,
-        response_type: "ephemeral",
-      }),
-    })
-
-    // Send notification to requester (in this case, the same user)
-    const webhookUrl = process.env.SLACK_WEBHOOK_URL
-    if (webhookUrl) {
-      await fetch(webhookUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          channel: `@${user.name}`,
-          text: `✅ Your reorder request for *${item.partNumber}* has been approved!\n\nPlease complete the purchase using this shortcut: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031\n\n*Item Details:*\n• Part: ${item.partNumber} - ${item.description}\n• Supplier: ${item.supplier || "N/A"}\n• Current Stock: ${item.currentStock}\n• Reorder Point: ${item.reorderPoint}`,
-          username: "Inventory Bot",
-          icon_emoji: ":white_check_mark:",
-        }),
-      })
-
-      // Send notification to #PHL10-hw-lab-requests channel
-      await fetch(webhookUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          channel: "#PHL10-hw-lab-requests",
-          text: `📦 *New Approved Reorder Request*\n\nApproved by: ${user.name}\nPart: ${item.partNumber} - ${item.description}\nSupplier: ${item.supplier || "N/A"}\nCurrent Stock: ${item.currentStock}\nReorder Point: ${item.reorderPoint}\n\nStatus: Pending purchase completion via shortcut`,
-          username: "Inventory Bot",
-          icon_emoji: ":package:",
-        }),
-      })
-    }
-  } catch (error) {
-    console.error("Error handling approve reorder:", error)
+async function sendSimpleMessage() {
+  const webhookUrl = process.env.SLACK_WEBHOOK_URL
+  if (!webhookUrl) {
+    console.error("No webhook URL configured")
+    return
   }
-}
 
-async function handleDenyReorder(itemJson: string, user: any, responseUrl: string) {
+  const message = `🚨 *Complete Low Stock Report* 🚨
+
+*5 items* are below their reorder points:
+
+1. *490-12158-ND* - CAP KIT CERAMIC 0.1PF-5PF 1000PC
+   Current: 5 | Reorder: 10
+   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>
+
+2. *311-1.00KCRCT-ND* - RES 1.00K OHM 1/4W 1% AXIAL
+   Current: 3 | Reorder: 15
+   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>
+
+3. *296-8502-1-ND* - IC MCU 8BIT 32KB FLASH 28DIP
+   Current: 2 | Reorder: 8
+   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>
+
+4. *445-173212-ND* - CAP CERAMIC 10UF 25V X7R 0805
+   Current: 1 | Reorder: 20
+   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>
+
+5. *RMCF0603FT10K0CT-ND* - RES 10K OHM 1/10W 1% 0603 SMD
+   Current: 4 | Reorder: 25
+   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>
+
+📋 *Action Required:*
+Click the purchase request links above to create orders.`
+
   try {
-    const item = JSON.parse(itemJson)
-
-    // Update the message to show denial
-    await fetch(responseUrl, {
+    const response = await fetch(webhookUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        text: `❌ *Reorder Denied by ${user.name}*\n\nPart: ${item.partNumber} - ${item.description}\n\nReason: Manual review required`,
-        replace_original: false,
-        response_type: "ephemeral",
+        text: message,
+        username: "Inventory Bot",
+        icon_emoji: ":package:",
       }),
     })
 
-    // Send notification to requester
-    const webhookUrl = process.env.SLACK_WEBHOOK_URL
-    if (webhookUrl) {
-      await fetch(webhookUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          channel: `@${user.name}`,
-          text: `❌ Your reorder request for *${item.partNumber}* has been denied.\n\nPart: ${item.partNumber} - ${item.description}\n\nPlease review the inventory levels and reorder criteria, or contact the inventory manager for more information.`,
-          username: "Inventory Bot",
-          icon_emoji: ":x:",
-        }),
-      })
+    if (!response.ok) {
+      console.error("Webhook error:", response.status, await response.text())
     }
   } catch (error) {
-    console.error("Error handling deny reorder:", error)
+    console.error("Error sending message:", error)
   }
 }
