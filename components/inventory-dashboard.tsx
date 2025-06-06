@@ -317,7 +317,7 @@ export default function InventoryDashboard() {
   const uniqueLocations = useMemo(() => {
     const uniqueLocations = Array.from(new Set(inventory.map((item) => item["Location"]).filter(Boolean)))
 
-    // Improved natural sorting for locations like H2-1, H2-2, H2-10, etc.
+    // Enhanced natural sorting for locations like H1-1, H1-2, H1-10, etc.
     return uniqueLocations.sort((a, b) => {
       // Split by common separators (-, _, space)
       const aParts = a.split(/[-_\s]+/)
@@ -328,16 +328,38 @@ export default function InventoryDashboard() {
         const aPart = aParts[i] || ""
         const bPart = bParts[i] || ""
 
-        // If both parts are numbers, compare numerically
-        const aNum = Number.parseInt(aPart, 10)
-        const bNum = Number.parseInt(bPart, 10)
+        // Extract numeric and non-numeric portions from each part
+        const aMatch = aPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
+        const bMatch = bPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
 
-        if (!isNaN(aNum) && !isNaN(bNum)) {
-          if (aNum !== bNum) {
-            return aNum - bNum
+        if (aMatch && bMatch) {
+          const [, aPrefix, aNumber, aSuffix] = aMatch
+          const [, bPrefix, bNumber, bSuffix] = bMatch
+
+          // First compare the letter prefix (H1 vs H2)
+          if (aPrefix !== bPrefix) {
+            return aPrefix.localeCompare(bPrefix)
+          }
+
+          // Then compare the numeric part
+          if (aNumber && bNumber) {
+            const aNum = Number.parseInt(aNumber, 10)
+            const bNum = Number.parseInt(bNumber, 10)
+            if (aNum !== bNum) {
+              return aNum - bNum
+            }
+          } else if (aNumber && !bNumber) {
+            return 1 // Numbers come after non-numbers
+          } else if (!aNumber && bNumber) {
+            return -1 // Non-numbers come before numbers
+          }
+
+          // Finally compare any suffix
+          if (aSuffix !== bSuffix) {
+            return aSuffix.localeCompare(bSuffix)
           }
         } else {
-          // Compare as strings (case insensitive)
+          // Fallback to string comparison if regex doesn't match
           const comparison = aPart.toLowerCase().localeCompare(bPart.toLowerCase())
           if (comparison !== 0) {
             return comparison
