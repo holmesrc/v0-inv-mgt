@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef, useMemo } from "react"
+import { useState, useRef, useMemo, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -55,22 +55,21 @@ export default function AddInventoryItem({
   const locationInputRef = useRef<HTMLInputElement>(null)
   const packageInputRef = useRef<HTMLInputElement>(null)
 
+  // Debug logging for locations
+  useEffect(() => {
+    console.log("AddInventoryItem received locations:", locations)
+  }, [locations])
+
   // Aggressive deduplication with debugging
   const uniquePackageTypes = useMemo(() => {
-    console.log("Raw packageTypes:", packageTypes)
-
     // Filter out empty/null/undefined values and trim whitespace
     const cleaned = packageTypes
       .filter((type) => type && typeof type === "string" && type.trim().length > 0)
       .map((type) => type.trim().toUpperCase()) // Normalize to uppercase
 
-    console.log("Cleaned packageTypes:", cleaned)
-
     // Create Set to remove duplicates, then convert back to array
     const uniqueSet = new Set(cleaned)
     const uniqueArray = Array.from(uniqueSet).sort()
-
-    console.log("Final unique packageTypes:", uniqueArray)
 
     return uniqueArray
   }, [packageTypes])
@@ -83,63 +82,65 @@ export default function AddInventoryItem({
     return Array.from(uniqueSet).sort()
   }, [suppliers])
 
+  // COMPLETELY REWRITTEN location sorting function
   const uniqueLocations = useMemo(() => {
+    console.log("Raw locations in AddInventoryItem:", locations)
+
+    // Step 1: Clean the data - remove empty values and trim whitespace
     const cleaned = locations
       .filter((location) => location && typeof location === "string" && location.trim().length > 0)
       .map((location) => location.trim())
 
-    // Enhanced natural sorting for locations like H1-1, H1-2, H1-10, etc.
-    return Array.from(new Set(cleaned)).sort((a, b) => {
-      // Split by common separators (-, _, space)
-      const aParts = a.split(/[-_\s]+/)
-      const bParts = b.split(/[-_\s]+/)
+    console.log("Cleaned locations:", cleaned)
 
-      // Compare each part
-      for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
-        const aPart = aParts[i] || ""
-        const bPart = bParts[i] || ""
+    // Step 2: Remove duplicates
+    const uniqueLocations = Array.from(new Set(cleaned))
+    console.log("Unique locations:", uniqueLocations)
 
-        // Extract numeric and non-numeric portions from each part
-        const aMatch = aPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
-        const bMatch = bPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
+    // Step 3: Custom sorting function for alphanumeric location codes
+    const sortedLocations = uniqueLocations.sort((a, b) => {
+      // Helper function to extract parts from location strings
+      const extractParts = (loc: string) => {
+        // Match patterns like "A1", "H1-2", "H10-B5", etc.
+        const match = loc.match(/^([A-Za-z]*)(\d*)(?:[^A-Za-z0-9]*([A-Za-z]*)(\d*))?/)
+        if (!match) return { prefix1: loc, num1: 0, prefix2: "", num2: 0 }
 
-        if (aMatch && bMatch) {
-          const [, aPrefix, aNumber, aSuffix] = aMatch
-          const [, bPrefix, bNumber, bSuffix] = bMatch
+        const [, prefix1 = "", numStr1 = "", prefix2 = "", numStr2 = ""] = match
+        const num1 = numStr1 ? Number.parseInt(numStr1, 10) : 0
+        const num2 = numStr2 ? Number.parseInt(numStr2, 10) : 0
 
-          // First compare the letter prefix (H1 vs H2)
-          if (aPrefix !== bPrefix) {
-            return aPrefix.localeCompare(bPrefix)
-          }
-
-          // Then compare the numeric part numerically (not alphabetically)
-          if (aNumber && bNumber) {
-            const aNum = Number.parseInt(aNumber, 10)
-            const bNum = Number.parseInt(bNumber, 10)
-            if (aNum !== bNum) {
-              return aNum - bNum
-            }
-          } else if (aNumber && !bNumber) {
-            return 1 // Numbers come after non-numbers
-          } else if (!aNumber && bNumber) {
-            return -1 // Non-numbers come before numbers
-          }
-
-          // Finally compare any suffix
-          if (aSuffix !== bSuffix) {
-            return aSuffix.localeCompare(bSuffix)
-          }
-        } else {
-          // Fallback to string comparison if regex doesn't match
-          const comparison = aPart.toLowerCase().localeCompare(bPart.toLowerCase())
-          if (comparison !== 0) {
-            return comparison
-          }
-        }
+        return { prefix1, num1, prefix2, num2 }
       }
 
-      return 0
+      const partsA = extractParts(a)
+      const partsB = extractParts(b)
+
+      // Compare first prefix (alphabetical)
+      if (partsA.prefix1 !== partsB.prefix1) {
+        return partsA.prefix1.localeCompare(partsB.prefix1)
+      }
+
+      // Compare first number (numerical)
+      if (partsA.num1 !== partsB.num1) {
+        return partsA.num1 - partsB.num1
+      }
+
+      // Compare second prefix if first parts are identical
+      if (partsA.prefix2 !== partsB.prefix2) {
+        return partsA.prefix2.localeCompare(partsB.prefix2)
+      }
+
+      // Compare second number
+      if (partsA.num2 !== partsB.num2) {
+        return partsA.num2 - partsB.num2
+      }
+
+      // If everything matches so far, fall back to string comparison
+      return a.localeCompare(b)
     })
+
+    console.log("Final sorted locations:", sortedLocations)
+    return sortedLocations
   }, [locations])
 
   const handleSubmit = (e: React.FormEvent) => {
