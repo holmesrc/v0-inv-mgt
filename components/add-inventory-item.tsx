@@ -87,8 +87,59 @@ export default function AddInventoryItem({
     const cleaned = locations
       .filter((location) => location && typeof location === "string" && location.trim().length > 0)
       .map((location) => location.trim())
-    const uniqueSet = new Set(cleaned)
-    return Array.from(uniqueSet).sort()
+
+    // Enhanced natural sorting for locations like H1-1, H1-2, H1-10, etc.
+    return Array.from(new Set(cleaned)).sort((a, b) => {
+      // Split by common separators (-, _, space)
+      const aParts = a.split(/[-_\s]+/)
+      const bParts = b.split(/[-_\s]+/)
+
+      // Compare each part
+      for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+        const aPart = aParts[i] || ""
+        const bPart = bParts[i] || ""
+
+        // Extract numeric and non-numeric portions from each part
+        const aMatch = aPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
+        const bMatch = bPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
+
+        if (aMatch && bMatch) {
+          const [, aPrefix, aNumber, aSuffix] = aMatch
+          const [, bPrefix, bNumber, bSuffix] = bMatch
+
+          // First compare the letter prefix (H1 vs H2)
+          if (aPrefix !== bPrefix) {
+            return aPrefix.localeCompare(bPrefix)
+          }
+
+          // Then compare the numeric part numerically (not alphabetically)
+          if (aNumber && bNumber) {
+            const aNum = Number.parseInt(aNumber, 10)
+            const bNum = Number.parseInt(bNumber, 10)
+            if (aNum !== bNum) {
+              return aNum - bNum
+            }
+          } else if (aNumber && !bNumber) {
+            return 1 // Numbers come after non-numbers
+          } else if (!aNumber && bNumber) {
+            return -1 // Non-numbers come before numbers
+          }
+
+          // Finally compare any suffix
+          if (aSuffix !== bSuffix) {
+            return aSuffix.localeCompare(bSuffix)
+          }
+        } else {
+          // Fallback to string comparison if regex doesn't match
+          const comparison = aPart.toLowerCase().localeCompare(bPart.toLowerCase())
+          if (comparison !== 0) {
+            return comparison
+          }
+        }
+      }
+
+      return 0
+    })
   }, [locations])
 
   const handleSubmit = (e: React.FormEvent) => {
