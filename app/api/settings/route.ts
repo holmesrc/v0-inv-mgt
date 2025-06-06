@@ -47,6 +47,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  console.log("=== SETTINGS API DEBUG START ===")
+
   try {
     if (!canUseSupabase()) {
       return NextResponse.json(
@@ -58,25 +60,120 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { key, value } = await request.json()
-    const supabase = createServerSupabaseClient()
-
-    const { error } = await supabase.from("settings").upsert({ key, value, updated_at: new Date().toISOString() })
-
-    if (error) {
-      console.error("Error saving settings:", error)
-      return NextResponse.json({ error: "Failed to save settings" }, { status: 500 })
+    // Parse request body with detailed error handling
+    let requestBody
+    try {
+      requestBody = await request.json()
+      console.log("Request body parsed successfully:", requestBody)
+    } catch (parseError) {
+      console.error("Error parsing request body:", parseError)
+      return NextResponse.json(
+        {
+          error: "Invalid request format",
+          details: parseError instanceof Error ? parseError.message : "Unknown parsing error",
+        },
+        { status: 400 },
+      )
     }
 
-    return NextResponse.json({ success: true, message: "Settings saved successfully" })
+    const { key, value } = requestBody
+
+    if (!key) {
+      console.error("Missing key in request")
+      return NextResponse.json({ error: "Missing key parameter" }, { status: 400 })
+    }
+
+    console.log(`Saving settings for key: ${key}`)
+
+    const supabase = createServerSupabaseClient()
+
+    // First check if the settings table exists
+    try {
+      const { error: tableCheckError } = await supabase.from("settings").select("count").limit(1)
+
+      if (tableCheckError) {
+        console.error("Settings table check failed:", tableCheckError)
+
+        if (tableCheckError.message.includes("relation") && tableCheckError.message.includes("does not exist")) {
+          console.log("Settings table does not exist, creating it...")
+
+          // Create the settings table
+          const { error: createTableError } = await supabase.rpc("create_settings_table")
+
+          if (createTableError) {
+            console.error("Failed to create settings table:", createTableError)
+            return NextResponse.json(
+              {
+                error: "Settings table does not exist and could not be created",
+                details: createTableError.message,
+              },
+              { status: 500 },
+            )
+          }
+
+          console.log("Settings table created successfully")
+        } else {
+          return NextResponse.json(
+            {
+              error: "Error accessing settings table",
+              details: tableCheckError.message,
+            },
+            { status: 500 },
+          )
+        }
+      }
+    } catch (tableError) {
+      console.error("Error checking settings table:", tableError)
+      return NextResponse.json(
+        {
+          error: "Failed to check settings table",
+          details: tableError instanceof Error ? tableError.message : "Unknown table error",
+        },
+        { status: 500 },
+      )
+    }
+
+    // Now try to upsert the settings
+    try {
+      const { error } = await supabase.from("settings").upsert({
+        key,
+        value,
+        updated_at: new Date().toISOString(),
+      })
+
+      if (error) {
+        console.error("Error saving settings:", error)
+        return NextResponse.json(
+          {
+            error: "Failed to save settings",
+            details: error.message,
+            code: error.code,
+          },
+          { status: 500 },
+        )
+      }
+
+      console.log("Settings saved successfully")
+      return NextResponse.json({ success: true, message: "Settings saved successfully" })
+    } catch (upsertError) {
+      console.error("Exception during settings upsert:", upsertError)
+      return NextResponse.json(
+        {
+          error: "Exception during settings save",
+          details: upsertError instanceof Error ? upsertError.message : "Unknown upsert error",
+        },
+        { status: 500 },
+      )
+    }
   } catch (error) {
-    console.error("Error saving settings:", error)
+    console.error("Critical error in settings API:", error)
     return NextResponse.json(
       {
-        error: "Supabase configuration error",
-        configured: false,
+        error: "Critical error in settings API",
+        details: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
       },
-      { status: 503 },
+      { status: 500 },
     )
   }
 }
