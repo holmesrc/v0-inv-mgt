@@ -417,7 +417,7 @@ export default function InventoryDashboard() {
             return aPrefix.localeCompare(bPrefix)
           }
 
-          // Then compare the numeric part
+          // Then compare the numeric part numerically (not alphabetically)
           if (aNumber && bNumber) {
             const aNum = Number.parseInt(aNumber, 10)
             const bNum = Number.parseInt(bNumber, 10)
@@ -900,7 +900,7 @@ export default function InventoryDashboard() {
                 <h3 className="font-medium text-orange-800 mb-1">Database Not Available</h3>
                 <p className="text-sm text-orange-700">
                   Supabase database connection failed. Your data is being stored locally in your browser only. Please
-                  check your environment variables and database setup.
+                  check your environment variables and database setup
                 </p>
               </div>
             </div>
