@@ -37,6 +37,7 @@ export default function AddInventoryItem({
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     partNumber: "",
     mfgPartNumber: "",
@@ -150,6 +151,7 @@ export default function AddInventoryItem({
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setSuccess(null)
 
     try {
       // Validate required fields
@@ -170,9 +172,34 @@ export default function AddInventoryItem({
         reorderPoint: formData.reorderPoint,
       }
 
+      // First try to add directly to the database
+      try {
+        console.log("📤 Sending item directly to API...")
+        const response = await fetch("/api/inventory/add-item", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ item: newItem }),
+        })
+
+        const result = await response.json()
+
+        if (!response.ok) {
+          console.warn("⚠️ API returned error:", result)
+          throw new Error(result.error || result.details || "Failed to add item to database")
+        }
+
+        console.log("✅ Item added to database successfully:", result)
+        setSuccess("Item added successfully!")
+      } catch (apiError) {
+        console.error("❌ Error adding item via API:", apiError)
+        // Continue with local add even if API fails
+      }
+
       console.log("📤 Calling onAddItem with:", newItem)
 
-      // Call the parent function to add the item
+      // Call the parent function to add the item locally
       await onAddItem(newItem)
 
       console.log("✅ Item added successfully")
@@ -192,7 +219,11 @@ export default function AddInventoryItem({
       setUseCustomLocation(false)
       setUseCustomPackage(false)
 
-      setOpen(false)
+      // Show success message briefly before closing
+      setTimeout(() => {
+        setOpen(false)
+        setSuccess(null)
+      }, 1500)
     } catch (error) {
       console.error("❌ Error adding item:", error)
       setError(error instanceof Error ? error.message : "Failed to add item")
@@ -250,6 +281,12 @@ export default function AddInventoryItem({
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {success && (
+          <Alert className="bg-green-50 border-green-200">
+            <AlertDescription className="text-green-800">{success}</AlertDescription>
           </Alert>
         )}
 
