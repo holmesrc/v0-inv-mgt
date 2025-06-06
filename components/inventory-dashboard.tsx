@@ -314,11 +314,38 @@ export default function InventoryDashboard() {
     return uniqueSuppliers.sort() // Sort alphabetically for consistency
   }, [inventory])
 
-  const locations = useMemo(() => {
+  const uniqueLocations = useMemo(() => {
     const uniqueLocations = Array.from(new Set(inventory.map((item) => item["Location"]).filter(Boolean)))
-    // Use natural sorting to handle H2-1, H2-2, H2-10 correctly
+
+    // Improved natural sorting for locations like H2-1, H2-2, H2-10, etc.
     return uniqueLocations.sort((a, b) => {
-      return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
+      // Split by common separators (-, _, space)
+      const aParts = a.split(/[-_\s]+/)
+      const bParts = b.split(/[-_\s]+/)
+
+      // Compare each part
+      for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+        const aPart = aParts[i] || ""
+        const bPart = bParts[i] || ""
+
+        // If both parts are numbers, compare numerically
+        const aNum = Number.parseInt(aPart, 10)
+        const bNum = Number.parseInt(bPart, 10)
+
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+          if (aNum !== bNum) {
+            return aNum - bNum
+          }
+        } else {
+          // Compare as strings (case insensitive)
+          const comparison = aPart.toLowerCase().localeCompare(bPart.toLowerCase())
+          if (comparison !== 0) {
+            return comparison
+          }
+        }
+      }
+
+      return 0
     })
   }, [inventory])
 
@@ -614,7 +641,7 @@ export default function InventoryDashboard() {
             onAddItem={addInventoryItem}
             packageTypes={packageTypes}
             suppliers={suppliers}
-            locations={locations}
+            locations={uniqueLocations} // Updated here
             defaultReorderPoint={alertSettings.defaultReorderPoint}
           />
           <Button onClick={handleDownloadExcel} variant="outline">
