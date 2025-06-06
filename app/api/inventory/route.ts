@@ -184,20 +184,22 @@ export async function POST(request: NextRequest) {
     let inventoryData
     try {
       inventoryData = inventory.map((item: any, index: number) => {
-        // Validate each item has required fields
+        // Log problematic items to help diagnose issues
         if (!item["Part number"]) {
-          throw new Error(`Item at index ${index} missing Part number`)
+          console.warn(`⚠️ Item at index ${index} missing Part number:`, item)
         }
 
+        // Handle missing or invalid values more gracefully
         return {
-          part_number: String(item["Part number"] || ""),
+          part_number: String(item["Part number"] || `Unknown-${index}`),
           mfg_part_number: String(item["MFG Part number"] || ""),
-          qty: Number(item.QTY) || 0,
+          qty: isNaN(Number(item.QTY)) ? 0 : Number(item.QTY),
           part_description: String(item["Part description"] || ""),
           supplier: String(item.Supplier || ""),
           location: String(item.Location || ""),
           package: String(item.Package || ""),
-          reorder_point: Number(item.reorderPoint) || 10,
+          reorder_point: isNaN(Number(item.reorderPoint)) ? 10 : Number(item.reorderPoint),
+          last_updated: new Date().toISOString(),
         }
       })
 
@@ -206,6 +208,7 @@ export async function POST(request: NextRequest) {
       console.log("Total items to insert:", inventoryData.length)
     } catch (transformError) {
       console.error("❌ Error transforming inventory data:", transformError)
+      console.error("Problem item sample:", inventory.slice(0, 3))
       return NextResponse.json(
         {
           error: "Failed to transform inventory data",

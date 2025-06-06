@@ -146,8 +146,14 @@ export default function AddInventoryItem({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
+    // Validate required fields
+    if (!formData.partNumber.trim()) {
+      alert("Part number is required and cannot be empty")
+      return
+    }
+
     const newItem: Omit<InventoryItem, "id" | "lastUpdated"> = {
-      "Part number": formData.partNumber,
+      "Part number": formData.partNumber.trim(),
       "MFG Part number": formData.mfgPartNumber,
       QTY: formData.qty,
       "Part description": formData.description,

@@ -259,6 +259,15 @@ export default function InventoryDashboard() {
       console.log("🚀 Starting inventory sync...")
       console.log("Items to sync:", inventoryData.length)
 
+      // Validate data before sending
+      const invalidItems = inventoryData.filter((item) => !item["Part number"])
+      if (invalidItems.length > 0) {
+        console.error("❌ Found invalid items:", invalidItems)
+        throw new Error(
+          `Found ${invalidItems.length} items with missing part numbers. Please fix these items before syncing.`,
+        )
+      }
+
       const response = await fetch("/api/inventory", {
         method: "POST",
         headers: {
@@ -311,6 +320,10 @@ export default function InventoryDashboard() {
       // Also save to localStorage as backup
       localStorage.setItem("inventory", JSON.stringify(inventoryData))
       if (note) localStorage.setItem("packageNote", note)
+
+      // Show success message
+      setError("✅ Sync successful! All items saved to database.")
+      setTimeout(() => setError(null), 3000)
 
       return result
     } catch (error) {
