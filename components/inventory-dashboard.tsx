@@ -693,24 +693,95 @@ export default function InventoryDashboard() {
       setSyncing(true)
       setError(null) // Clear any previous errors
 
-      console.log("🚀 Starting manual sync...")
-      await saveInventoryToDatabase(inventory, packageNote)
+      console.log("🚀 Starting enhanced manual sync...")
+
+      // Step 1: Check if we have local data
+      if (inventory.length === 0) {
+        throw new Error("No inventory data to sync. Please upload inventory first.")
+      }
+      console.log(`✅ Local inventory has ${inventory.length} items`)
+
+      // Step 2: Check Supabase configuration
+      console.log("🔍 Checking Supabase configuration...")
+      const configResponse = await fetch("/api/debug/supabase")
+      const configResult = await configResponse.json()
+
+      if (configResult.status !== "success") {
+        throw new Error(`Supabase configuration failed: ${configResult.message}`)
+      }
+      console.log("✅ Supabase configuration verified")
+
+      // Step 3: Attempt to sync inventory
+      console.log("📤 Syncing inventory data...")
+      const syncResult = await saveInventoryToDatabase(inventory, packageNote)
+      console.log("✅ Inventory sync completed:", syncResult)
+
+      // Step 4: Attempt to sync settings
+      console.log("⚙️ Syncing settings...")
       await saveSettingsToDatabase(alertSettings)
+      console.log("✅ Settings sync completed")
 
-      console.log("✅ Manual sync completed successfully")
-      alert("Data synced successfully!")
+      // Step 5: Verify data was saved by reading it back
+      console.log("🔍 Verifying sync by reading data back...")
+      const verifyResponse = await fetch("/api/inventory", {
+        method: "GET",
+        headers: { "Cache-Control": "no-cache" },
+      })
+
+      if (verifyResponse.ok) {
+        const verifyResult = await verifyResponse.json()
+        if (verifyResult.success && verifyResult.count > 0) {
+          console.log(`✅ Verification successful: ${verifyResult.count} items in database`)
+          alert(
+            `✅ Sync successful!\n\n📊 Synced: ${inventory.length} inventory items\n🔍 Verified: ${verifyResult.count} items in database\n⚙️ Settings updated`,
+          )
+        } else {
+          console.warn("⚠️ Verification inconclusive:", verifyResult)
+          alert("⚠️ Sync completed but verification was inconclusive. Check the console for details.")
+        }
+      } else {
+        console.warn("⚠️ Could not verify sync - verification request failed")
+        alert("✅ Sync completed but could not verify. Data should be saved.")
+      }
     } catch (error) {
-      console.error("❌ Sync failed:", error)
+      console.error("❌ Enhanced sync failed:", error)
+
+      // Provide specific guidance based on the error
+      let userMessage = "❌ Sync failed:\n\n"
+      let technicalDetails = ""
+
+      if (error instanceof Error) {
+        userMessage += error.message
+        technicalDetails = error.stack || ""
+
+        // Add specific guidance for common issues
+        if (error.message.includes("Supabase")) {
+          userMessage += "\n\n🔧 Check your Supabase environment variables in Vercel settings."
+        } else if (error.message.includes("Network")) {
+          userMessage += "\n\n🌐 Check your internet connection and try again."
+        } else if (error.message.includes("No inventory")) {
+          userMessage += "\n\n📁 Upload an Excel file first to have data to sync."
+        }
+      } else {
+        userMessage += "Unknown error occurred"
+        technicalDetails = String(error)
+      }
+
+      // Show user-friendly error
+      alert(userMessage)
+
+      // Set detailed error for the UI
       const errorMessage = error instanceof Error ? error.message : "Unknown sync error"
-      setError(`Failed to sync data to database: ${errorMessage}`)
+      setError(`Sync failed: ${errorMessage}. Check browser console for details.`)
 
-      // Show more detailed error in alert
-      const detailedError =
-        error instanceof Error
-          ? `${error.message}\n\nCheck the browser console for more details.`
-          : "Unknown sync error - check the browser console for details."
-
-      alert(`Sync failed: ${detailedError}`)
+      // Log detailed information for debugging
+      console.error("📋 Sync Error Details:", {
+        message: error instanceof Error ? error.message : "Unknown error",
+        stack: technicalDetails,
+        inventoryCount: inventory.length,
+        packageNote: packageNote ? "present" : "empty",
+        timestamp: new Date().toISOString(),
+      })
     } finally {
       setSyncing(false)
     }
@@ -760,6 +831,32 @@ export default function InventoryDashboard() {
           <Button onClick={handleManualSync} variant="outline" disabled={syncing}>
             {syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
             {syncing ? "Syncing..." : "Sync to Database"}
+          </Button>
+          <Button
+            onClick={async () => {
+              try {
+                const configResponse = await fetch("/api/debug/supabase")
+                const configResult = await configResponse.json()
+
+                const envResponse = await fetch("/api/debug/env")
+                const envResult = await envResponse.json()
+
+                alert(
+                  `🔍 Quick Diagnostic:\n\n` +
+                    `📊 Local Items: ${inventory.length}\n` +
+                    `🗄️ Database: ${configResult.status === "success" ? "✅ Connected" : "❌ " + configResult.message}\n` +
+                    `⚙️ Supabase URL: ${envResult.supabase?.url || "❌ Missing"}\n` +
+                    `🔑 Supabase Keys: ${envResult.supabase?.anonKey || "❌ Missing"}\n` +
+                    `🛠️ Service Key: ${envResult.supabase?.serviceKey || "❌ Missing"}`,
+                )
+              } catch (error) {
+                alert(`❌ Diagnostic failed: ${error instanceof Error ? error.message : "Unknown error"}`)
+              }
+            }}
+            variant="outline"
+            size="sm"
+          >
+            🔍 Diagnose
           </Button>
           <Button onClick={sendLowStockAlert} variant="outline">
             <Bell className="w-4 h-4 mr-2" />
