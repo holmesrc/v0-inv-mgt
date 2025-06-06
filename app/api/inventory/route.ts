@@ -122,17 +122,43 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Step 5: Test database connection
+    // Step 5: Test database connection with more detailed error handling
     console.log("Step 5: Testing database connection...")
     try {
-      const { data: testData, error: testError } = await supabase.from("inventory").select("count").limit(1)
+      const { data: testData, error: testError } = await supabase.from("inventory").select("id").limit(1)
 
       if (testError) {
         console.error("❌ Database connection test failed:", testError)
+
+        // Check for specific error types
+        if (testError.message.includes("relation") && testError.message.includes("does not exist")) {
+          return NextResponse.json(
+            {
+              error: "Database table 'inventory' does not exist",
+              details: "Please run the SQL scripts to create the required tables",
+              hint: "Run scripts/003-fix-table-structure.sql in your Supabase dashboard",
+            },
+            { status: 500 },
+          )
+        }
+
+        if (testError.message.includes("permission denied")) {
+          return NextResponse.json(
+            {
+              error: "Database permission denied",
+              details: "The service role key doesn't have permission to access the inventory table",
+              hint: "Check your Supabase RLS policies and service role permissions",
+            },
+            { status: 500 },
+          )
+        }
+
         return NextResponse.json(
           {
             error: "Database connection failed",
             details: testError.message,
+            code: testError.code,
+            hint: testError.hint,
           },
           { status: 500 },
         )
@@ -163,6 +189,8 @@ export async function POST(request: NextRequest) {
           {
             error: "Failed to clear existing inventory",
             details: deleteError.message,
+            code: deleteError.code,
+            hint: deleteError.hint,
           },
           { status: 500 },
         )
@@ -179,26 +207,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Step 7: Transform inventory data
+    // Step 7: Transform inventory data with better validation
     console.log("Step 7: Transforming inventory data...")
     let inventoryData
     try {
       inventoryData = inventory.map((item: any, index: number) => {
-        // Log problematic items to help diagnose issues
-        if (!item["Part number"]) {
-          console.warn(`⚠️ Item at index ${index} missing Part number:`, item)
+        // More thorough validation
+        const partNumber = item["Part number"]
+        if (!partNumber || typeof partNumber !== "string" || partNumber.trim() === "") {
+          throw new Error(`Item at index ${index} has invalid or missing part number: "${partNumber}"`)
         }
 
-        // Handle missing or invalid values more gracefully
         return {
-          part_number: String(item["Part number"] || `Unknown-${index}`),
-          mfg_part_number: String(item["MFG Part number"] || ""),
-          qty: isNaN(Number(item.QTY)) ? 0 : Number(item.QTY),
-          part_description: String(item["Part description"] || ""),
-          supplier: String(item.Supplier || ""),
-          location: String(item.Location || ""),
-          package: String(item.Package || ""),
-          reorder_point: isNaN(Number(item.reorderPoint)) ? 10 : Number(item.reorderPoint),
+          part_number: String(partNumber).trim(),
+          mfg_part_number: String(item["MFG Part number"] || "").trim(),
+          qty: isNaN(Number(item.QTY)) ? 0 : Math.max(0, Number(item.QTY)),
+          part_description: String(item["Part description"] || "").trim(),
+          supplier: String(item.Supplier || "").trim(),
+          location: String(item.Location || "").trim(),
+          package: String(item.Package || "").trim(),
+          reorder_point: isNaN(Number(item.reorderPoint)) ? 10 : Math.max(0, Number(item.reorderPoint)),
           last_updated: new Date().toISOString(),
         }
       })
@@ -218,24 +246,45 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Step 8: Insert new inventory data
+    // Step 8: Insert new inventory data with better error handling
     console.log("Step 8: Inserting new inventory data...")
     try {
-      const { error: inventoryError } = await supabase.from("inventory").insert(inventoryData)
+      const { data: insertedData, error: inventoryError } = await supabase
+        .from("inventory")
+        .insert(inventoryData)
+        .select("id")
 
       if (inventoryError) {
         console.error("❌ Error inserting inventory:", inventoryError)
+
+        // Provide specific guidance based on error type
+        let errorMessage = "Failed to save inventory"
+        let hint = ""
+
+        if (inventoryError.message.includes("duplicate key")) {
+          errorMessage = "Duplicate part numbers detected"
+          hint = "Check for duplicate part numbers in your data"
+        } else if (inventoryError.message.includes("violates check constraint")) {
+          errorMessage = "Data validation failed"
+          hint = "Check that all numeric values are valid"
+        } else if (inventoryError.message.includes("permission denied")) {
+          errorMessage = "Permission denied for insert operation"
+          hint = "Check your Supabase RLS policies and service role permissions"
+        }
+
         return NextResponse.json(
           {
-            error: "Failed to save inventory",
+            error: errorMessage,
             details: inventoryError.message,
             code: inventoryError.code,
-            hint: inventoryError.hint,
+            hint: hint || inventoryError.hint,
           },
           { status: 500 },
         )
       }
+
       console.log("✅ Inventory inserted successfully")
+      console.log("Inserted items count:", insertedData?.length || 0)
     } catch (insertError) {
       console.error("❌ Exception during inventory insertion:", insertError)
       return NextResponse.json(
@@ -289,14 +338,6 @@ export async function POST(request: NextRequest) {
     console.error("=== INVENTORY SYNC CRITICAL ERROR ===")
     console.error("Critical error saving inventory:", error)
     console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace")
-
-    // Log additional diagnostic information
-    console.error("Request headers:", request.headers)
-    console.error("Environment:", {
-      NODE_ENV: process.env.NODE_ENV,
-      VERCEL_ENV: process.env.VERCEL_ENV,
-      VERCEL_URL: process.env.VERCEL_URL,
-    })
 
     return NextResponse.json(
       {
