@@ -74,9 +74,6 @@ export default function InventoryDashboard() {
     loadSettingsFromDatabase()
   }, [])
 
-  // Modify the loadInventoryFromDatabase function to better handle Supabase connection issues
-  // Replace the existing loadInventoryFromDatabase function with this improved version:
-
   const loadInventoryFromDatabase = async () => {
     try {
       setLoading(true)
@@ -257,9 +254,17 @@ export default function InventoryDashboard() {
   const saveInventoryToDatabase = async (inventoryData: InventoryItem[], note = "", filename = "") => {
     try {
       setSyncing(true)
+      setError(null) // Clear any previous errors
+
+      console.log("🚀 Starting inventory sync...")
+      console.log("Items to sync:", inventoryData.length)
+
       const response = await fetch("/api/inventory", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+        },
         body: JSON.stringify({
           inventory: inventoryData,
           packageNote: note,
@@ -267,14 +272,41 @@ export default function InventoryDashboard() {
         }),
       })
 
+      console.log("📡 Response status:", response.status)
+      console.log("📡 Response headers:", Object.fromEntries(response.headers.entries()))
+
+      // Get response text first to handle both JSON and non-JSON responses
+      const responseText = await response.text()
+      console.log("📡 Raw response:", responseText.substring(0, 500))
+
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        let errorDetails = `HTTP ${response.status}: ${response.statusText}`
+
+        try {
+          const errorData = JSON.parse(responseText)
+          errorDetails = errorData.details || errorData.error || errorDetails
+          console.error("❌ Detailed error:", errorData)
+        } catch (parseError) {
+          console.error("❌ Could not parse error response as JSON")
+          errorDetails += ` - Response: ${responseText.substring(0, 200)}`
+        }
+
+        throw new Error(errorDetails)
       }
 
-      const result = await response.json()
+      let result
+      try {
+        result = JSON.parse(responseText)
+      } catch (parseError) {
+        console.error("❌ Could not parse success response as JSON:", parseError)
+        throw new Error("Server returned invalid JSON response")
+      }
+
       if (!result.success) {
         throw new Error(result.error || "Failed to save inventory")
       }
+
+      console.log("✅ Sync successful:", result)
 
       // Also save to localStorage as backup
       localStorage.setItem("inventory", JSON.stringify(inventoryData))
@@ -282,7 +314,7 @@ export default function InventoryDashboard() {
 
       return result
     } catch (error) {
-      console.error("Error saving inventory:", error)
+      console.error("❌ Error saving inventory:", error)
       // Still save to localStorage even if database fails
       localStorage.setItem("inventory", JSON.stringify(inventoryData))
       if (note) localStorage.setItem("packageNote", note)
@@ -655,23 +687,30 @@ export default function InventoryDashboard() {
     }
   }
 
-  // Manual sync function
+  // Manual sync function with enhanced error reporting
   const handleManualSync = async () => {
     try {
       setSyncing(true)
       setError(null) // Clear any previous errors
 
-      console.log("Starting manual sync...")
+      console.log("🚀 Starting manual sync...")
       await saveInventoryToDatabase(inventory, packageNote)
       await saveSettingsToDatabase(alertSettings)
 
-      console.log("Manual sync completed successfully")
+      console.log("✅ Manual sync completed successfully")
       alert("Data synced successfully!")
     } catch (error) {
-      console.error("Sync failed:", error)
+      console.error("❌ Sync failed:", error)
       const errorMessage = error instanceof Error ? error.message : "Unknown sync error"
       setError(`Failed to sync data to database: ${errorMessage}`)
-      alert(`Sync failed: ${errorMessage}`)
+
+      // Show more detailed error in alert
+      const detailedError =
+        error instanceof Error
+          ? `${error.message}\n\nCheck the browser console for more details.`
+          : "Unknown sync error - check the browser console for details."
+
+      alert(`Sync failed: ${detailedError}`)
     } finally {
       setSyncing(false)
     }

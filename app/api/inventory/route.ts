@@ -54,8 +54,13 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  console.log("=== INVENTORY SYNC DEBUG START ===")
+
   try {
+    // Step 1: Check if Supabase is configured
+    console.log("Step 1: Checking Supabase configuration...")
     if (!canUseSupabase()) {
+      console.log("❌ Supabase not configured")
       return NextResponse.json(
         {
           error: "Supabase is not configured. Data will be stored locally only.",
@@ -64,89 +69,229 @@ export async function POST(request: NextRequest) {
         { status: 503 },
       )
     }
+    console.log("✅ Supabase is configured")
 
-    const { inventory, packageNote, filename } = await request.json()
-    const supabase = createServerSupabaseClient()
-
-    console.log("Starting inventory save to database...")
-    console.log("Inventory items to save:", inventory.length)
-
-    // Clear existing inventory
-    const { error: deleteError } = await supabase
-      .from("inventory")
-      .delete()
-      .neq("id", "00000000-0000-0000-0000-000000000000")
-
-    if (deleteError) {
-      console.error("Error clearing existing inventory:", deleteError)
-      return NextResponse.json({ error: "Failed to clear existing inventory" }, { status: 500 })
-    }
-
-    // Transform and insert new inventory data
-    const inventoryData = inventory.map((item: any) => ({
-      part_number: item["Part number"],
-      mfg_part_number: item["MFG Part number"],
-      qty: item.QTY,
-      part_description: item["Part description"],
-      supplier: item.Supplier,
-      location: item.Location,
-      package: item.Package,
-      reorder_point: item.reorderPoint || 10,
-      // Don't include requester field in inventory table - it's only for purchase requests
-    }))
-
-    console.log("Transformed inventory data sample:", inventoryData[0])
-
-    const { error: inventoryError } = await supabase.from("inventory").insert(inventoryData)
-
-    if (inventoryError) {
-      console.error("Error inserting inventory:", inventoryError)
+    // Step 2: Parse request body
+    console.log("Step 2: Parsing request body...")
+    let requestBody
+    try {
+      requestBody = await request.json()
+      console.log("✅ Request body parsed successfully")
+      console.log("Request body keys:", Object.keys(requestBody))
+      console.log("Inventory items count:", requestBody.inventory?.length || 0)
+    } catch (parseError) {
+      console.error("❌ Error parsing request body:", parseError)
       return NextResponse.json(
         {
-          error: "Failed to save inventory",
-          details: inventoryError.message,
+          error: "Invalid request body",
+          details: parseError instanceof Error ? parseError.message : "Unknown parsing error",
+        },
+        { status: 400 },
+      )
+    }
+
+    const { inventory, packageNote, filename } = requestBody
+
+    // Step 3: Validate inventory data
+    console.log("Step 3: Validating inventory data...")
+    if (!inventory || !Array.isArray(inventory)) {
+      console.error("❌ Invalid inventory data:", typeof inventory)
+      return NextResponse.json({ error: "Invalid inventory data - must be an array" }, { status: 400 })
+    }
+
+    if (inventory.length === 0) {
+      console.error("❌ Empty inventory array")
+      return NextResponse.json({ error: "Cannot sync empty inventory" }, { status: 400 })
+    }
+    console.log("✅ Inventory data is valid")
+
+    // Step 4: Create Supabase client
+    console.log("Step 4: Creating Supabase client...")
+    let supabase
+    try {
+      supabase = createServerSupabaseClient()
+      console.log("✅ Supabase client created")
+    } catch (clientError) {
+      console.error("❌ Error creating Supabase client:", clientError)
+      return NextResponse.json(
+        {
+          error: "Failed to create database connection",
+          details: clientError instanceof Error ? clientError.message : "Unknown client error",
         },
         { status: 500 },
       )
     }
 
-    console.log("Inventory saved successfully")
+    // Step 5: Test database connection
+    console.log("Step 5: Testing database connection...")
+    try {
+      const { data: testData, error: testError } = await supabase.from("inventory").select("count").limit(1)
 
-    // Save package note if provided
-    if (packageNote) {
-      console.log("Saving package note...")
-      const { error: deleteNoteError } = await supabase
-        .from("package_notes")
+      if (testError) {
+        console.error("❌ Database connection test failed:", testError)
+        return NextResponse.json(
+          {
+            error: "Database connection failed",
+            details: testError.message,
+          },
+          { status: 500 },
+        )
+      }
+      console.log("✅ Database connection successful")
+    } catch (connectionError) {
+      console.error("❌ Database connection error:", connectionError)
+      return NextResponse.json(
+        {
+          error: "Database connection error",
+          details: connectionError instanceof Error ? connectionError.message : "Unknown connection error",
+        },
+        { status: 500 },
+      )
+    }
+
+    // Step 6: Clear existing inventory
+    console.log("Step 6: Clearing existing inventory...")
+    try {
+      const { error: deleteError } = await supabase
+        .from("inventory")
         .delete()
         .neq("id", "00000000-0000-0000-0000-000000000000")
 
-      if (deleteNoteError) {
-        console.warn("Warning: Could not clear existing package notes:", deleteNoteError)
+      if (deleteError) {
+        console.error("❌ Error clearing existing inventory:", deleteError)
+        return NextResponse.json(
+          {
+            error: "Failed to clear existing inventory",
+            details: deleteError.message,
+          },
+          { status: 500 },
+        )
       }
+      console.log("✅ Existing inventory cleared")
+    } catch (deleteError) {
+      console.error("❌ Exception during inventory deletion:", deleteError)
+      return NextResponse.json(
+        {
+          error: "Exception during inventory deletion",
+          details: deleteError instanceof Error ? deleteError.message : "Unknown deletion error",
+        },
+        { status: 500 },
+      )
+    }
 
-      const { error: noteError } = await supabase.from("package_notes").insert({
-        note: packageNote,
-        filename: filename || "inventory.xlsx",
+    // Step 7: Transform inventory data
+    console.log("Step 7: Transforming inventory data...")
+    let inventoryData
+    try {
+      inventoryData = inventory.map((item: any, index: number) => {
+        // Validate each item has required fields
+        if (!item["Part number"]) {
+          throw new Error(`Item at index ${index} missing Part number`)
+        }
+
+        return {
+          part_number: String(item["Part number"] || ""),
+          mfg_part_number: String(item["MFG Part number"] || ""),
+          qty: Number(item.QTY) || 0,
+          part_description: String(item["Part description"] || ""),
+          supplier: String(item.Supplier || ""),
+          location: String(item.Location || ""),
+          package: String(item.Package || ""),
+          reorder_point: Number(item.reorderPoint) || 10,
+        }
       })
 
-      if (noteError) {
-        console.warn("Warning: Could not save package note:", noteError)
+      console.log("✅ Inventory data transformed successfully")
+      console.log("Sample transformed item:", inventoryData[0])
+      console.log("Total items to insert:", inventoryData.length)
+    } catch (transformError) {
+      console.error("❌ Error transforming inventory data:", transformError)
+      return NextResponse.json(
+        {
+          error: "Failed to transform inventory data",
+          details: transformError instanceof Error ? transformError.message : "Unknown transformation error",
+        },
+        { status: 500 },
+      )
+    }
+
+    // Step 8: Insert new inventory data
+    console.log("Step 8: Inserting new inventory data...")
+    try {
+      const { error: inventoryError } = await supabase.from("inventory").insert(inventoryData)
+
+      if (inventoryError) {
+        console.error("❌ Error inserting inventory:", inventoryError)
+        return NextResponse.json(
+          {
+            error: "Failed to save inventory",
+            details: inventoryError.message,
+            code: inventoryError.code,
+            hint: inventoryError.hint,
+          },
+          { status: 500 },
+        )
+      }
+      console.log("✅ Inventory inserted successfully")
+    } catch (insertError) {
+      console.error("❌ Exception during inventory insertion:", insertError)
+      return NextResponse.json(
+        {
+          error: "Exception during inventory insertion",
+          details: insertError instanceof Error ? insertError.message : "Unknown insertion error",
+        },
+        { status: 500 },
+      )
+    }
+
+    // Step 9: Save package note (optional)
+    if (packageNote) {
+      console.log("Step 9: Saving package note...")
+      try {
+        // Clear existing notes
+        const { error: deleteNoteError } = await supabase
+          .from("package_notes")
+          .delete()
+          .neq("id", "00000000-0000-0000-0000-000000000000")
+
+        if (deleteNoteError) {
+          console.warn("⚠️ Warning: Could not clear existing package notes:", deleteNoteError)
+        }
+
+        // Insert new note
+        const { error: noteError } = await supabase.from("package_notes").insert({
+          note: packageNote,
+          filename: filename || "inventory.xlsx",
+        })
+
+        if (noteError) {
+          console.warn("⚠️ Warning: Could not save package note:", noteError)
+          // Don't fail the whole operation for package note issues
+        } else {
+          console.log("✅ Package note saved successfully")
+        }
+      } catch (noteError) {
+        console.warn("⚠️ Exception saving package note:", noteError)
         // Don't fail the whole operation for package note issues
       }
     }
 
+    console.log("=== INVENTORY SYNC SUCCESS ===")
     return NextResponse.json({
       success: true,
       message: "Inventory saved successfully",
       count: inventoryData.length,
     })
   } catch (error) {
-    console.error("Error saving inventory:", error)
+    console.error("=== INVENTORY SYNC CRITICAL ERROR ===")
+    console.error("Critical error saving inventory:", error)
+    console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace")
+
     return NextResponse.json(
       {
-        error: "Failed to save inventory",
-        details: error instanceof Error ? error.message : "Unknown error",
-        configured: false,
+        error: "Critical error during inventory sync",
+        details: error instanceof Error ? error.message : "Unknown critical error",
+        type: error instanceof Error ? error.constructor.name : "Unknown",
       },
       { status: 500 },
     )
