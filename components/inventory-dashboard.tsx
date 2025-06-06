@@ -488,22 +488,50 @@ export default function InventoryDashboard() {
     }
   }
 
-  // Add new inventory item
+  // Add new inventory item with enhanced error handling
   const addInventoryItem = async (newItem: Omit<InventoryItem, "id" | "lastUpdated">) => {
-    const item: InventoryItem = {
-      ...newItem,
-      id: `item-${Date.now()}`,
-      lastUpdated: new Date(),
-    }
-    const updatedInventory = [...inventory, item]
-    setInventory(updatedInventory)
+    console.log("🚀 addInventoryItem called with:", newItem)
 
     try {
-      await saveInventoryToDatabase(updatedInventory, packageNote)
+      const item: InventoryItem = {
+        ...newItem,
+        id: `item-${Date.now()}`,
+        lastUpdated: new Date(),
+      }
+
+      console.log("📝 Created item with ID:", item.id)
+
+      // Add to local state first
+      const updatedInventory = [...inventory, item]
+      setInventory(updatedInventory)
+      console.log("✅ Added to local state, new count:", updatedInventory.length)
+
+      // Save to localStorage immediately
+      localStorage.setItem("inventory", JSON.stringify(updatedInventory))
+      console.log("✅ Saved to localStorage")
+
+      // Try to save to database
+      if (supabaseConfigured) {
+        console.log("💾 Attempting to save to database...")
+        try {
+          await saveInventoryToDatabase(updatedInventory, packageNote)
+          console.log("✅ Successfully saved to database")
+          setError(null) // Clear any previous errors
+        } catch (dbError) {
+          console.error("❌ Failed to save to database:", dbError)
+          setError(
+            `Item added locally but failed to sync to database: ${dbError instanceof Error ? dbError.message : "Unknown error"}`,
+          )
+          // Don't throw here - the item was added locally
+        }
+      } else {
+        console.log("⚠️ Supabase not configured, item saved locally only")
+        setError("Item added locally only (database not configured)")
+      }
     } catch (error) {
-      console.error("Failed to save new item to database:", error)
-      // Item is still added locally, just show a warning
-      setError("Item added locally but failed to sync to database")
+      console.error("❌ Critical error in addInventoryItem:", error)
+      setError(`Failed to add item: ${error instanceof Error ? error.message : "Unknown error"}`)
+      throw error // Re-throw so the UI can handle it
     }
   }
 

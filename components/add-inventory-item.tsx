@@ -15,7 +15,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Plus } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Plus, AlertTriangle } from "lucide-react"
 import type { InventoryItem } from "@/types/inventory"
 
 interface AddInventoryItemProps {
@@ -34,6 +35,8 @@ export default function AddInventoryItem({
   defaultReorderPoint,
 }: AddInventoryItemProps) {
   const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     partNumber: "",
     mfgPartNumber: "",
@@ -143,44 +146,59 @@ export default function AddInventoryItem({
     return sortedLocations
   }, [locations])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setLoading(true)
+    setError(null)
 
-    // Validate required fields
-    if (!formData.partNumber.trim()) {
-      alert("Part number is required and cannot be empty")
-      return
+    try {
+      // Validate required fields
+      if (!formData.partNumber.trim()) {
+        throw new Error("Part number is required and cannot be empty")
+      }
+
+      console.log("🚀 Adding new inventory item:", formData)
+
+      const newItem: Omit<InventoryItem, "id" | "lastUpdated"> = {
+        "Part number": formData.partNumber.trim(),
+        "MFG Part number": formData.mfgPartNumber,
+        QTY: formData.qty,
+        "Part description": formData.description,
+        Supplier: formData.supplier,
+        Location: formData.location,
+        Package: formData.package,
+        reorderPoint: formData.reorderPoint,
+      }
+
+      console.log("📤 Calling onAddItem with:", newItem)
+
+      // Call the parent function to add the item
+      await onAddItem(newItem)
+
+      console.log("✅ Item added successfully")
+
+      // Reset form
+      setFormData({
+        partNumber: "",
+        mfgPartNumber: "",
+        qty: 0,
+        description: "",
+        supplier: "",
+        location: "",
+        package: "",
+        reorderPoint: defaultReorderPoint,
+      })
+      setUseCustomSupplier(false)
+      setUseCustomLocation(false)
+      setUseCustomPackage(false)
+
+      setOpen(false)
+    } catch (error) {
+      console.error("❌ Error adding item:", error)
+      setError(error instanceof Error ? error.message : "Failed to add item")
+    } finally {
+      setLoading(false)
     }
-
-    const newItem: Omit<InventoryItem, "id" | "lastUpdated"> = {
-      "Part number": formData.partNumber.trim(),
-      "MFG Part number": formData.mfgPartNumber,
-      QTY: formData.qty,
-      "Part description": formData.description,
-      Supplier: formData.supplier,
-      Location: formData.location,
-      Package: formData.package,
-      reorderPoint: formData.reorderPoint,
-    }
-
-    onAddItem(newItem)
-
-    // Reset form
-    setFormData({
-      partNumber: "",
-      mfgPartNumber: "",
-      qty: 0,
-      description: "",
-      supplier: "",
-      location: "",
-      package: "",
-      reorderPoint: defaultReorderPoint,
-    })
-    setUseCustomSupplier(false)
-    setUseCustomLocation(false)
-    setUseCustomPackage(false)
-
-    setOpen(false)
   }
 
   const handleInputChange = (field: string, value: string | number) => {
@@ -227,6 +245,14 @@ export default function AddInventoryItem({
           <DialogTitle>Add New Inventory Item</DialogTitle>
           <DialogDescription>Enter the details for the new inventory item. All fields are required.</DialogDescription>
         </DialogHeader>
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-2 gap-4 py-4">
             <div className="space-y-2">
@@ -237,6 +263,7 @@ export default function AddInventoryItem({
                 onChange={(e) => handleInputChange("partNumber", e.target.value)}
                 placeholder="e.g., 490-12158-ND"
                 required
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
@@ -247,6 +274,7 @@ export default function AddInventoryItem({
                 onChange={(e) => handleInputChange("mfgPartNumber", e.target.value)}
                 placeholder="e.g., CAP KIT CER 5.1PF-47PF"
                 required
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
@@ -258,6 +286,7 @@ export default function AddInventoryItem({
                 value={formData.qty}
                 onChange={(e) => handleInputChange("qty", Number.parseInt(e.target.value) || 0)}
                 required
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
@@ -268,6 +297,7 @@ export default function AddInventoryItem({
                 min="0"
                 value={formData.reorderPoint}
                 onChange={(e) => handleInputChange("reorderPoint", Number.parseInt(e.target.value) || 0)}
+                disabled={loading}
               />
             </div>
             <div className="space-y-2 col-span-2">
@@ -278,12 +308,17 @@ export default function AddInventoryItem({
                 onChange={(e) => handleInputChange("description", e.target.value)}
                 placeholder="e.g., CAP KIT CERAMIC 0.1PF-5PF 1000PC"
                 required
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="supplier">Supplier</Label>
               {!useCustomSupplier ? (
-                <Select value={formData.supplier} onValueChange={(value) => handleSelectChange("supplier", value)}>
+                <Select
+                  value={formData.supplier}
+                  onValueChange={(value) => handleSelectChange("supplier", value)}
+                  disabled={loading}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select supplier" />
                   </SelectTrigger>
@@ -305,6 +340,7 @@ export default function AddInventoryItem({
                   onBlur={() => {
                     if (!formData.supplier) setUseCustomSupplier(false)
                   }}
+                  disabled={loading}
                 />
               )}
               {!useCustomSupplier && (
@@ -317,6 +353,7 @@ export default function AddInventoryItem({
                     setUseCustomSupplier(true)
                     setTimeout(() => supplierInputRef.current?.focus(), 100)
                   }}
+                  disabled={loading}
                 >
                   Enter custom supplier
                 </Button>
@@ -325,7 +362,11 @@ export default function AddInventoryItem({
             <div className="space-y-2">
               <Label htmlFor="location">Location</Label>
               {!useCustomLocation ? (
-                <Select value={formData.location} onValueChange={(value) => handleSelectChange("location", value)}>
+                <Select
+                  value={formData.location}
+                  onValueChange={(value) => handleSelectChange("location", value)}
+                  disabled={loading}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select location" />
                   </SelectTrigger>
@@ -347,6 +388,7 @@ export default function AddInventoryItem({
                   onBlur={() => {
                     if (!formData.location) setUseCustomLocation(false)
                   }}
+                  disabled={loading}
                 />
               )}
               {!useCustomLocation && (
@@ -359,6 +401,7 @@ export default function AddInventoryItem({
                     setUseCustomLocation(true)
                     setTimeout(() => locationInputRef.current?.focus(), 100)
                   }}
+                  disabled={loading}
                 >
                   Enter custom location
                 </Button>
@@ -367,7 +410,11 @@ export default function AddInventoryItem({
             <div className="space-y-2">
               <Label htmlFor="package">Package Type</Label>
               {!useCustomPackage ? (
-                <Select value={formData.package} onValueChange={(value) => handleSelectChange("package", value)}>
+                <Select
+                  value={formData.package}
+                  onValueChange={(value) => handleSelectChange("package", value)}
+                  disabled={loading}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select package type" />
                   </SelectTrigger>
@@ -389,6 +436,7 @@ export default function AddInventoryItem({
                   onBlur={() => {
                     if (!formData.package) setUseCustomPackage(false)
                   }}
+                  disabled={loading}
                 />
               )}
               {!useCustomPackage && (
@@ -401,6 +449,7 @@ export default function AddInventoryItem({
                     setUseCustomPackage(true)
                     setTimeout(() => packageInputRef.current?.focus(), 100)
                   }}
+                  disabled={loading}
                 >
                   Enter custom package type
                 </Button>
@@ -408,10 +457,12 @@ export default function AddInventoryItem({
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>
               Cancel
             </Button>
-            <Button type="submit">Add Item</Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Adding..." : "Add Item"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
