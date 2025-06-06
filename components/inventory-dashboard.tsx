@@ -321,9 +321,9 @@ export default function InventoryDashboard() {
       localStorage.setItem("inventory", JSON.stringify(inventoryData))
       if (note) localStorage.setItem("packageNote", note)
 
-      // Show success message
-      setError("✅ Sync successful! All items saved to database.")
-      setTimeout(() => setError(null), 3000)
+      // Show success message in a consistent way
+      setError(null) // Clear any existing error
+      alert("✅ Sync successful! All items saved to database.")
 
       return result
     } catch (error) {
@@ -758,6 +758,12 @@ export default function InventoryDashboard() {
       }
     } catch (error) {
       console.error("❌ Enhanced sync failed:", error)
+
+      // Clear any success messages that might be showing
+      const successElement = document.querySelector(".text-green-600")
+      if (successElement) {
+        successElement.remove()
+      }
 
       // Provide specific guidance based on the error
       let userMessage = "❌ Sync failed:\n\n"

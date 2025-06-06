@@ -290,6 +290,14 @@ export async function POST(request: NextRequest) {
     console.error("Critical error saving inventory:", error)
     console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace")
 
+    // Log additional diagnostic information
+    console.error("Request headers:", request.headers)
+    console.error("Environment:", {
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      VERCEL_URL: process.env.VERCEL_URL,
+    })
+
     return NextResponse.json(
       {
         error: "Critical error during inventory sync",
