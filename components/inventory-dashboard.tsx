@@ -74,74 +74,114 @@ export default function InventoryDashboard() {
     loadSettingsFromDatabase()
   }, [])
 
+  // Modify the loadInventoryFromDatabase function to better handle Supabase connection issues
+  // Replace the existing loadInventoryFromDatabase function with this improved version:
+
   const loadInventoryFromDatabase = async () => {
     try {
       setLoading(true)
 
-      // Check if Excel file exists in storage
-      const fileMetadata = await getExcelFileMetadata()
-
-      if (fileMetadata.exists) {
-        // Read directly from the Excel file in storage
-        const result = await fetch("/api/excel", { method: "PUT" })
-
-        if (!result.ok) {
-          throw new Error(`HTTP ${result.status}: ${result.statusText}`)
-        }
-
-        const data = await result.json()
-
-        if (data.success && data.inventory.length > 0) {
-          setInventory(data.inventory)
-          setPackageNote(data.packageNote || "")
-          setShowUpload(false)
-          setSupabaseConfigured(true)
-
-          // Also save to localStorage as backup
-          localStorage.setItem("inventory", JSON.stringify(data.inventory))
-          if (data.packageNote) localStorage.setItem("packageNote", data.packageNote)
-
-          setError(null)
-          return
+      // First try to load from localStorage as a quick fallback
+      const localData = localStorage.getItem("inventory")
+      let localInventory = null
+      if (localData) {
+        try {
+          localInventory = JSON.parse(localData)
+        } catch (e) {
+          console.error("Error parsing local inventory data:", e)
         }
       }
 
-      // If no Excel file or error reading it, try API fallback
-      const response = await fetch("/api/inventory")
+      // Check if Supabase is configured by making a simple request
+      const configCheck = await fetch("/api/debug/supabase", {
+        method: "GET",
+        headers: { "Cache-Control": "no-cache" },
+      })
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
+      const configResult = await configCheck.json()
+      const isSupabaseConfigured = configResult.status === "success"
+      setSupabaseConfigured(isSupabaseConfigured)
 
-      const result = await response.json()
-
-      if (result.success && result.data.length > 0) {
-        setInventory(result.data)
-        setShowUpload(false)
-        setSupabaseConfigured(true)
-
-        // Also save to localStorage as backup
-        localStorage.setItem("inventory", JSON.stringify(result.data))
-      } else if (result.configured === false) {
-        // Supabase not configured
-        setSupabaseConfigured(false)
-        // Try to load from localStorage as fallback
-        const localData = localStorage.getItem("inventory")
-        if (localData) {
-          const parsedData = JSON.parse(localData)
-          setInventory(parsedData)
+      if (!isSupabaseConfigured) {
+        console.log("Supabase not configured, using localStorage data")
+        if (localInventory) {
+          setInventory(localInventory)
+          const localNote = localStorage.getItem("packageNote")
+          if (localNote) setPackageNote(localNote)
           setShowUpload(false)
         } else {
           setShowUpload(true)
         }
-      } else {
-        // Try to load from localStorage as fallback
-        const localData = localStorage.getItem("inventory")
-        if (localData) {
-          const parsedData = JSON.parse(localData)
-          setInventory(parsedData)
+        return
+      }
+
+      // If Supabase is configured, try to load from Excel file in storage
+      try {
+        const fileMetadata = await getExcelFileMetadata()
+
+        if (fileMetadata.exists) {
+          // Read directly from the Excel file in storage
+          const result = await fetch("/api/excel", {
+            method: "PUT",
+            headers: { "Cache-Control": "no-cache" },
+          })
+
+          if (result.ok) {
+            const data = await result.json()
+
+            if (data.success && data.inventory.length > 0) {
+              setInventory(data.inventory)
+              setPackageNote(data.packageNote || "")
+              setShowUpload(false)
+
+              // Also save to localStorage as backup
+              localStorage.setItem("inventory", JSON.stringify(data.inventory))
+              if (data.packageNote) localStorage.setItem("packageNote", data.packageNote)
+
+              setError(null)
+              return
+            }
+          }
+        }
+
+        // If no Excel file or error reading it, try API fallback
+        const response = await fetch("/api/inventory", {
+          headers: { "Cache-Control": "no-cache" },
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+
+          if (result.success && result.data.length > 0) {
+            setInventory(result.data)
+            setShowUpload(false)
+
+            // Also save to localStorage as backup
+            localStorage.setItem("inventory", JSON.stringify(result.data))
+          } else {
+            // If API returns no data but was successful, use localStorage
+            if (localInventory) {
+              setInventory(localInventory)
+              setShowUpload(false)
+            } else {
+              setShowUpload(true)
+            }
+          }
+        } else {
+          // API error, fall back to localStorage
+          if (localInventory) {
+            setInventory(localInventory)
+            setShowUpload(false)
+          } else {
+            setShowUpload(true)
+          }
+        }
+      } catch (error) {
+        console.error("Error accessing Supabase storage:", error)
+        // Fall back to localStorage on any error
+        if (localInventory) {
+          setInventory(localInventory)
           setShowUpload(false)
-          setSupabaseConfigured(true)
         } else {
           setShowUpload(true)
         }
@@ -149,14 +189,18 @@ export default function InventoryDashboard() {
     } catch (error) {
       console.error("Error loading inventory:", error)
       setError(`Failed to load inventory: ${error instanceof Error ? error.message : "Unknown error"}`)
-      setSupabaseConfigured(false)
 
-      // Try localStorage fallback
+      // Final fallback - try localStorage
       const localData = localStorage.getItem("inventory")
       if (localData) {
-        const parsedData = JSON.parse(localData)
-        setInventory(parsedData)
-        setShowUpload(false)
+        try {
+          const parsedData = JSON.parse(localData)
+          setInventory(parsedData)
+          setShowUpload(false)
+        } catch (e) {
+          console.error("Error parsing local inventory data:", e)
+          setShowUpload(true)
+        }
       } else {
         setShowUpload(true)
       }
