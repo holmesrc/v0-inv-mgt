@@ -45,7 +45,6 @@ import { downloadExcelFile } from "@/lib/excel-generator"
 import FileUpload from "./file-upload"
 import AddInventoryItem from "./add-inventory-item"
 import { getExcelFileMetadata } from "@/lib/storage"
-import ExcelFileInfo from "./excel-file-info"
 
 export default function InventoryDashboard() {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
@@ -944,32 +943,6 @@ export default function InventoryDashboard() {
             {syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
             {syncing ? "Syncing..." : "Sync to Database"}
           </Button>
-          <Button
-            onClick={async () => {
-              try {
-                const configResponse = await fetch("/api/debug/supabase")
-                const configResult = await configResponse.json()
-
-                const envResponse = await fetch("/api/debug/env")
-                const envResult = await envResponse.json()
-
-                alert(
-                  `🔍 Quick Diagnostic:\n\n` +
-                    `📊 Local Items: ${inventory.length}\n` +
-                    `🗄️ Database: ${configResult.status === "success" ? "✅ Connected" : "❌ " + configResult.message}\n` +
-                    `⚙️ Supabase URL: ${envResult.supabase?.url || "❌ Missing"}\n` +
-                    `🔑 Supabase Keys: ${envResult.supabase?.anonKey || "❌ Missing"}\n` +
-                    `🛠️ Service Key: ${envResult.supabase?.serviceKey || "❌ Missing"}`,
-                )
-              } catch (error) {
-                alert(`❌ Diagnostic failed: ${error instanceof Error ? error.message : "Unknown error"}`)
-              }
-            }}
-            variant="outline"
-            size="sm"
-          >
-            🔍 Diagnose
-          </Button>
           <Button onClick={sendLowStockAlert} variant="outline">
             <Bell className="w-4 h-4 mr-2" />
             Send Alert Now
@@ -1066,7 +1039,6 @@ export default function InventoryDashboard() {
       </div>
 
       {/* Excel File Information */}
-      <ExcelFileInfo onUploadNew={() => setShowUpload(true)} />
 
       {/* Error Alert */}
       {error && (
@@ -1079,24 +1051,6 @@ export default function InventoryDashboard() {
             </Button>
           </AlertDescription>
         </Alert>
-      )}
-
-      {/* Database Status */}
-      {supabaseConfigured === true && (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardContent className="pt-4">
-            <div className="flex items-start gap-2">
-              <Database className="w-5 h-5 text-blue-600 mt-0.5" />
-              <div>
-                <h3 className="font-medium text-blue-800 mb-1">Persistent Storage Active</h3>
-                <p className="text-sm text-blue-700">
-                  Your inventory data is automatically saved to the database. Changes are synced in real-time, and your
-                  data will persist across sessions and devices.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       )}
 
       {/* Supabase Not Configured Warning */}
@@ -1253,161 +1207,163 @@ export default function InventoryDashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Part Number</TableHead>
-                <TableHead>MFG Part Number</TableHead>
-                <TableHead>QTY</TableHead>
-                <TableHead>Part Description</TableHead>
-                <TableHead>Supplier</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Package</TableHead>
-                <TableHead>Reorder Point</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredInventory.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">{item["Part number"]}</TableCell>
-                  <TableCell>{item["MFG Part number"]}</TableCell>
-                  <TableCell>{item["QTY"]}</TableCell>
-                  <TableCell>{item["Part description"]}</TableCell>
-                  <TableCell>{item["Supplier"]}</TableCell>
-                  <TableCell>{item["Location"]}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{item["Package"]}</Badge>
-                  </TableCell>
-                  <TableCell>{item.reorderPoint || alertSettings.defaultReorderPoint}</TableCell>
-                  <TableCell>
-                    {(() => {
-                      const stockStatus = getStockStatus(item)
-                      const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint
-                      const currentQty = item["QTY"]
+          <div className="max-h-96 overflow-y-auto border rounded-md">
+            <Table>
+              <TableHeader className="sticky top-0 bg-white z-10">
+                <TableRow>
+                  <TableHead>Part Number</TableHead>
+                  <TableHead>MFG Part Number</TableHead>
+                  <TableHead>QTY</TableHead>
+                  <TableHead>Part Description</TableHead>
+                  <TableHead>Supplier</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Package</TableHead>
+                  <TableHead>Reorder Point</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredInventory.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-medium">{item["Part number"]}</TableCell>
+                    <TableCell>{item["MFG Part number"]}</TableCell>
+                    <TableCell>{item["QTY"]}</TableCell>
+                    <TableCell>{item["Part description"]}</TableCell>
+                    <TableCell>{item["Supplier"]}</TableCell>
+                    <TableCell>{item["Location"]}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{item["Package"]}</Badge>
+                    </TableCell>
+                    <TableCell>{item.reorderPoint || alertSettings.defaultReorderPoint}</TableCell>
+                    <TableCell>
+                      {(() => {
+                        const stockStatus = getStockStatus(item)
+                        const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint
+                        const currentQty = item["QTY"]
 
-                      return (
-                        <div className="space-y-1">
-                          <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>
-                          <div className="text-xs text-muted-foreground">
-                            {currentQty} / {reorderPoint} units
-                          </div>
-                        </div>
-                      )
-                    })()}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm">
-                            Edit
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Edit Item</DialogTitle>
-                            <DialogDescription>Update {item["Part number"]} details</DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div>
-                              <Label>Quantity</Label>
-                              <Input
-                                type="number"
-                                defaultValue={item["QTY"]}
-                                onChange={(e) => {
-                                  const newValue = Number.parseInt(e.target.value)
-                                  if (!isNaN(newValue)) {
-                                    updateItemQuantity(item.id, newValue)
-                                  }
-                                }}
-                              />
-                            </div>
-                            <div>
-                              <Label>Reorder Point</Label>
-                              <Input
-                                type="number"
-                                defaultValue={item.reorderPoint || alertSettings.defaultReorderPoint}
-                                onChange={(e) => {
-                                  const newValue = Number.parseInt(e.target.value)
-                                  if (!isNaN(newValue)) {
-                                    updateReorderPoint(item.id, newValue)
-                                  }
-                                }}
-                              />
+                        return (
+                          <div className="space-y-1">
+                            <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>
+                            <div className="text-xs text-muted-foreground">
+                              {currentQty} / {reorderPoint} units
                             </div>
                           </div>
-                          <DialogFooter>
-                            <Button
-                              variant="destructive"
-                              onClick={() => {
-                                if (confirm("Are you sure you want to delete this item?")) {
-                                  deleteInventoryItem(item.id)
-                                }
-                              }}
-                            >
-                              Delete Item
+                        )
+                      })()}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              Edit
                             </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm">
-                            <ShoppingCart className="w-4 h-4" />
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Create Purchase Request</DialogTitle>
-                            <DialogDescription>Request more stock for {item["Part number"]}</DialogDescription>
-                          </DialogHeader>
-                          <form
-                            onSubmit={(e) => {
-                              e.preventDefault()
-                              const formData = new FormData(e.currentTarget)
-                              const quantity = Number.parseInt(formData.get("quantity") as string)
-                              const urgency = formData.get("urgency") as "low" | "medium" | "high"
-                              const requester = formData.get("requester") as string
-                              createPurchaseRequest(item, quantity, urgency, requester)
-                            }}
-                          >
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Edit Item</DialogTitle>
+                              <DialogDescription>Update {item["Part number"]} details</DialogDescription>
+                            </DialogHeader>
                             <div className="space-y-4">
                               <div>
                                 <Label>Quantity</Label>
-                                <Input name="quantity" type="number" required />
+                                <Input
+                                  type="number"
+                                  defaultValue={item["QTY"]}
+                                  onChange={(e) => {
+                                    const newValue = Number.parseInt(e.target.value)
+                                    if (!isNaN(newValue)) {
+                                      updateItemQuantity(item.id, newValue)
+                                    }
+                                  }}
+                                />
                               </div>
                               <div>
-                                <Label>Urgency</Label>
-                                <Select name="urgency" required>
-                                  <SelectTrigger>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="low">Low</SelectItem>
-                                    <SelectItem value="medium">Medium</SelectItem>
-                                    <SelectItem value="high">High</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div>
-                                <Label>Requested By</Label>
-                                <Input name="requester" placeholder="Your name or department" />
+                                <Label>Reorder Point</Label>
+                                <Input
+                                  type="number"
+                                  defaultValue={item.reorderPoint || alertSettings.defaultReorderPoint}
+                                  onChange={(e) => {
+                                    const newValue = Number.parseInt(e.target.value)
+                                    if (!isNaN(newValue)) {
+                                      updateReorderPoint(item.id, newValue)
+                                    }
+                                  }}
+                                />
                               </div>
                             </div>
-                            <DialogFooter className="mt-4">
-                              <Button type="submit">Create Request</Button>
+                            <DialogFooter>
+                              <Button
+                                variant="destructive"
+                                onClick={() => {
+                                  if (confirm("Are you sure you want to delete this item?")) {
+                                    deleteInventoryItem(item.id)
+                                  }
+                                }}
+                              >
+                                Delete Item
+                              </Button>
                             </DialogFooter>
-                          </form>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                          </DialogContent>
+                        </Dialog>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              <ShoppingCart className="w-4 h-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Create Purchase Request</DialogTitle>
+                              <DialogDescription>Request more stock for {item["Part number"]}</DialogDescription>
+                            </DialogHeader>
+                            <form
+                              onSubmit={(e) => {
+                                e.preventDefault()
+                                const formData = new FormData(e.currentTarget)
+                                const quantity = Number.parseInt(formData.get("quantity") as string)
+                                const urgency = formData.get("urgency") as "low" | "medium" | "high"
+                                const requester = formData.get("requester") as string
+                                createPurchaseRequest(item, quantity, urgency, requester)
+                              }}
+                            >
+                              <div className="space-y-4">
+                                <div>
+                                  <Label>Quantity</Label>
+                                  <Input name="quantity" type="number" required />
+                                </div>
+                                <div>
+                                  <Label>Urgency</Label>
+                                  <Select name="urgency" required>
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="low">Low</SelectItem>
+                                      <SelectItem value="medium">Medium</SelectItem>
+                                      <SelectItem value="high">High</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div>
+                                  <Label>Requested By</Label>
+                                  <Input name="requester" placeholder="Your name or department" />
+                                </div>
+                              </div>
+                              <DialogFooter className="mt-4">
+                                <Button type="submit">Create Request</Button>
+                              </DialogFooter>
+                            </form>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
