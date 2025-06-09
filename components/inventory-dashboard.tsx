@@ -514,19 +514,45 @@ export default function InventoryDashboard() {
       if (supabaseConfigured) {
         console.log("💾 Attempting to save to database...")
         try {
-          await saveInventoryToDatabase(updatedInventory, packageNote)
-          console.log("✅ Successfully saved to database")
-          setError(null) // Clear any previous errors
+          // Only sync the inventory, not settings
+          const response = await fetch("/api/inventory", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-cache",
+            },
+            body: JSON.stringify({
+              inventory: updatedInventory,
+              packageNote: packageNote,
+            }),
+          })
+
+          if (response.ok) {
+            const result = await response.json()
+            if (result.success) {
+              console.log("✅ Successfully saved to database")
+              setError(null) // Clear any previous errors
+              // Show success message
+              alert("✅ Item added and saved to database successfully!")
+            } else {
+              throw new Error(result.error || "Failed to save inventory")
+            }
+          } else {
+            const errorText = await response.text()
+            throw new Error(`HTTP ${response.status}: ${errorText}`)
+          }
         } catch (dbError) {
           console.error("❌ Failed to save to database:", dbError)
           setError(
             `Item added locally but failed to sync to database: ${dbError instanceof Error ? dbError.message : "Unknown error"}`,
           )
-          // Don't throw here - the item was added locally
+          // Show partial success message
+          alert("⚠️ Item added locally but failed to save to database. Use 'Sync to Database' button to retry.")
         }
       } else {
         console.log("⚠️ Supabase not configured, item saved locally only")
         setError("Item added locally only (database not configured)")
+        alert("✅ Item added locally (database not configured)")
       }
     } catch (error) {
       console.error("❌ Critical error in addInventoryItem:", error)
@@ -757,10 +783,15 @@ export default function InventoryDashboard() {
       const syncResult = await saveInventoryToDatabase(inventory, packageNote)
       console.log("✅ Inventory sync completed:", syncResult)
 
-      // Step 4: Attempt to sync settings
+      // Step 4: Attempt to sync settings (don't fail if this fails)
       console.log("⚙️ Syncing settings...")
-      await saveSettingsToDatabase(alertSettings)
-      console.log("✅ Settings sync completed")
+      try {
+        await saveSettingsToDatabase(alertSettings)
+        console.log("✅ Settings sync completed")
+      } catch (settingsError) {
+        console.warn("⚠️ Settings sync failed but continuing:", settingsError)
+        // Don't throw here - settings failure shouldn't stop inventory sync
+      }
 
       // Step 5: Verify data was saved by reading it back
       console.log("🔍 Verifying sync by reading data back...")
