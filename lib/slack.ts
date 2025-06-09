@@ -72,7 +72,7 @@ export function createLowStockAlertMessage(items: any[]) {
   if (remainingCount > 0) {
     message += `_...and ${remainingCount} more items need attention_\n\n`
     // Use the correct deployment URL
-    const deploymentUrl = "https://v0-inv-mgt-git-test-holmesrc-amazoncoms-projects.vercel.app"
+    const deploymentUrl = "https://v0-inv-mgt.vercel.app"
     message += `📄 <${deploymentUrl}/low-stock|📋 View All ${items.length} Low Stock Items>\n\n`
   }
 
@@ -340,7 +340,7 @@ export function createTextOnlyLowStockAlert(items: any[]) {
 
   if (remainingCount > 0) {
     message += `_...and ${remainingCount} more items need attention_\n\n`
-    message += `To see all low stock items, click here: <${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/low-stock|View All Low Stock Items>\n\n`
+    message += `To see all low stock items, click here: <https://v0-inv-mgt.vercel.app/low-stock|View All Low Stock Items>\n\n`
   }
 
   message += `📋 *Instructions:*\n`
@@ -363,7 +363,7 @@ export function createTextOnlyFullLowStockAlert(items: any[]) {
   })
 
   message += `📋 *Action Required:*\n`
-  message += `Click the reorder links above to create purchase requests.\n`
+  message += `Click the purchase request links above to create purchase requests.\n`
   message += `Send completed requests to #PHL10-hw-lab-requests channel.`
 
   return message
