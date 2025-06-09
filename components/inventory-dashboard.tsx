@@ -25,7 +25,6 @@ import {
   Settings,
   ShoppingCart,
   Bell,
-  Upload,
   Info,
   List,
   Download,
@@ -45,6 +44,8 @@ import { downloadExcelFile } from "@/lib/excel-generator"
 import FileUpload from "./file-upload"
 import AddInventoryItem from "./add-inventory-item"
 import { getExcelFileMetadata } from "@/lib/storage"
+import ProtectedUploadButton from "./protected-upload-button"
+import PendingChangesDisplay from "./pending-changes-display"
 
 export default function InventoryDashboard() {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
@@ -526,71 +527,59 @@ export default function InventoryDashboard() {
     console.log("🚀 addInventoryItem called with:", newItem)
 
     try {
-      const item: InventoryItem = {
-        ...newItem,
-        id: `item-${Date.now()}`,
-        lastUpdated: new Date(),
+      // Transform to database format for approval
+      const itemData = {
+        part_number: String(newItem["Part number"]).trim(),
+        mfg_part_number: String(newItem["MFG Part number"] || "").trim(),
+        qty: isNaN(Number(newItem.QTY)) ? 0 : Math.max(0, Number(newItem.QTY)),
+        part_description: String(newItem["Part description"] || "").trim(),
+        supplier: String(newItem.Supplier || "").trim(),
+        location: String(newItem.Location || "").trim(),
+        package: String(newItem.Package || "").trim(),
+        reorder_point: isNaN(Number(newItem.reorderPoint)) ? 10 : Math.max(0, Number(newItem.reorderPoint)),
       }
 
-      console.log("📝 Created item with ID:", item.id)
+      // Submit for approval instead of adding directly
+      const response = await fetch("/api/inventory/pending", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          changeType: "add",
+          itemData,
+          requestedBy: "Current User", // You can make this dynamic
+        }),
+      })
 
-      // Add to local state first
-      const updatedInventory = [...inventory, item]
-      setInventory(updatedInventory)
-      console.log("✅ Added to local state, new count:", updatedInventory.length)
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          alert("✅ Item submitted for approval! An approval request has been sent to the inventory alerts channel.")
 
-      // Save to localStorage immediately
-      localStorage.setItem("inventory", JSON.stringify(updatedInventory))
-      console.log("✅ Saved to localStorage")
-
-      // Try to save to database
-      if (supabaseConfigured) {
-        console.log("💾 Attempting to save to database...")
-        try {
-          // Only sync the inventory, not settings
-          const response = await fetch("/api/inventory", {
+          // Send Slack approval request
+          await fetch("/api/slack/send-approval-request", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "Cache-Control": "no-cache",
             },
             body: JSON.stringify({
-              inventory: updatedInventory,
-              packageNote: packageNote,
+              changeType: "add",
+              itemData,
+              requestedBy: "Current User",
+              changeId: result.data.id,
             }),
           })
-
-          if (response.ok) {
-            const result = await response.json()
-            if (result.success) {
-              console.log("✅ Successfully saved to database")
-              setError(null) // Clear any previous errors
-              // Show success message
-              alert("✅ Item added and saved to database successfully!")
-            } else {
-              throw new Error(result.error || "Failed to save inventory")
-            }
-          } else {
-            const errorText = await response.text()
-            throw new Error(`HTTP ${response.status}: ${errorText}`)
-          }
-        } catch (dbError) {
-          console.error("❌ Failed to save to database:", dbError)
-          setError(
-            `Item added locally but failed to sync to database: ${dbError instanceof Error ? dbError.message : "Unknown error"}`,
-          )
-          // Show partial success message
-          alert("⚠️ Item added locally but failed to save to database. Use 'Sync to Database' button to retry.")
+        } else {
+          throw new Error(result.error || "Failed to submit for approval")
         }
       } else {
-        console.log("⚠️ Supabase not configured, item saved locally only")
-        setError("Item added locally only (database not configured)")
-        alert("✅ Item added locally (database not configured)")
+        throw new Error("Failed to submit change for approval")
       }
     } catch (error) {
-      console.error("❌ Critical error in addInventoryItem:", error)
-      setError(`Failed to add item: ${error instanceof Error ? error.message : "Unknown error"}`)
-      throw error // Re-throw so the UI can handle it
+      console.error("❌ Error submitting item for approval:", error)
+      setError(`Failed to submit item for approval: ${error instanceof Error ? error.message : "Unknown error"}`)
+      throw error
     }
   }
 
@@ -626,14 +615,64 @@ export default function InventoryDashboard() {
 
   // Delete inventory item
   const deleteInventoryItem = async (itemId: string) => {
-    const updatedInventory = inventory.filter((item) => item.id !== itemId)
-    setInventory(updatedInventory)
+    const itemToDelete = inventory.find((item) => item.id === itemId)
+    if (!itemToDelete) return
 
     try {
-      await saveInventoryToDatabase(updatedInventory, packageNote)
+      // Transform to database format for approval
+      const originalData = {
+        part_number: String(itemToDelete["Part number"]).trim(),
+        mfg_part_number: String(itemToDelete["MFG Part number"] || "").trim(),
+        qty: itemToDelete["QTY"],
+        part_description: String(itemToDelete["Part description"] || "").trim(),
+        supplier: String(itemToDelete.Supplier || "").trim(),
+        location: String(itemToDelete.Location || "").trim(),
+        package: String(itemToDelete.Package || "").trim(),
+        reorder_point: itemToDelete.reorderPoint || alertSettings.defaultReorderPoint,
+      }
+
+      // Submit for approval instead of deleting directly
+      const response = await fetch("/api/inventory/pending", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          changeType: "delete",
+          originalData,
+          requestedBy: "Current User",
+        }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          alert(
+            "✅ Deletion submitted for approval! An approval request has been sent to the inventory alerts channel.",
+          )
+
+          // Send Slack approval request
+          await fetch("/api/slack/send-approval-request", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              changeType: "delete",
+              originalData,
+              requestedBy: "Current User",
+              changeId: result.data.id,
+            }),
+          })
+        } else {
+          throw new Error(result.error || "Failed to submit for approval")
+        }
+      } else {
+        throw new Error("Failed to submit change for approval")
+      }
     } catch (error) {
-      console.error("Failed to delete item from database:", error)
-      setError("Item deleted locally but failed to sync to database")
+      console.error("❌ Error submitting deletion for approval:", error)
+      setError(`Failed to submit deletion for approval: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
   }
 
@@ -935,10 +974,7 @@ export default function InventoryDashboard() {
             <Download className="w-4 h-4 mr-2" />
             Download Excel
           </Button>
-          <Button onClick={() => setShowUpload(true)} variant="outline">
-            <Upload className="w-4 h-4 mr-2" />
-            Upload New File
-          </Button>
+          <ProtectedUploadButton onUploadAuthorized={() => setShowUpload(true)} />
           <Button onClick={handleManualSync} variant="outline" disabled={syncing}>
             {syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
             {syncing ? "Syncing..." : "Sync to Database"}
@@ -1052,6 +1088,9 @@ export default function InventoryDashboard() {
           </AlertDescription>
         </Alert>
       )}
+
+      {/* Pending Changes Display */}
+      <PendingChangesDisplay />
 
       {/* Supabase Not Configured Warning */}
       {supabaseConfigured === false && (
