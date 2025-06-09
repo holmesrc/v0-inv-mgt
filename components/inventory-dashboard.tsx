@@ -112,12 +112,46 @@ export default function InventoryDashboard() {
         return
       }
 
-      // If Supabase is configured, try to load from Excel file in storage
+      // If Supabase is configured, try to load directly from database first
+      console.log("🔍 Loading inventory directly from database...")
+      try {
+        const dbResponse = await fetch("/api/inventory/load-from-db", {
+          method: "GET",
+          headers: { "Cache-Control": "no-cache" },
+        })
+
+        if (dbResponse.ok) {
+          const dbResult = await dbResponse.json()
+
+          if (dbResult.success && dbResult.data.length > 0) {
+            console.log(`✅ Loaded ${dbResult.data.length} items from database`)
+            setInventory(dbResult.data)
+            setPackageNote(dbResult.packageNote || "")
+            setShowUpload(false)
+
+            // Also save to localStorage as backup
+            localStorage.setItem("inventory", JSON.stringify(dbResult.data))
+            if (dbResult.packageNote) localStorage.setItem("packageNote", dbResult.packageNote)
+
+            setError(null)
+            return
+          } else {
+            console.log("⚠️ Database returned no items, trying Excel file fallback...")
+          }
+        } else {
+          console.warn("⚠️ Database load failed, trying Excel file fallback...")
+        }
+      } catch (dbError) {
+        console.error("❌ Error loading from database:", dbError)
+        console.log("🔄 Falling back to Excel file method...")
+      }
+
+      // Fallback: Try to load from Excel file in storage
       try {
         const fileMetadata = await getExcelFileMetadata()
 
         if (fileMetadata.exists) {
-          // Read directly from the Excel file in storage
+          console.log("📁 Loading from Excel file in storage...")
           const result = await fetch("/api/excel", {
             method: "PUT",
             headers: { "Cache-Control": "no-cache" },
@@ -141,7 +175,7 @@ export default function InventoryDashboard() {
           }
         }
 
-        // If no Excel file or error reading it, try API fallback
+        // Final fallback: Try API method
         const response = await fetch("/api/inventory", {
           headers: { "Cache-Control": "no-cache" },
         })
@@ -174,7 +208,7 @@ export default function InventoryDashboard() {
           }
         }
       } catch (error) {
-        console.error("Error accessing Supabase storage:", error)
+        console.error("Error accessing storage methods:", error)
         // Fall back to localStorage on any error
         if (localInventory) {
           setInventory(localInventory)
