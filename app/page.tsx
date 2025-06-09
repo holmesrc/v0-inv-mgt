@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import InventoryDashboard from "@/components/inventory-dashboard"
-import SlackSetupGuide from "@/components/slack-setup-guide"
 import SupabaseSetupGuide from "@/components/supabase-setup-guide"
 
 export default function Home() {
@@ -27,7 +26,6 @@ export default function Home() {
     <div>
       <InventoryDashboard />
       {supabaseConfigured === false && <SupabaseSetupGuide />}
-      <SlackSetupGuide />
     </div>
   )
 }
