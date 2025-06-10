@@ -20,7 +20,7 @@ import { Plus, AlertTriangle } from "lucide-react"
 import type { InventoryItem } from "@/types/inventory"
 
 interface AddInventoryItemProps {
-  onAddItem: (item: Omit<InventoryItem, "id" | "lastUpdated">) => void
+  onAddItem: (item: Omit<InventoryItem, "id" | "lastUpdated">, requester: string) => void
   packageTypes: string[]
   suppliers: string[]
   locations: string[]
@@ -47,6 +47,7 @@ export default function AddInventoryItem({
     location: "",
     package: "",
     reorderPoint: defaultReorderPoint,
+    requester: "", // New field for requester
   })
 
   // Track if we're using custom input values
@@ -158,6 +159,9 @@ export default function AddInventoryItem({
       if (!formData.partNumber.trim()) {
         throw new Error("Part number is required and cannot be empty")
       }
+      if (!formData.requester.trim()) {
+        throw new Error("Requester name is required")
+      }
 
       console.log("🚀 Adding new inventory item:", formData)
 
@@ -172,37 +176,13 @@ export default function AddInventoryItem({
         reorderPoint: formData.reorderPoint,
       }
 
-      // First try to add directly to the database
-      try {
-        console.log("📤 Sending item directly to API...")
-        const response = await fetch("/api/inventory/add-item", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ item: newItem }),
-        })
+      console.log("📤 Calling onAddItem with:", newItem, "Requester:", formData.requester)
 
-        const result = await response.json()
+      // Call the parent function to add the item with requester info
+      await onAddItem(newItem, formData.requester.trim())
 
-        if (!response.ok) {
-          console.warn("⚠️ API returned error:", result)
-          throw new Error(result.error || result.details || "Failed to add item to database")
-        }
-
-        console.log("✅ Item added to database successfully:", result)
-        setSuccess("Item added successfully!")
-      } catch (apiError) {
-        console.error("❌ Error adding item via API:", apiError)
-        // Continue with local add even if API fails
-      }
-
-      console.log("📤 Calling onAddItem with:", newItem)
-
-      // Call the parent function to add the item locally
-      await onAddItem(newItem)
-
-      console.log("✅ Item added successfully")
+      console.log("✅ Item submitted for approval")
+      setSuccess("Item submitted for approval! Check the pending changes section above.")
 
       // Reset form
       setFormData({
@@ -214,6 +194,7 @@ export default function AddInventoryItem({
         location: "",
         package: "",
         reorderPoint: defaultReorderPoint,
+        requester: "",
       })
       setUseCustomSupplier(false)
       setUseCustomLocation(false)
@@ -223,7 +204,7 @@ export default function AddInventoryItem({
       setTimeout(() => {
         setOpen(false)
         setSuccess(null)
-      }, 1500)
+      }, 2000)
     } catch (error) {
       console.error("❌ Error adding item:", error)
       setError(error instanceof Error ? error.message : "Failed to add item")
@@ -274,7 +255,10 @@ export default function AddInventoryItem({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Add New Inventory Item</DialogTitle>
-          <DialogDescription>Enter the details for the new inventory item. All fields are required.</DialogDescription>
+          <DialogDescription>
+            Enter the details for the new inventory item. This request will be sent for approval before being added to
+            the database.
+          </DialogDescription>
         </DialogHeader>
 
         {error && (
@@ -292,6 +276,17 @@ export default function AddInventoryItem({
 
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="requester">Requested By *</Label>
+              <Input
+                id="requester"
+                value={formData.requester}
+                onChange={(e) => handleInputChange("requester", e.target.value)}
+                placeholder="Enter your name"
+                required
+                disabled={loading}
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="partNumber">Part Number *</Label>
               <Input
@@ -498,7 +493,7 @@ export default function AddInventoryItem({
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? "Adding..." : "Add Item"}
+              {loading ? "Submitting..." : "Submit for Approval"}
             </Button>
           </DialogFooter>
         </form>
