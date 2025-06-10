@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import type { InventoryItem } from "@/types/inventory" // Declare the InventoryItem variable
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -11,18 +12,30 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { InfoIcon, CheckCircle2 } from "lucide-react"
 
 interface AddInventoryItemProps {
-  onItemAdded?: () => void
+  onAddItem: (item: Omit<InventoryItem, "id" | "lastUpdated">, requester: string) => void
+  packageTypes: string[]
+  suppliers: string[]
+  locations: string[]
+  defaultReorderPoint: number
 }
 
-export default function AddInventoryItem({ onItemAdded }: AddInventoryItemProps) {
+export default function AddInventoryItem({
+  onAddItem,
+  packageTypes,
+  suppliers,
+  locations,
+  defaultReorderPoint,
+}: AddInventoryItemProps) {
   const [formData, setFormData] = useState({
     requester: "",
-    part_number: "",
+    partNumber: "",
+    mfgPartNumber: "",
+    qty: 0,
     description: "",
+    supplier: "",
     location: "",
-    current_stock: "",
-    min_stock: "",
-    notes: "",
+    package: "",
+    reorderPoint: defaultReorderPoint,
   })
 
   const [loading, setLoading] = useState(false)
@@ -40,12 +53,20 @@ export default function AddInventoryItem({ onItemAdded }: AddInventoryItemProps)
     setError(null)
     setSuccess(false)
 
+    // Validate required fields
+    if (!formData.partNumber.trim()) {
+      throw new Error("Part number is required and cannot be empty")
+    }
+    if (!formData.requester.trim()) {
+      throw new Error("Requester name is required and cannot be empty")
+    }
+
     try {
       // Convert stock values to numbers
       const payload = {
         ...formData,
-        current_stock: Number.parseInt(formData.current_stock),
-        min_stock: Number.parseInt(formData.min_stock),
+        current_stock: Number.parseInt(formData.qty.toString()),
+        min_stock: Number.parseInt(formData.reorderPoint.toString()),
       }
 
       const response = await fetch("/api/inventory/add-item", {
@@ -64,16 +85,21 @@ export default function AddInventoryItem({ onItemAdded }: AddInventoryItemProps)
       setSuccess(true)
       setFormData({
         requester: "",
-        part_number: "",
+        partNumber: "",
+        mfgPartNumber: "",
+        qty: 0,
         description: "",
+        supplier: "",
         location: "",
-        current_stock: "",
-        min_stock: "",
-        notes: "",
+        package: "",
+        reorderPoint: defaultReorderPoint,
       })
 
-      if (onItemAdded) {
-        onItemAdded()
+      // Call the parent function to add the item locally
+      // await onAddItem(newItem, formData.requester)
+
+      if (onAddItem) {
+        //onItemAdded()
       }
     } catch (err) {
       setError(err.message)
@@ -103,15 +129,15 @@ export default function AddInventoryItem({ onItemAdded }: AddInventoryItemProps)
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
+          <div className="space-y-2 col-span-2">
             <Label htmlFor="requester">Requested By *</Label>
             <Input
               id="requester"
               name="requester"
               value={formData.requester}
               onChange={handleChange}
-              required
               placeholder="Your name"
+              required
             />
           </div>
 
@@ -120,7 +146,7 @@ export default function AddInventoryItem({ onItemAdded }: AddInventoryItemProps)
             <Input
               id="part_number"
               name="part_number"
-              value={formData.part_number}
+              value={formData.partNumber}
               onChange={handleChange}
               required
               placeholder="e.g. ABC-123"
@@ -160,7 +186,7 @@ export default function AddInventoryItem({ onItemAdded }: AddInventoryItemProps)
               name="current_stock"
               type="number"
               min="0"
-              value={formData.current_stock}
+              value={formData.qty}
               onChange={handleChange}
               required
               placeholder="e.g. 10"
@@ -174,7 +200,7 @@ export default function AddInventoryItem({ onItemAdded }: AddInventoryItemProps)
               name="min_stock"
               type="number"
               min="0"
-              value={formData.min_stock}
+              value={formData.reorderPoint}
               onChange={handleChange}
               required
               placeholder="e.g. 5"

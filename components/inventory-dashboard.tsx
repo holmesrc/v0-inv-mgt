@@ -1,10 +1,36 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { RefreshCw, InfoIcon } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  AlertTriangle,
+  Package,
+  Search,
+  Settings,
+  ShoppingCart,
+  Bell,
+  Info,
+  List,
+  Download,
+  RefreshCw,
+  Database,
+} from "lucide-react"
 import type { InventoryItem, PurchaseRequest, AlertSettings } from "@/types/inventory"
 import {
   sendSlackMessage,
@@ -20,10 +46,9 @@ import AddInventoryItem from "./add-inventory-item"
 import { getExcelFileMetadata } from "@/lib/storage"
 import ProtectedUploadButton from "./protected-upload-button"
 import PendingChangesDisplay from "./pending-changes-display"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function InventoryDashboard() {
-  const [inventory, setInventory] = useState([])
+  const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [packageNote, setPackageNote] = useState<string>("")
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
@@ -36,18 +61,18 @@ export default function InventoryDashboard() {
     defaultReorderPoint: 10,
   })
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [supabaseConfigured, setSupabaseConfigured] = useState<boolean | null>(null)
   // Remove the useSession hook
   // const { data: session } = useSession()
-  const [lowStockItems, setLowStockItems] = useState([])
-  const [stats, setStats] = useState({
-    totalItems: 0,
-    lowStockItems: 0,
-    outOfStockItems: 0,
-    pendingChanges: 0,
-  })
+  // const [lowStockItems, setLowStockItems] = useState([])
+  // const [stats, setStats] = useState({
+  //   totalItems: 0,
+  //   lowStockItems: 0,
+  //   outOfStockItems: 0,
+  //   pendingChanges: 0,
+  // })
   const [syncStatus, setSyncStatus] = useState({ syncing: false, lastSync: null })
   const [pendingChanges, setPendingChanges] = useState([])
 
@@ -61,80 +86,80 @@ export default function InventoryDashboard() {
   }, [])
 
   // Function to load inventory data
-  const loadInventory = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const response = await fetch("/api/inventory/load-from-db")
-      if (!response.ok) {
-        throw new Error(`Error: ${response.status}`)
-      }
-      const data = await response.json()
-      setInventory(data.items || [])
+  // const loadInventory = async () => {
+  //   setLoading(true)
+  //   setError(null)
+  //   try {
+  //     const response = await fetch("/api/inventory/load-from-db")
+  //     if (!response.ok) {
+  //       throw new Error(`Error: ${response.status}`)
+  //     }
+  //     const data = await response.json()
+  //     setInventory(data.items || [])
 
-      // Calculate stats
-      const lowStock = data.items.filter((item) => item.current_stock < item.min_stock && item.current_stock > 0)
-      const outOfStock = data.items.filter((item) => item.current_stock <= 0)
+  //     // Calculate stats
+  //     const lowStock = data.items.filter((item) => item.current_stock < item.min_stock && item.current_stock > 0)
+  //     const outOfStock = data.items.filter((item) => item.current_stock <= 0)
 
-      setStats({
-        totalItems: data.items.length,
-        lowStockItems: lowStock.length,
-        outOfStockItems: outOfStock.length,
-        pendingChanges: pendingChanges.length,
-      })
+  //     setStats({
+  //       totalItems: data.items.length,
+  //       lowStockItems: lowStock.length,
+  //       outOfStockItems: outOfStock.length,
+  //       pendingChanges: pendingChanges.length,
+  //     })
 
-      setLowStockItems(lowStock)
-    } catch (err) {
-      setError(err.message)
-      console.error("Failed to load inventory:", err)
-    } finally {
-      setLoading(false)
-    }
-  }
+  //     setLowStockItems(lowStock)
+  //   } catch (err) {
+  //     setError(err.message)
+  //     console.error("Failed to load inventory:", err)
+  //   } finally {
+  //     setLoading(false)
+  //   }
+  // }
 
   // Function to load pending changes
-  const loadPendingChanges = async () => {
-    try {
-      const response = await fetch("/api/inventory/pending")
-      if (!response.ok) {
-        throw new Error(`Error: ${response.status}`)
-      }
-      const data = await response.json()
-      setPendingChanges(data.pendingChanges || [])
+  // const loadPendingChanges = async () => {
+  //   try {
+  //     const response = await fetch("/api/inventory/pending")
+  //     if (!response.ok) {
+  //       throw new Error(`Error: ${response.status}`)
+  //     }
+  //     const data = await response.json()
+  //     setPendingChanges(data.pendingChanges || [])
 
-      // Update stats with pending changes count
-      setStats((prev) => ({
-        ...prev,
-        pendingChanges: data.pendingChanges?.length || 0,
-      }))
-    } catch (err) {
-      console.error("Failed to load pending changes:", err)
-    }
-  }
+  //     // Update stats with pending changes count
+  //     setStats((prev) => ({
+  //       ...prev,
+  //       pendingChanges: data.pendingChanges?.length || 0,
+  //     }))
+  //   } catch (err) {
+  //     console.error("Failed to load pending changes:", err)
+  //   }
+  // }
 
   // Function to handle manual sync
-  const handleSync = async () => {
-    setSyncStatus({ ...syncStatus, syncing: true })
-    try {
-      const response = await fetch("/api/inventory")
-      if (!response.ok) {
-        throw new Error(`Error: ${response.status}`)
-      }
-      const data = await response.json()
-      setSyncStatus({
-        syncing: false,
-        lastSync: new Date().toLocaleTimeString(),
-      })
-      loadInventory()
-      loadPendingChanges()
-    } catch (err) {
-      console.error("Sync failed:", err)
-      setSyncStatus({
-        ...syncStatus,
-        syncing: false,
-      })
-    }
-  }
+  // const handleSync = async () => {
+  //   setSyncStatus({ ...syncStatus, syncing: true })
+  //   try {
+  //     const response = await fetch("/api/inventory")
+  //     if (!response.ok) {
+  //       throw new Error(`Error: ${response.status}`)
+  //     }
+  //     const data = await response.json()
+  //     setSyncStatus({
+  //       syncing: false,
+  //       lastSync: new Date().toLocaleTimeString(),
+  //     })
+  //     loadInventory()
+  //     loadPendingChanges()
+  //   } catch (err) {
+  //     console.error("Sync failed:", err)
+  //     setSyncStatus({
+  //       ...syncStatus,
+  //       syncing: false,
+  //     })
+  //   }
+  // }
 
   const loadInventoryFromDatabase = async () => {
     try {
@@ -301,30 +326,6 @@ export default function InventoryDashboard() {
       setLoading(false)
     }
   }
-
-  // Load data on component mount
-  useEffect(() => {
-    loadInventory()
-    loadPendingChanges()
-    // Set up interval to refresh data every 5 minutes
-    const interval = setInterval(
-      () => {
-        loadInventory()
-        loadPendingChanges()
-      },
-      5 * 60 * 1000,
-    )
-
-    return () => clearInterval(interval)
-  }, [])
-
-  // Update stats when pending changes update
-  useEffect(() => {
-    setStats((prev) => ({
-      ...prev,
-      pendingChanges: pendingChanges.length,
-    }))
-  }, [pendingChanges])
 
   const loadSettingsFromDatabase = async () => {
     try {
@@ -581,7 +582,7 @@ export default function InventoryDashboard() {
   }, [inventory])
 
   // Get low stock items
-  const lowStockItemsOld = useMemo(() => {
+  const lowStockItems = useMemo(() => {
     return inventory.filter((item) => item["QTY"] <= (item.reorderPoint || alertSettings.defaultReorderPoint))
   }, [inventory, alertSettings.defaultReorderPoint])
 
@@ -613,28 +614,60 @@ export default function InventoryDashboard() {
     console.log("🚀 addInventoryItem called with:", newItem, "by", requester)
 
     try {
-      // Generate a unique ID for the new item
-      const newItemWithId: InventoryItem = {
-        ...newItem,
-        id: `item-${Date.now()}`,
-        lastUpdated: new Date(),
+      // Transform to database format for approval
+      const itemData = {
+        part_number: String(newItem["Part number"]).trim(),
+        mfg_part_number: String(newItem["MFG Part number"] || "").trim(),
+        qty: isNaN(Number(newItem.QTY)) ? 0 : Math.max(0, Number(newItem.QTY)),
+        part_description: String(newItem["Part description"] || "").trim(),
+        supplier: String(newItem.Supplier || "").trim(),
+        location: String(newItem.Location || "").trim(),
+        package: String(newItem.Package || "").trim(),
+        reorder_point: isNaN(Number(newItem.reorderPoint)) ? 10 : Math.max(0, Number(newItem.reorderPoint)),
       }
 
-      // Add to local state immediately
-      const updatedInventory = [...inventory, newItemWithId]
-      setInventory(updatedInventory)
+      // Submit for approval instead of adding directly
+      const response = await fetch("/api/inventory/pending", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          changeType: "add",
+          itemData,
+          requestedBy: requester, // Use the provided requester
+        }),
+      })
 
-      // Save to database with requester info in the success message
-      try {
-        await saveInventoryToDatabase(updatedInventory, packageNote)
-        alert(`✅ Item added successfully by ${requester}! Inventory updated.`)
-      } catch (error) {
-        console.error("Failed to save to database:", error)
-        setError("Item added locally but failed to sync to database")
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          alert(
+            `✅ Item submitted for approval by ${requester}! An approval request has been sent to the inventory alerts channel.`,
+          )
+
+          // Send Slack approval request
+          await fetch("/api/slack/send-approval-request", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              changeType: "add",
+              itemData,
+              requestedBy: requester,
+              changeId: result.data.id,
+            }),
+          })
+        } else {
+          throw new Error(result.error || "Failed to submit for approval")
+        }
+      } else {
+        throw new Error("Failed to submit change for approval")
       }
     } catch (error) {
-      console.error("❌ Error adding item:", error)
-      setError(`Failed to add item: ${error instanceof Error ? error.message : "Unknown error"}`)
+      console.error("❌ Error submitting item for approval:", error)
+      setError(`Failed to submit item for approval: ${error instanceof Error ? error.message : "Unknown error"}`)
       throw error
     }
   }
@@ -767,12 +800,12 @@ export default function InventoryDashboard() {
 
   // Send low stock alert
   const sendLowStockAlert = async () => {
-    if (lowStockItemsOld.length === 0) {
+    if (lowStockItems.length === 0) {
       alert("No low stock items to report!")
       return
     }
 
-    const formattedItems = lowStockItemsOld.map((item) => ({
+    const formattedItems = lowStockItems.map((item) => ({
       partNumber: item["Part number"],
       description: item["Part description"],
       supplier: item["Supplier"],
@@ -806,12 +839,12 @@ export default function InventoryDashboard() {
 
   // Send full low stock alert
   const sendFullAlert = async () => {
-    if (lowStockItemsOld.length === 0) {
+    if (lowStockItems.length === 0) {
       alert("No low stock items to report!")
       return
     }
 
-    const formattedItems = lowStockItemsOld.map((item) => ({
+    const formattedItems = lowStockItems.map((item) => ({
       partNumber: item["Part number"],
       description: item["Part description"],
       supplier: item["Supplier"],
@@ -1011,233 +1044,456 @@ export default function InventoryDashboard() {
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-6">Inventory Management Dashboard</h1>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalItems}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Low Stock Items</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-amber-500">{stats.lowStockItems}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-500">{stats.outOfStockItems}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Pending Changes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-500">{stats.pendingChanges}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Sync Status and Button */}
-      <div className="flex justify-between items-center mb-6">
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
         <div>
-          {syncStatus.lastSync && <span className="text-sm text-gray-500">Last synced: {syncStatus.lastSync}</span>}
+          <h1 className="text-3xl font-bold">Inventory Management System</h1>
+          <p className="text-muted-foreground">Managing {inventory.length} inventory items</p>
         </div>
-        <Button onClick={handleSync} disabled={syncStatus.syncing} className="flex items-center gap-2">
-          <RefreshCw className={`h-4 w-4 ${syncStatus.syncing ? "animate-spin" : ""}`} />
-          {syncStatus.syncing ? "Syncing..." : "Sync Now"}
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <AddInventoryItem
+            onAddItem={addInventoryItem}
+            packageTypes={packageTypes}
+            suppliers={suppliers}
+            locations={uniqueLocations} // Updated here
+            defaultReorderPoint={alertSettings.defaultReorderPoint}
+          />
+          <Button onClick={handleDownloadExcel} variant="outline">
+            <Download className="w-4 h-4 mr-2" />
+            Download Excel
+          </Button>
+          <ProtectedUploadButton onUploadAuthorized={() => setShowUpload(true)} />
+          <Button onClick={handleManualSync} variant="outline" disabled={syncing}>
+            {syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
+            {syncing ? "Syncing..." : "Sync to Database"}
+          </Button>
+          <Button onClick={sendLowStockAlert} variant="outline">
+            <Bell className="w-4 h-4 mr-2" />
+            Send Alert Now
+          </Button>
+          {lowStockItems.length > 3 && (
+            <Button onClick={sendFullAlert} variant="outline">
+              <List className="w-4 h-4 mr-2" />
+              Send Full Alert
+            </Button>
+          )}
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Settings className="w-4 h-4 mr-2" />
+                Settings
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Alert Settings</DialogTitle>
+                <DialogDescription>Configure your weekly low stock alerts</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={alertSettings.enabled}
+                    onChange={(e) => handleSettingsUpdate({ ...alertSettings, enabled: e.target.checked })}
+                  />
+                  <Label>Enable weekly alerts</Label>
+                </div>
+                <div>
+                  <Label>Day of week</Label>
+                  <Select
+                    value={alertSettings.dayOfWeek.toString()}
+                    onValueChange={(value) =>
+                      handleSettingsUpdate({ ...alertSettings, dayOfWeek: Number.parseInt(value) })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Sunday</SelectItem>
+                      <SelectItem value="1">Monday</SelectItem>
+                      <SelectItem value="2">Tuesday</SelectItem>
+                      <SelectItem value="3">Wednesday</SelectItem>
+                      <SelectItem value="4">Thursday</SelectItem>
+                      <SelectItem value="5">Friday</SelectItem>
+                      <SelectItem value="6">Saturday</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Time</Label>
+                  <Input
+                    type="time"
+                    value={alertSettings.time}
+                    onChange={(e) => handleSettingsUpdate({ ...alertSettings, time: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Default reorder point</Label>
+                  <Input
+                    type="number"
+                    value={alertSettings.defaultReorderPoint}
+                    onChange={(e) =>
+                      handleSettingsUpdate({
+                        ...alertSettings,
+                        defaultReorderPoint: Number.parseInt(e.target.value),
+                      })
+                    }
+                  />
+                  <div className="mt-2 p-3 bg-gray-50 rounded text-sm">
+                    <p className="font-medium mb-2">Stock Status Levels:</p>
+                    <ul className="space-y-1 text-xs">
+                      <li>
+                        <strong>Low Stock:</strong> ≤ {alertSettings.defaultReorderPoint} units
+                      </li>
+                      <li>
+                        <strong>Approaching Low:</strong> {alertSettings.defaultReorderPoint + 1} -{" "}
+                        {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
+                      </li>
+                      <li>
+                        <strong>Normal:</strong> &gt; {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      {/* Main Content Tabs */}
-      <Tabs defaultValue="inventory">
-        <TabsList className="mb-4">
-          <TabsTrigger value="inventory">Inventory</TabsTrigger>
-          <TabsTrigger value="low-stock">Low Stock</TabsTrigger>
-          <TabsTrigger value="add-item">Add Item</TabsTrigger>
-          <TabsTrigger value="pending">
-            Pending Changes
-            {stats.pendingChanges > 0 && (
-              <span className="ml-2 bg-blue-500 text-white rounded-full px-2 py-0.5 text-xs">
-                {stats.pendingChanges}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="upload">Upload</TabsTrigger>
-        </TabsList>
+      {/* Excel File Information */}
 
-        {/* Inventory Tab */}
-        <TabsContent value="inventory">
-          <Card>
-            <CardHeader>
-              <CardTitle>Full Inventory</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <p>Loading inventory data...</p>
-              ) : error ? (
-                <Alert variant="destructive">
-                  <InfoIcon className="h-4 w-4" />
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>Failed to load inventory data. {error}</AlertDescription>
-                </Alert>
-              ) : inventory.length === 0 ? (
-                <p>No inventory items found.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="bg-gray-100">
-                        <th className="border p-2 text-left">Part Number</th>
-                        <th className="border p-2 text-left">Description</th>
-                        <th className="border p-2 text-left">Location</th>
-                        <th className="border p-2 text-left">Current Stock</th>
-                        <th className="border p-2 text-left">Min Stock</th>
-                        <th className="border p-2 text-left">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {inventory.map((item, index) => (
-                        <tr key={index} className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                          <td className="border p-2">{item.part_number}</td>
-                          <td className="border p-2">{item.description}</td>
-                          <td className="border p-2">{item.location}</td>
-                          <td className="border p-2">{item.current_stock}</td>
-                          <td className="border p-2">{item.min_stock}</td>
-                          <td className="border p-2">
-                            {item.current_stock <= 0 ? (
-                              <span className="text-red-500 font-medium">Out of Stock</span>
-                            ) : item.current_stock < item.min_stock ? (
-                              <span className="text-amber-500 font-medium">Low Stock</span>
-                            ) : (
-                              <span className="text-green-500 font-medium">In Stock</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+      {/* Error Alert */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            {error}
+            <Button variant="outline" size="sm" className="ml-2" onClick={() => setError(null)}>
+              Dismiss
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Pending Changes Display */}
+      <PendingChangesDisplay />
+
+      {/* Supabase Not Configured Warning */}
+      {supabaseConfigured === false && (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardContent className="pt-4">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 text-orange-600 mt-0.5" />
+              <div>
+                <h3 className="font-medium text-orange-800 mb-1">Database Not Available</h3>
+                <p className="text-sm text-orange-700">
+                  Supabase database connection failed. Your data is being stored locally in your browser only. Please
+                  check your environment variables and database setup
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stats Cards with Definitions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{inventory.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">All inventory items</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Low Stock Items</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-500">{lowStockItems.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              ≤ {alertSettings.defaultReorderPoint} units (at or below reorder point)
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Info className="w-5 h-5 text-blue-600" />
+              Stock Status Definitions
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex items-start gap-3">
+                <Badge variant="destructive" className="mt-1">
+                  Low Stock
+                </Badge>
+                <div>
+                  <p className="font-medium text-sm">≤ {alertSettings.defaultReorderPoint} units</p>
+                  <p className="text-xs text-muted-foreground">
+                    At or below the reorder point. Immediate action required.
+                  </p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Low Stock Tab */}
-        <TabsContent value="low-stock">
-          <Card>
-            <CardHeader>
-              <CardTitle>Low Stock Items</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <p>Loading low stock data...</p>
-              ) : error ? (
-                <Alert variant="destructive">
-                  <InfoIcon className="h-4 w-4" />
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>Failed to load low stock data. {error}</AlertDescription>
-                </Alert>
-              ) : lowStockItems.length === 0 ? (
-                <p>No low stock items found.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="bg-gray-100">
-                        <th className="border p-2 text-left">Part Number</th>
-                        <th className="border p-2 text-left">Description</th>
-                        <th className="border p-2 text-left">Location</th>
-                        <th className="border p-2 text-left">Current Stock</th>
-                        <th className="border p-2 text-left">Min Stock</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lowStockItems.map((item, index) => (
-                        <tr key={index} className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                          <td className="border p-2">{item.part_number}</td>
-                          <td className="border p-2">{item.description}</td>
-                          <td className="border p-2">{item.location}</td>
-                          <td className="border p-2 font-medium text-amber-500">{item.current_stock}</td>
-                          <td className="border p-2">{item.min_stock}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              </div>
+              <div className="flex items-start gap-3">
+                <Badge variant="secondary" className="mt-1">
+                  Approaching Low
+                </Badge>
+                <div>
+                  <p className="font-medium text-sm">
+                    {alertSettings.defaultReorderPoint + 1} - {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
+                  </p>
+                  <p className="text-xs text-muted-foreground">Within 50% above reorder point. Monitor closely.</p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+              </div>
+              <div className="flex items-start gap-3">
+                <Badge variant="outline" className="mt-1">
+                  Normal
+                </Badge>
+                <div>
+                  <p className="font-medium text-sm">
+                    {">"} {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
+                  </p>
+                  <p className="text-xs text-muted-foreground">More than 50% above reorder point. Adequate stock.</p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 p-3 bg-white rounded border border-blue-200">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> These calculations are based on your default reorder point of{" "}
+                {alertSettings.defaultReorderPoint} units. Individual items may have custom reorder points that override
+                this default.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-        {/* Add Item Tab */}
-        <TabsContent value="add-item">
-          <Card>
-            <CardHeader>
-              <CardTitle>Add New Inventory Item</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AddInventoryItem
-                onAddItem={addInventoryItem}
-                packageTypes={packageTypes}
-                suppliers={suppliers}
-                locations={uniqueLocations}
-                defaultReorderPoint={alertSettings.defaultReorderPoint}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
+      {/* Search and Filters */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Search & Filter</CardTitle>
+          <CardDescription>
+            Search across part numbers, descriptions, suppliers, locations, and package types
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by part number, description, supplier, location, or package type..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+            </div>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Package Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Packages</SelectItem>
+                {packageTypes.map((packageType) => (
+                  <SelectItem key={packageType} value={packageType}>
+                    {packageType}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={stockFilter} onValueChange={setStockFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Stock Level" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Items</SelectItem>
+                <SelectItem value="low">Low Stock</SelectItem>
+                <SelectItem value="approaching">Approaching Low</SelectItem>
+                <SelectItem value="normal">Normal Stock</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Pending Changes Tab */}
-        <TabsContent value="pending">
-          <Card>
-            <CardHeader>
-              <CardTitle>Pending Changes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PendingChangesDisplay
-                pendingChanges={pendingChanges}
-                onChangesUpdated={() => {
-                  loadPendingChanges()
-                  loadInventory()
-                }}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
+      {/* Inventory Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Inventory Items</CardTitle>
+          <CardDescription>
+            Showing {filteredInventory.length} of {inventory.length} items
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="max-h-96 overflow-y-auto border rounded-md">
+            <Table>
+              <TableHeader className="sticky top-0 bg-white z-10">
+                <TableRow>
+                  <TableHead>Part Number</TableHead>
+                  <TableHead>MFG Part Number</TableHead>
+                  <TableHead>QTY</TableHead>
+                  <TableHead>Part Description</TableHead>
+                  <TableHead>Supplier</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Package</TableHead>
+                  <TableHead>Reorder Point</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredInventory.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-medium">{item["Part number"]}</TableCell>
+                    <TableCell>{item["MFG Part number"]}</TableCell>
+                    <TableCell>{item["QTY"]}</TableCell>
+                    <TableCell>{item["Part description"]}</TableCell>
+                    <TableCell>{item["Supplier"]}</TableCell>
+                    <TableCell>{item["Location"]}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{item["Package"]}</Badge>
+                    </TableCell>
+                    <TableCell>{item.reorderPoint || alertSettings.defaultReorderPoint}</TableCell>
+                    <TableCell>
+                      {(() => {
+                        const stockStatus = getStockStatus(item)
+                        const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint
+                        const currentQty = item["QTY"]
 
-        {/* Upload Tab */}
-        <TabsContent value="upload">
-          <Card>
-            <CardHeader>
-              <CardTitle>Upload Inventory Data</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ProtectedUploadButton
-                onUploadComplete={() => {
-                  loadInventory()
-                  loadPendingChanges()
-                }}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                        return (
+                          <div className="space-y-1">
+                            <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>
+                            <div className="text-xs text-muted-foreground">
+                              {currentQty} / {reorderPoint} units
+                            </div>
+                          </div>
+                        )
+                      })()}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              Edit
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Edit Item</DialogTitle>
+                              <DialogDescription>Update {item["Part number"]} details</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <div>
+                                <Label>Quantity</Label>
+                                <Input
+                                  type="number"
+                                  defaultValue={item["QTY"]}
+                                  onChange={(e) => {
+                                    const newValue = Number.parseInt(e.target.value)
+                                    if (!isNaN(newValue)) {
+                                      updateItemQuantity(item.id, newValue)
+                                    }
+                                  }}
+                                />
+                              </div>
+                              <div>
+                                <Label>Reorder Point</Label>
+                                <Input
+                                  type="number"
+                                  defaultValue={item.reorderPoint || alertSettings.defaultReorderPoint}
+                                  onChange={(e) => {
+                                    const newValue = Number.parseInt(e.target.value)
+                                    if (!isNaN(newValue)) {
+                                      updateReorderPoint(item.id, newValue)
+                                    }
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <Button
+                                variant="destructive"
+                                onClick={() => {
+                                  if (confirm("Are you sure you want to delete this item?")) {
+                                    deleteInventoryItem(item.id)
+                                  }
+                                }}
+                              >
+                                Delete Item
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              <ShoppingCart className="w-4 h-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Create Purchase Request</DialogTitle>
+                              <DialogDescription>Request more stock for {item["Part number"]}</DialogDescription>
+                            </DialogHeader>
+                            <form
+                              onSubmit={(e) => {
+                                e.preventDefault()
+                                const formData = new FormData(e.currentTarget)
+                                const quantity = Number.parseInt(formData.get("quantity") as string)
+                                const urgency = formData.get("urgency") as "low" | "medium" | "high"
+                                const requester = formData.get("requester") as string
+                                createPurchaseRequest(item, quantity, urgency, requester)
+                              }}
+                            >
+                              <div className="space-y-4">
+                                <div>
+                                  <Label>Quantity</Label>
+                                  <Input name="quantity" type="number" required />
+                                </div>
+                                <div>
+                                  <Label>Urgency</Label>
+                                  <Select name="urgency" required>
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="low">Low</SelectItem>
+                                      <SelectItem value="medium">Medium</SelectItem>
+                                      <SelectItem value="high">High</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div>
+                                  <Label>Requested By</Label>
+                                  <Input name="requester" placeholder="Your name or department" />
+                                </div>
+                              </div>
+                              <DialogFooter className="mt-4">
+                                <Button type="submit">Create Request</Button>
+                              </DialogFooter>
+                            </form>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
