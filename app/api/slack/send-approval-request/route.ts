@@ -1,65 +1,46 @@
 import { type NextRequest, NextResponse } from "next/server"
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const { changeType, itemData, originalData, requestedBy, changeId } = await request.json()
+    const { changeId, description, requestedBy, changeDetails } = await req.json()
 
-    const webhookUrl = process.env.SLACK_WEBHOOK_URL
-    if (!webhookUrl) {
-      throw new Error("Slack webhook URL not configured")
+    if (!changeId || !description || !requestedBy || !changeDetails) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    let message = ""
-    let actionText = ""
+    const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL
 
-    if (changeType === "add") {
-      actionText = "Add New Item"
-      message =
-        `🔔 *Inventory Change Approval Required*\n\n` +
-        `**Action:** ${actionText}\n` +
-        `**Requested by:** ${requestedBy}\n\n` +
-        `**New Item Details:**\n` +
-        `• Part Number: ${itemData.part_number}\n` +
-        `• Description: ${itemData.part_description}\n` +
-        `• Quantity: ${itemData.qty}\n` +
-        `• Supplier: ${itemData.supplier}\n` +
-        `• Location: ${itemData.location}\n` +
-        `• Package: ${itemData.package}`
-    } else if (changeType === "delete") {
-      actionText = "Delete Item"
-      message =
-        `🔔 *Inventory Change Approval Required*\n\n` +
-        `**Action:** ${actionText}\n` +
-        `**Requested by:** ${requestedBy}\n\n` +
-        `**Item to Delete:**\n` +
-        `• Part Number: ${originalData.part_number}\n` +
-        `• Description: ${originalData.part_description}\n` +
-        `• Current Quantity: ${originalData.qty}`
-    } else if (changeType === "update") {
-      actionText = "Update Item"
-      message =
-        `🔔 *Inventory Change Approval Required*\n\n` +
-        `**Action:** ${actionText}\n` +
-        `**Requested by:** ${requestedBy}\n\n` +
-        `**Changes:**\n` +
-        `• Part Number: ${originalData.part_number}\n`
-
-      // Show what's changing
-      if (itemData.qty !== originalData.qty) {
-        message += `• Quantity: ${originalData.qty} → ${itemData.qty}\n`
-      }
-      if (itemData.reorder_point !== originalData.reorder_point) {
-        message += `• Reorder Point: ${originalData.reorder_point} → ${itemData.reorder_point}\n`
-      }
+    if (!slackWebhookUrl) {
+      console.error("SLACK_WEBHOOK_URL is not defined in environment variables.")
+      return NextResponse.json({ error: "Slack webhook URL not configured" }, { status: 500 })
     }
 
-    // Add approval buttons
     const blocks = [
       {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: message,
+          text: `Approval Request for Change: *${changeId}*`,
+        },
+      },
+      {
+        type: "section",
+        fields: [
+          {
+            type: "mrkdwn",
+            text: `*Description:*\n${description}`,
+          },
+          {
+            type: "mrkdwn",
+            text: `*Requested By:*\n${requestedBy}`,
+          },
+        ],
+      },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*Change Details:*\n${changeDetails}`,
         },
       },
       {
@@ -73,7 +54,10 @@ export async function POST(request: NextRequest) {
             },
             style: "primary",
             action_id: "approve_change",
-            value: JSON.stringify({ changeId, action: "approve" }),
+            value: JSON.stringify({
+              changeId: changeId,
+              action: "approve",
+            }),
           },
           {
             type: "button",
@@ -83,33 +67,35 @@ export async function POST(request: NextRequest) {
             },
             style: "danger",
             action_id: "reject_change",
-            value: JSON.stringify({ changeId, action: "reject" }),
+            value: JSON.stringify({
+              changeId: changeId,
+              action: "reject",
+            }),
           },
         ],
       },
     ]
 
-    const response = await fetch(webhookUrl, {
+    const payload = {
+      blocks: blocks,
+    }
+
+    const response = await fetch(slackWebhookUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        text: `Inventory Change Approval Required: ${actionText}`,
-        blocks,
-      }),
+      body: JSON.stringify(payload),
     })
 
     if (!response.ok) {
-      throw new Error(`Slack API error: ${response.status}`)
+      console.error(`Failed to send Slack message. Status: ${response.status}, Body: ${await response.text()}`)
+      return NextResponse.json({ error: "Failed to send Slack message" }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ message: "Slack message sent successfully" }, { status: 200 })
   } catch (error) {
-    console.error("Error sending approval request:", error)
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 },
-    )
+    console.error("Error processing request:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

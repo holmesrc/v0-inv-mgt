@@ -26,21 +26,26 @@ export async function POST(request: NextRequest) {
 
       if (action.action_id === "approve_change" || action.action_id === "reject_change") {
         try {
+          // Parse the action value which should contain the change ID
           const actionData = JSON.parse(action.value)
           const userName = payload.user.name || payload.user.username || "Unknown User"
 
           console.log("👤 User:", userName)
           console.log("📊 Action data:", actionData)
 
-          // Call the approve API
-          const approveResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/inventory/approve`, {
+          // Determine the action type
+          const actionType = action.action_id === "approve_change" ? "approve" : "reject"
+
+          // Call the approve API with the correct URL
+          const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://v0-inv-mgt.vercel.app"
+          const approveResponse = await fetch(`${baseUrl}/api/inventory/approve`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
               changeId: actionData.changeId,
-              action: actionData.action,
+              action: actionType,
               approvedBy: userName,
             }),
           })
@@ -49,15 +54,29 @@ export async function POST(request: NextRequest) {
           console.log("📝 Approval result:", result)
 
           if (result.success) {
-            // Update the Slack message
-            const statusText = actionData.action === "approve" ? "✅ APPROVED" : "❌ REJECTED"
+            // Update the Slack message to show the result
+            const statusText = actionType === "approve" ? "✅ APPROVED" : "❌ REJECTED"
+            const statusColor = actionType === "approve" ? "#28a745" : "#dc3545"
+
+            // Get the original message text
+            const originalText = payload.original_message?.blocks?.[0]?.text?.text || "Change request"
+
             const updatedBlocks = [
               {
                 type: "section",
                 text: {
                   type: "mrkdwn",
-                  text: `${payload.original_message.blocks[0].text.text}\n\n*Status:* ${statusText} by ${userName}`,
+                  text: `${originalText}\n\n*Status:* ${statusText} by ${userName}`,
                 },
+              },
+              {
+                type: "context",
+                elements: [
+                  {
+                    type: "mrkdwn",
+                    text: `Action completed at ${new Date().toLocaleString()}`,
+                  },
+                ],
               },
             ]
 
@@ -74,7 +93,7 @@ export async function POST(request: NextRequest) {
         } catch (parseError) {
           console.error("❌ Error parsing action value:", parseError)
           return NextResponse.json({
-            text: "❌ Error processing action",
+            text: "❌ Error processing action - invalid data format",
             replace_original: false,
           })
         }
@@ -84,7 +103,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("❌ Error handling Slack interaction:", error)
-    return NextResponse.json({ text: "❌ Error processing request" }, { status: 500 })
+    return NextResponse.json(
+      {
+        text: "❌ Error processing request",
+        replace_original: false,
+      },
+      { status: 500 },
+    )
   }
 }
 
