@@ -47,8 +47,12 @@ import { getExcelFileMetadata } from "@/lib/storage"
 import ProtectedUploadButton from "./protected-upload-button"
 import PendingChangesDisplay from "./pending-changes-display"
 
-export default function InventoryDashboard() {
-  const [inventory, setInventory] = useState<InventoryItem[]>([])
+interface InventoryDashboardProps {
+  inventory: InventoryItem[]
+  setInventory: (inventory: InventoryItem[]) => void
+}
+
+export default function InventoryDashboard({ inventory, setInventory }: InventoryDashboardProps) {
   const [packageNote, setPackageNote] = useState<string>("")
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
@@ -69,6 +73,8 @@ export default function InventoryDashboard() {
 
   // Show upload screen if no inventory data
   const [showUpload, setShowUpload] = useState(false)
+
+  const defaultReorderPoint = 10
 
   // Load data from database on component mount
   useEffect(() => {
