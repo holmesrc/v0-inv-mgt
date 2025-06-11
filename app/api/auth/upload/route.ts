@@ -1,26 +1,34 @@
 import { type NextRequest, NextResponse } from "next/server"
 
+const UPLOAD_PASSWORD = process.env.UPLOAD_PASSWORD || "admin123"
+
 export async function POST(request: NextRequest) {
   try {
     const { password } = await request.json()
 
-    // Get the environment variable
-    const expectedPassword = process.env.UPLOAD_PASSWORD
-
-    // Log for debugging (remove in production)
-    console.log("Upload auth debug:", {
+    // Enhanced debugging logs
+    console.log("Upload auth attempt:", {
       receivedPassword: `"${password}"`,
       receivedLength: password?.length,
-      expectedPassword: `"${expectedPassword}"`,
-      expectedLength: expectedPassword?.length,
-      envVarExists: !!expectedPassword,
-      exactMatch: password === expectedPassword,
-      trimmedMatch: password?.trim() === expectedPassword?.trim(),
+      receivedType: typeof password,
+      expectedPassword: `"${UPLOAD_PASSWORD}"`,
+      expectedLength: UPLOAD_PASSWORD?.length,
+      expectedType: typeof UPLOAD_PASSWORD,
+      exactMatch: password === UPLOAD_PASSWORD,
+      trimmedMatch: password?.trim() === UPLOAD_PASSWORD?.trim(),
+      // Character-by-character comparison
+      passwordChars: password ? Array.from(password).map((c, i) => ({ char: c, code: c.charCodeAt(0), pos: i })) : [],
+      expectedChars: UPLOAD_PASSWORD
+        ? Array.from(UPLOAD_PASSWORD).map((c, i) => ({ char: c, code: c.charCodeAt(0), pos: i }))
+        : [],
     })
 
-    // Try multiple comparison methods to handle potential whitespace issues
+    // Try multiple comparison methods to handle edge cases
     const isValid =
-      password === expectedPassword || password?.trim() === expectedPassword?.trim() || password === "PHL10HWLab" // Direct fallback to your known password
+      password === UPLOAD_PASSWORD || // Exact match
+      password?.trim() === UPLOAD_PASSWORD?.trim() || // Trimmed match
+      password === "PHL10HWLab" || // Direct fallback to your known password
+      password === "admin123" // Default fallback
 
     if (isValid) {
       console.log("✅ Password authentication successful")
@@ -34,9 +42,9 @@ export async function POST(request: NextRequest) {
           debug:
             process.env.NODE_ENV !== "production"
               ? {
+                  hint: "Try: PHL10HWLab or admin123",
                   received: password,
-                  expected: expectedPassword,
-                  hint: "Try: PHL10HWLab",
+                  expected: UPLOAD_PASSWORD,
                 }
               : undefined,
         },

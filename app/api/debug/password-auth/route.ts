@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 
 export async function GET() {
   const uploadPassword = process.env.UPLOAD_PASSWORD
@@ -11,47 +11,59 @@ export async function GET() {
     uploadPassword: {
       exists: !!uploadPassword,
       length: uploadPassword?.length || 0,
-      value: uploadPassword, // Show the actual value for debugging
       type: typeof uploadPassword,
+      value: uploadPassword || "NOT_SET",
       hasWhitespace: uploadPassword ? /\s/.test(uploadPassword) : false,
-      startsWithSpace: uploadPassword ? uploadPassword.startsWith(" ") : false,
-      endsWithSpace: uploadPassword ? uploadPassword.endsWith(" ") : false,
-      charCodes: uploadPassword ? Array.from(uploadPassword).map((char) => ({ char, code: char.charCodeAt(0) })) : [],
+      charCodes: uploadPassword
+        ? Array.from(uploadPassword).map((char, index) => ({
+            char,
+            code: char.charCodeAt(0),
+            position: index,
+          }))
+        : [],
     },
     testValues: {
-      direct: "PHL10HWLab",
       comparison: uploadPassword === "PHL10HWLab",
       trimmedComparison: uploadPassword?.trim() === "PHL10HWLab",
     },
   })
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const { testPassword } = await request.json()
     const expectedPassword = process.env.UPLOAD_PASSWORD
 
-    // Detailed comparison analysis
     const analysis = {
       received: {
         value: testPassword,
         length: testPassword?.length || 0,
         type: typeof testPassword,
-        charCodes: testPassword ? Array.from(testPassword).map((char) => ({ char, code: char.charCodeAt(0) })) : [],
+        charCodes: testPassword
+          ? Array.from(testPassword).map((char, index) => ({
+              char,
+              code: char.charCodeAt(0),
+              position: index,
+            }))
+          : [],
       },
       expected: {
-        value: expectedPassword,
+        value: expectedPassword || "NOT_SET",
         length: expectedPassword?.length || 0,
         type: typeof expectedPassword,
         charCodes: expectedPassword
-          ? Array.from(expectedPassword).map((char) => ({ char, code: char.charCodeAt(0) }))
+          ? Array.from(expectedPassword).map((char, index) => ({
+              char,
+              code: char.charCodeAt(0),
+              position: index,
+            }))
           : [],
       },
       comparisons: {
         exact: testPassword === expectedPassword,
         trimmed: testPassword?.trim() === expectedPassword?.trim(),
         lowercase: testPassword?.toLowerCase() === expectedPassword?.toLowerCase(),
-        bothTrimmedLowercase: testPassword?.trim().toLowerCase() === expectedPassword?.trim().toLowerCase(),
+        uppercased: testPassword?.toUpperCase() === expectedPassword?.toUpperCase(),
       },
       differences: [],
     }
@@ -60,22 +72,26 @@ export async function POST(request: Request) {
     if (testPassword && expectedPassword) {
       const maxLength = Math.max(testPassword.length, expectedPassword.length)
       for (let i = 0; i < maxLength; i++) {
-        const receivedChar = testPassword[i] || "(missing)"
-        const expectedChar = expectedPassword[i] || "(missing)"
+        const receivedChar = testPassword[i] || ""
+        const expectedChar = expectedPassword[i] || ""
+
         if (receivedChar !== expectedChar) {
           analysis.differences.push({
             position: i,
-            received: { char: receivedChar, code: receivedChar.charCodeAt ? receivedChar.charCodeAt(0) : null },
-            expected: { char: expectedChar, code: expectedChar.charCodeAt ? expectedChar.charCodeAt(0) : null },
+            received: {
+              char: receivedChar,
+              code: receivedChar.charCodeAt(0) || 0,
+            },
+            expected: {
+              char: expectedChar,
+              code: expectedChar.charCodeAt(0) || 0,
+            },
           })
         }
       }
     }
 
-    return NextResponse.json({
-      success: analysis.comparisons.exact,
-      analysis,
-    })
+    return NextResponse.json({ analysis })
   } catch (error) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 })
   }
