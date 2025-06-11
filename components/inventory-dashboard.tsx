@@ -404,25 +404,35 @@ export default function InventoryDashboard() {
 
   // Filter and search logic - FIXED to include Location field
   const filteredInventory = useMemo(() => {
-    return inventory.filter((item) => {
-      const matchesSearch =
-        item["Part number"].toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item["MFG Part number"].toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item["Part description"].toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item["Supplier"].toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item["Location"].toLowerCase().includes(searchTerm.toLowerCase()) || // ADDED THIS LINE
-        item["Package"].toLowerCase().includes(searchTerm.toLowerCase()) // ADDED THIS LINE TOO
+    if (!inventory || inventory.length === 0) return []
 
-      const matchesCategory = categoryFilter === "all" || item["Package"] === categoryFilter
+    return inventory.filter((item) => {
+      // Safely handle undefined/null values
+      const partNumber = item["Part number"] || ""
+      const mfgPartNumber = item["MFG Part number"] || ""
+      const description = item["Part description"] || ""
+      const supplier = item["Supplier"] || ""
+      const location = item["Location"] || ""
+      const packageType = item["Package"] || ""
+
+      const matchesSearch =
+        partNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        mfgPartNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        supplier.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        packageType.toLowerCase().includes(searchTerm.toLowerCase())
+
+      const matchesCategory = categoryFilter === "all" || packageType === categoryFilter
+
+      const currentQty = item["QTY"] || 0
+      const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint || 10
 
       const matchesStock =
         stockFilter === "all" ||
-        (stockFilter === "low" && item["QTY"] <= (item.reorderPoint || alertSettings.defaultReorderPoint)) ||
-        (stockFilter === "approaching" &&
-          item["QTY"] > (item.reorderPoint || alertSettings.defaultReorderPoint) &&
-          item["QTY"] <= Math.ceil((item.reorderPoint || alertSettings.defaultReorderPoint) * 1.5)) ||
-        (stockFilter === "normal" &&
-          item["QTY"] > Math.ceil((item.reorderPoint || alertSettings.defaultReorderPoint) * 1.5))
+        (stockFilter === "low" && currentQty <= reorderPoint) ||
+        (stockFilter === "approaching" && currentQty > reorderPoint && currentQty <= Math.ceil(reorderPoint * 1.5)) ||
+        (stockFilter === "normal" && currentQty > Math.ceil(reorderPoint * 1.5))
 
       return matchesSearch && matchesCategory && matchesStock
     })
@@ -430,8 +440,15 @@ export default function InventoryDashboard() {
 
   // Get unique values for dropdowns - with proper deduplication
   const packageTypes = useMemo(() => {
-    const uniquePackages = Array.from(new Set(inventory.map((item) => item["Package"]).filter(Boolean)))
-    return uniquePackages.sort() // Sort alphabetically for consistency
+    if (!inventory || inventory.length === 0) return []
+    const uniquePackages = Array.from(
+      new Set(
+        inventory
+          .map((item) => item["Package"])
+          .filter((pkg) => pkg && typeof pkg === "string" && pkg.trim().length > 0),
+      ),
+    )
+    return uniquePackages.sort()
   }, [inventory])
 
   const suppliers = useMemo(() => {
