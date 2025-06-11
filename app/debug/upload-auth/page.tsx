@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 export default function UploadAuthDebugPage() {
   const [envData, setEnvData] = useState<any>(null)
-  const [testPassword, setTestPassword] = useState("")
+  const [testPassword, setTestPassword] = useState("PHL10HWLab")
   const [testResult, setTestResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
@@ -34,6 +34,7 @@ export default function UploadAuthDebugPage() {
         status: response.status,
         success: result.success,
         error: result.error,
+        debug: result.debug,
         response: result,
       })
     } catch (error) {
@@ -57,7 +58,7 @@ export default function UploadAuthDebugPage() {
         </CardHeader>
         <CardContent>
           {envData ? (
-            <div className="space-y-2">
+            <div className="space-y-2 text-sm">
               <div>
                 <strong>Environment:</strong> {envData.environment?.NODE_ENV} / {envData.environment?.VERCEL_ENV}
               </div>
@@ -68,13 +69,20 @@ export default function UploadAuthDebugPage() {
                 <strong>Password Length:</strong> {envData.uploadPassword?.length}
               </div>
               <div>
-                <strong>Password Type:</strong> {envData.uploadPassword?.type}
+                <strong>Password Value:</strong> "{envData.uploadPassword?.value}"
               </div>
-              {envData.uploadPassword?.value && (
-                <div>
-                  <strong>Password Value:</strong> "{envData.uploadPassword.value}"
-                </div>
-              )}
+              <div>
+                <strong>Has Whitespace:</strong> {envData.uploadPassword?.hasWhitespace ? "⚠️ Yes" : "✅ No"}
+              </div>
+              <div>
+                <strong>Starts with Space:</strong> {envData.uploadPassword?.startsWithSpace ? "⚠️ Yes" : "✅ No"}
+              </div>
+              <div>
+                <strong>Ends with Space:</strong> {envData.uploadPassword?.endsWithSpace ? "⚠️ Yes" : "✅ No"}
+              </div>
+              <div>
+                <strong>Direct Comparison:</strong> {envData.testValues?.comparison ? "✅ Match" : "❌ No Match"}
+              </div>
             </div>
           ) : (
             <div>Loading environment data...</div>
@@ -90,20 +98,25 @@ export default function UploadAuthDebugPage() {
         <CardContent className="space-y-4">
           <div>
             <Input
-              type="password"
+              type="text"
               placeholder="Enter password to test"
               value={testPassword}
               onChange={(e) => setTestPassword(e.target.value)}
             />
           </div>
-          <Button onClick={testAuth} disabled={loading || !testPassword}>
-            {loading ? "Testing..." : "Test Password"}
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={testAuth} disabled={loading || !testPassword}>
+              {loading ? "Testing..." : "Test Password"}
+            </Button>
+            <Button variant="outline" onClick={() => setTestPassword("PHL10HWLab")}>
+              Use Expected Value
+            </Button>
+          </div>
 
           {testResult && (
             <div className="mt-4 p-4 bg-gray-100 rounded">
               <strong>Test Result:</strong>
-              <pre className="mt-2 text-sm">{JSON.stringify(testResult, null, 2)}</pre>
+              <pre className="mt-2 text-sm overflow-auto">{JSON.stringify(testResult, null, 2)}</pre>
             </div>
           )}
         </CardContent>
