@@ -64,6 +64,15 @@ export default function InventoryDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [supabaseConfigured, setSupabaseConfigured] = useState<boolean | null>(null)
+  // Remove the useSession hook
+  // const { data: session } = useSession()
+  // const [lowStockItems, setLowStockItems] = useState([])
+  // const [stats, setStats] = useState({
+  //   totalItems: 0,
+  //   lowStockItems: 0,
+  //   outOfStockItems: 0,
+  //   pendingChanges: 0,
+  // })
   const [syncStatus, setSyncStatus] = useState({ syncing: false, lastSync: null })
   const [pendingChanges, setPendingChanges] = useState([])
 
@@ -75,6 +84,82 @@ export default function InventoryDashboard() {
     loadInventoryFromDatabase()
     loadSettingsFromDatabase()
   }, [])
+
+  // Function to load inventory data
+  // const loadInventory = async () => {
+  //   setLoading(true)
+  //   setError(null)
+  //   try {
+  //     const response = await fetch("/api/inventory/load-from-db")
+  //     if (!response.ok) {
+  //       throw new Error(`Error: ${response.status}`)
+  //     }
+  //     const data = await response.json()
+  //     setInventory(data.items || [])
+
+  //     // Calculate stats
+  //     const lowStock = data.items.filter((item) => item.current_stock < item.min_stock && item.current_stock > 0)
+  //     const outOfStock = data.items.filter((item) => item.current_stock <= 0)
+
+  //     setStats({
+  //       totalItems: data.items.length,
+  //       lowStockItems: lowStock.length,
+  //       outOfStockItems: outOfStock.length,
+  //       pendingChanges: pendingChanges.length,
+  //     })
+
+  //     setLowStockItems(lowStock)
+  //   } catch (err) {
+  //     setError(err.message)
+  //     console.error("Failed to load inventory:", err)
+  //   } finally {
+  //     setLoading(false)
+  //   }
+  // }
+
+  // Function to load pending changes
+  // const loadPendingChanges = async () => {
+  //   try {
+  //     const response = await fetch("/api/inventory/pending")
+  //     if (!response.ok) {
+  //       throw new Error(`Error: ${response.status}`)
+  //     }
+  //     const data = await response.json()
+  //     setPendingChanges(data.pendingChanges || [])
+
+  //     // Update stats with pending changes count
+  //     setStats((prev) => ({
+  //       ...prev,
+  //       pendingChanges: data.pendingChanges?.length || 0,
+  //     }))
+  //   } catch (err) {
+  //     console.error("Failed to load pending changes:", err)
+  //   }
+  // }
+
+  // Function to handle manual sync
+  // const handleSync = async () => {
+  //   setSyncStatus({ ...syncStatus, syncing: true })
+  //   try {
+  //     const response = await fetch("/api/inventory")
+  //     if (!response.ok) {
+  //       throw new Error(`Error: ${response.status}`)
+  //     }
+  //     const data = await response.json()
+  //     setSyncStatus({
+  //       syncing: false,
+  //       lastSync: new Date().toLocaleTimeString(),
+  //     })
+  //     loadInventory()
+  //     loadPendingChanges()
+  //   } catch (err) {
+  //     console.error("Sync failed:", err)
+  //     setSyncStatus({
+  //       ...syncStatus,
+  //       syncing: false,
+  //     })
+  //   }
+  // }
 
   const loadInventoryFromDatabase = async () => {
     try {
@@ -404,35 +489,25 @@ export default function InventoryDashboard() {
 
   // Filter and search logic - FIXED to include Location field
   const filteredInventory = useMemo(() => {
-    if (!inventory || inventory.length === 0) return []
-
     return inventory.filter((item) => {
-      // Safely handle undefined/null values
-      const partNumber = item["Part number"] || ""
-      const mfgPartNumber = item["MFG Part number"] || ""
-      const description = item["Part description"] || ""
-      const supplier = item["Supplier"] || ""
-      const location = item["Location"] || ""
-      const packageType = item["Package"] || ""
-
       const matchesSearch =
-        partNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        mfgPartNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        supplier.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        packageType.toLowerCase().includes(searchTerm.toLowerCase())
+        item["Part number"].toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item["MFG Part number"].toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item["Part description"].toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item["Supplier"].toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item["Location"].toLowerCase().includes(searchTerm.toLowerCase()) || // ADDED THIS LINE
+        item["Package"].toLowerCase().includes(searchTerm.toLowerCase()) // ADDED THIS LINE TOO
 
-      const matchesCategory = categoryFilter === "all" || packageType === categoryFilter
-
-      const currentQty = item["QTY"] || 0
-      const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint || 10
+      const matchesCategory = categoryFilter === "all" || item["Package"] === categoryFilter
 
       const matchesStock =
         stockFilter === "all" ||
-        (stockFilter === "low" && currentQty <= reorderPoint) ||
-        (stockFilter === "approaching" && currentQty > reorderPoint && currentQty <= Math.ceil(reorderPoint * 1.5)) ||
-        (stockFilter === "normal" && currentQty > Math.ceil(reorderPoint * 1.5))
+        (stockFilter === "low" && item["QTY"] <= (item.reorderPoint || alertSettings.defaultReorderPoint)) ||
+        (stockFilter === "approaching" &&
+          item["QTY"] > (item.reorderPoint || alertSettings.defaultReorderPoint) &&
+          item["QTY"] <= Math.ceil((item.reorderPoint || alertSettings.defaultReorderPoint) * 1.5)) ||
+        (stockFilter === "normal" &&
+          item["QTY"] > Math.ceil((item.reorderPoint || alertSettings.defaultReorderPoint) * 1.5))
 
       return matchesSearch && matchesCategory && matchesStock
     })
@@ -440,15 +515,8 @@ export default function InventoryDashboard() {
 
   // Get unique values for dropdowns - with proper deduplication
   const packageTypes = useMemo(() => {
-    if (!inventory || inventory.length === 0) return []
-    const uniquePackages = Array.from(
-      new Set(
-        inventory
-          .map((item) => item["Package"])
-          .filter((pkg) => pkg && typeof pkg === "string" && pkg.trim().length > 0),
-      ),
-    )
-    return uniquePackages.sort()
+    const uniquePackages = Array.from(new Set(inventory.map((item) => item["Package"]).filter(Boolean)))
+    return uniquePackages.sort() // Sort alphabetically for consistency
   }, [inventory])
 
   const suppliers = useMemo(() => {
@@ -898,11 +966,7 @@ export default function InventoryDashboard() {
         if (verifyResult.success && verifyResult.count > 0) {
           console.log(`✅ Verification successful: ${verifyResult.count} items in database`)
           alert(
-            `✅ Sync successful!
-
-📊 Synced: ${inventory.length} inventory items
-🔍 Verified: ${verifyResult.count} items in database
-⚙️ Settings updated`,
+            `✅ Sync successful!\n\n📊 Synced: ${inventory.length} inventory items\n🔍 Verified: ${verifyResult.count} items in database\n⚙️ Settings updated`,
           )
         } else {
           console.warn("⚠️ Verification inconclusive:", verifyResult)

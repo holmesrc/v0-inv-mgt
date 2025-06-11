@@ -1,11 +1,11 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useRef, useMemo, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Plus, AlertTriangle, CheckCircle2 } from "lucide-react"
+import { Plus, AlertTriangle } from "lucide-react"
 import type { InventoryItem } from "@/types/inventory"
 
 interface AddInventoryItemProps {
@@ -29,16 +29,15 @@ interface AddInventoryItemProps {
 
 export default function AddInventoryItem({
   onAddItem,
-  packageTypes = [],
-  suppliers = [],
-  locations = [],
-  defaultReorderPoint = 5,
+  packageTypes,
+  suppliers,
+  locations,
+  defaultReorderPoint,
 }: AddInventoryItemProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
-
+  const [success, setSuccess] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     requester: "",
     partNumber: "",
@@ -51,42 +50,139 @@ export default function AddInventoryItem({
     reorderPoint: defaultReorderPoint,
   })
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
+  // Track if we're using custom input values
+  const [useCustomSupplier, setUseCustomSupplier] = useState(false)
+  const [useCustomLocation, setUseCustomLocation] = useState(false)
+  const [useCustomPackage, setUseCustomPackage] = useState(false)
+
+  // Refs for input fields
+  const supplierInputRef = useRef<HTMLInputElement>(null)
+  const locationInputRef = useRef<HTMLInputElement>(null)
+  const packageInputRef = useRef<HTMLInputElement>(null)
+
+  // Debug logging for locations
+  useEffect(() => {
+    console.log("AddInventoryItem received locations:", locations)
+  }, [locations])
+
+  // Aggressive deduplication with debugging
+  const uniquePackageTypes = useMemo(() => {
+    // Filter out empty/null/undefined values and trim whitespace
+    const cleaned = packageTypes
+      .filter((type) => type && typeof type === "string" && type.trim().length > 0)
+      .map((type) => type.trim().toUpperCase()) // Normalize to uppercase
+
+    // Create Set to remove duplicates, then convert back to array
+    const uniqueSet = new Set(cleaned)
+    const uniqueArray = Array.from(uniqueSet).sort()
+
+    return uniqueArray
+  }, [packageTypes])
+
+  const uniqueSuppliers = useMemo(() => {
+    const cleaned = suppliers
+      .filter((supplier) => supplier && typeof supplier === "string" && supplier.trim().length > 0)
+      .map((supplier) => supplier.trim())
+    const uniqueSet = new Set(cleaned)
+    return Array.from(uniqueSet).sort()
+  }, [suppliers])
+
+  // COMPLETELY REWRITTEN location sorting function
+  const uniqueLocations = useMemo(() => {
+    console.log("Raw locations in AddInventoryItem:", locations)
+
+    // Step 1: Clean the data - remove empty values and trim whitespace
+    const cleaned = locations
+      .filter((location) => location && typeof location === "string" && location.trim().length > 0)
+      .map((location) => location.trim())
+
+    console.log("Cleaned locations:", cleaned)
+
+    // Step 2: Remove duplicates
+    const uniqueLocations = Array.from(new Set(cleaned))
+    console.log("Unique locations:", uniqueLocations)
+
+    // Step 3: Custom sorting function for alphanumeric location codes
+    const sortedLocations = uniqueLocations.sort((a, b) => {
+      // Helper function to extract parts from location strings
+      const extractParts = (loc: string) => {
+        // Match patterns like "A1", "H1-2", "H10-B5", etc.
+        const match = loc.match(/^([A-Za-z]*)(\d*)(?:[^A-Za-z0-9]*([A-Za-z]*)(\d*))?/)
+        if (!match) return { prefix1: loc, num1: 0, prefix2: "", num2: 0 }
+
+        const [, prefix1 = "", numStr1 = "", prefix2 = "", numStr2 = ""] = match
+        const num1 = numStr1 ? Number.parseInt(numStr1, 10) : 0
+        const num2 = numStr2 ? Number.parseInt(numStr2, 10) : 0
+
+        return { prefix1, num1, prefix2, num2 }
+      }
+
+      const partsA = extractParts(a)
+      const partsB = extractParts(b)
+
+      // Compare first prefix (alphabetical)
+      if (partsA.prefix1 !== partsB.prefix1) {
+        return partsA.prefix1.localeCompare(partsB.prefix1)
+      }
+
+      // Compare first number (numerical)
+      if (partsA.num1 !== partsB.num1) {
+        return partsA.num1 - partsB.num1
+      }
+
+      // Compare second prefix if first parts are identical
+      if (partsA.prefix2 !== partsB.prefix2) {
+        return partsA.prefix2.localeCompare(partsB.prefix2)
+      }
+
+      // Compare second number
+      if (partsA.num2 !== partsB.num2) {
+        return partsA.num2 - partsB.num2
+      }
+
+      // If everything matches so far, fall back to string comparison
+      return a.localeCompare(b)
+    })
+
+    console.log("Final sorted locations:", sortedLocations)
+    return sortedLocations
+  }, [locations])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
-    setSuccess(false)
+    setSuccess(null)
 
     try {
       // Validate required fields
       if (!formData.partNumber.trim()) {
-        throw new Error("Part number is required")
+        throw new Error("Part number is required and cannot be empty")
       }
       if (!formData.requester.trim()) {
-        throw new Error("Requester name is required")
+        throw new Error("Requester name is required and cannot be empty")
       }
 
-      // Create the new item object
+      console.log("🚀 Adding new inventory item:", formData)
+
       const newItem: Omit<InventoryItem, "id" | "lastUpdated"> = {
         "Part number": formData.partNumber.trim(),
         "MFG Part number": formData.mfgPartNumber,
-        QTY: Number(formData.qty),
+        QTY: formData.qty,
         "Part description": formData.description,
         Supplier: formData.supplier,
         Location: formData.location,
         Package: formData.package,
-        reorderPoint: Number(formData.reorderPoint),
+        reorderPoint: formData.reorderPoint,
       }
+
+      console.log("📤 Calling onAddItem with:", newItem, "by", formData.requester)
 
       // Call the parent function to add the item
       await onAddItem(newItem, formData.requester)
 
-      setSuccess(true)
+      console.log("✅ Item added successfully")
+      setSuccess("Item submitted for approval successfully!")
 
       // Reset form
       setFormData({
@@ -100,17 +196,51 @@ export default function AddInventoryItem({
         package: "",
         reorderPoint: defaultReorderPoint,
       })
+      setUseCustomSupplier(false)
+      setUseCustomLocation(false)
+      setUseCustomPackage(false)
 
-      // Close dialog after success
+      // Show success message briefly before closing
       setTimeout(() => {
         setOpen(false)
-        setSuccess(false)
+        setSuccess(null)
       }, 1500)
-    } catch (err: any) {
-      setError(err.message || "Failed to add item")
-      console.error("Error adding item:", err)
+    } catch (error) {
+      console.error("❌ Error adding item:", error)
+      setError(error instanceof Error ? error.message : "Failed to add item")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleInputChange = (field: string, value: string | number) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }))
+  }
+
+  const handleSelectChange = (field: string, value: string) => {
+    if (value === "custom") {
+      // If "custom" is selected, focus the corresponding input field
+      if (field === "supplier") {
+        setUseCustomSupplier(true)
+        setTimeout(() => supplierInputRef.current?.focus(), 100)
+      } else if (field === "location") {
+        setUseCustomLocation(true)
+        setTimeout(() => locationInputRef.current?.focus(), 100)
+      } else if (field === "package") {
+        setUseCustomPackage(true)
+        setTimeout(() => packageInputRef.current?.focus(), 100)
+      }
+    } else {
+      // Otherwise, update the form data with the selected value
+      handleInputChange(field, value)
+
+      // Reset custom input flags
+      if (field === "supplier") setUseCustomSupplier(false)
+      else if (field === "location") setUseCustomLocation(false)
+      else if (field === "package") setUseCustomPackage(false)
     }
   }
 
@@ -125,7 +255,7 @@ export default function AddInventoryItem({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Add New Inventory Item</DialogTitle>
-          <DialogDescription>Enter the details for the new inventory item.</DialogDescription>
+          <DialogDescription>Enter the details for the new inventory item. All fields are required.</DialogDescription>
         </DialogHeader>
 
         {error && (
@@ -136,21 +266,19 @@ export default function AddInventoryItem({
         )}
 
         {success && (
-          <Alert className="mb-4 bg-green-50 border-green-200">
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-            <AlertDescription className="text-green-600">Item has been submitted for approval.</AlertDescription>
+          <Alert className="bg-green-50 border-green-200">
+            <AlertDescription className="text-green-800">{success}</AlertDescription>
           </Alert>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit}>
+          <div className="grid grid-cols-2 gap-4 py-4">
             <div className="space-y-2 col-span-2">
               <Label htmlFor="requester">Requested By *</Label>
               <Input
                 id="requester"
-                name="requester"
                 value={formData.requester}
-                onChange={handleChange}
+                onChange={(e) => handleInputChange("requester", e.target.value)}
                 placeholder="Your name"
                 required
                 disabled={loading}
@@ -161,103 +289,203 @@ export default function AddInventoryItem({
               <Label htmlFor="partNumber">Part Number *</Label>
               <Input
                 id="partNumber"
-                name="partNumber"
                 value={formData.partNumber}
-                onChange={handleChange}
+                onChange={(e) => handleInputChange("partNumber", e.target.value)}
+                placeholder="e.g., 490-12158-ND"
                 required
-                placeholder="e.g. ABC-123"
                 disabled={loading}
               />
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="mfgPartNumber">MFG Part Number</Label>
+              <Label htmlFor="mfgPartNumber">MFG Part Number *</Label>
               <Input
                 id="mfgPartNumber"
-                name="mfgPartNumber"
                 value={formData.mfgPartNumber}
-                onChange={handleChange}
-                placeholder="Manufacturer part number"
-                disabled={loading}
-              />
-            </div>
-
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="description">Description *</Label>
-              <Input
-                id="description"
-                name="description"
-                value={formData.description}
-                onChange={handleChange}
+                onChange={(e) => handleInputChange("mfgPartNumber", e.target.value)}
+                placeholder="e.g., CAP KIT CER 5.1PF-47PF"
                 required
-                placeholder="Item description"
                 disabled={loading}
               />
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="location">Location</Label>
-              <Input
-                id="location"
-                name="location"
-                value={formData.location}
-                onChange={handleChange}
-                placeholder="Storage location"
-                disabled={loading}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="supplier">Supplier</Label>
-              <Input
-                id="supplier"
-                name="supplier"
-                value={formData.supplier}
-                onChange={handleChange}
-                placeholder="Supplier name"
-                disabled={loading}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="package">Package Type</Label>
-              <Input
-                id="package"
-                name="package"
-                value={formData.package}
-                onChange={handleChange}
-                placeholder="Package type"
-                disabled={loading}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="qty">Quantity</Label>
+              <Label htmlFor="qty">Quantity *</Label>
               <Input
                 id="qty"
-                name="qty"
                 type="number"
                 min="0"
                 value={formData.qty}
-                onChange={handleChange}
+                onChange={(e) => handleInputChange("qty", Number.parseInt(e.target.value) || 0)}
+                required
                 disabled={loading}
               />
             </div>
-
-            <div className="space-y-2 col-span-2">
+            <div className="space-y-2">
               <Label htmlFor="reorderPoint">Reorder Point</Label>
               <Input
                 id="reorderPoint"
-                name="reorderPoint"
                 type="number"
                 min="0"
                 value={formData.reorderPoint}
-                onChange={handleChange}
+                onChange={(e) => handleInputChange("reorderPoint", Number.parseInt(e.target.value) || 0)}
                 disabled={loading}
               />
             </div>
+            <div className="space-y-2 col-span-2">
+              <Label htmlFor="description">Part Description *</Label>
+              <Input
+                id="description"
+                value={formData.description}
+                onChange={(e) => handleInputChange("description", e.target.value)}
+                placeholder="e.g., CAP KIT CERAMIC 0.1PF-5PF 1000PC"
+                required
+                disabled={loading}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="supplier">Supplier</Label>
+              {!useCustomSupplier ? (
+                <Select
+                  value={formData.supplier}
+                  onValueChange={(value) => handleSelectChange("supplier", value)}
+                  disabled={loading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select supplier" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniqueSuppliers.map((supplier, index) => (
+                      <SelectItem key={`supplier-${index}-${supplier}`} value={supplier}>
+                        {supplier}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">Enter custom supplier...</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  ref={supplierInputRef}
+                  placeholder="Enter supplier name"
+                  value={formData.supplier}
+                  onChange={(e) => handleInputChange("supplier", e.target.value)}
+                  onBlur={() => {
+                    if (!formData.supplier) setUseCustomSupplier(false)
+                  }}
+                  disabled={loading}
+                />
+              )}
+              {!useCustomSupplier && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="mt-1 h-auto py-1 text-xs"
+                  onClick={() => {
+                    setUseCustomSupplier(true)
+                    setTimeout(() => supplierInputRef.current?.focus(), 100)
+                  }}
+                  disabled={loading}
+                >
+                  Enter custom supplier
+                </Button>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="location">Location</Label>
+              {!useCustomLocation ? (
+                <Select
+                  value={formData.location}
+                  onValueChange={(value) => handleSelectChange("location", value)}
+                  disabled={loading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniqueLocations.map((location, index) => (
+                      <SelectItem key={`location-${index}-${location}`} value={location}>
+                        {location}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">Enter custom location...</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  ref={locationInputRef}
+                  placeholder="Enter location"
+                  value={formData.location}
+                  onChange={(e) => handleInputChange("location", e.target.value)}
+                  onBlur={() => {
+                    if (!formData.location) setUseCustomLocation(false)
+                  }}
+                  disabled={loading}
+                />
+              )}
+              {!useCustomLocation && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="mt-1 h-auto py-1 text-xs"
+                  onClick={() => {
+                    setUseCustomLocation(true)
+                    setTimeout(() => locationInputRef.current?.focus(), 100)
+                  }}
+                  disabled={loading}
+                >
+                  Enter custom location
+                </Button>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="package">Package Type</Label>
+              {!useCustomPackage ? (
+                <Select
+                  value={formData.package}
+                  onValueChange={(value) => handleSelectChange("package", value)}
+                  disabled={loading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select package type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniquePackageTypes.map((packageType, index) => (
+                      <SelectItem key={`package-${index}-${packageType}`} value={packageType}>
+                        {packageType}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">Enter custom package...</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  ref={packageInputRef}
+                  placeholder="Enter package type"
+                  value={formData.package}
+                  onChange={(e) => handleInputChange("package", e.target.value)}
+                  onBlur={() => {
+                    if (!formData.package) setUseCustomPackage(false)
+                  }}
+                  disabled={loading}
+                />
+              )}
+              {!useCustomPackage && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="mt-1 h-auto py-1 text-xs"
+                  onClick={() => {
+                    setUseCustomPackage(true)
+                    setTimeout(() => packageInputRef.current?.focus(), 100)
+                  }}
+                  disabled={loading}
+                >
+                  Enter custom package type
+                </Button>
+              )}
+            </div>
           </div>
-
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>
               Cancel
