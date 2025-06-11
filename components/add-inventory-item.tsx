@@ -345,7 +345,7 @@ export default function AddInventoryItem({
               <Label htmlFor="supplier">Supplier</Label>
               {!useCustomSupplier ? (
                 <Select
-                  value={formData.supplier}
+                  value={formData.supplier || ""}
                   onValueChange={(value) => handleSelectChange("supplier", value)}
                   disabled={loading}
                 >
@@ -393,7 +393,7 @@ export default function AddInventoryItem({
               <Label htmlFor="location">Location</Label>
               {!useCustomLocation ? (
                 <Select
-                  value={formData.location}
+                  value={formData.location || ""}
                   onValueChange={(value) => handleSelectChange("location", value)}
                   disabled={loading}
                 >
@@ -441,7 +441,7 @@ export default function AddInventoryItem({
               <Label htmlFor="package">Package Type</Label>
               {!useCustomPackage ? (
                 <Select
-                  value={formData.package}
+                  value={formData.package || ""}
                   onValueChange={(value) => handleSelectChange("package", value)}
                   disabled={loading}
                 >
