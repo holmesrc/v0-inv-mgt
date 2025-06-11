@@ -13,7 +13,7 @@ interface FileUploadProps {
   onDataLoaded: (data: any[], packageNote: string) => void
 }
 
-export function FileUpload({ onDataLoaded }: FileUploadProps) {
+export default function FileUpload({ onDataLoaded }: FileUploadProps) {
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -185,6 +185,3 @@ export function FileUpload({ onDataLoaded }: FileUploadProps) {
     </div>
   )
 }
-
-// Also provide default export for compatibility
-export default FileUpload
