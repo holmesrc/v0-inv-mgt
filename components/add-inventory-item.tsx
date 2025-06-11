@@ -6,7 +6,6 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
@@ -50,10 +49,9 @@ export default function AddInventoryItem({
     location: "",
     package: "",
     reorderPoint: defaultReorderPoint,
-    notes: "",
   })
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
@@ -83,7 +81,6 @@ export default function AddInventoryItem({
         Location: formData.location,
         Package: formData.package,
         reorderPoint: Number(formData.reorderPoint),
-        notes: formData.notes,
       }
 
       // Call the parent function to add the item
@@ -102,7 +99,6 @@ export default function AddInventoryItem({
         location: "",
         package: "",
         reorderPoint: defaultReorderPoint,
-        notes: "",
       })
 
       // Close dialog after success
@@ -206,7 +202,7 @@ export default function AddInventoryItem({
                 name="location"
                 value={formData.location}
                 onChange={handleChange}
-                placeholder="e.g. Shelf A3"
+                placeholder="Storage location"
                 disabled={loading}
               />
             </div>
@@ -230,13 +226,13 @@ export default function AddInventoryItem({
                 name="package"
                 value={formData.package}
                 onChange={handleChange}
-                placeholder="e.g. SMD, DIP"
+                placeholder="Package type"
                 disabled={loading}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="qty">Current Stock *</Label>
+              <Label htmlFor="qty">Quantity</Label>
               <Input
                 id="qty"
                 name="qty"
@@ -244,14 +240,12 @@ export default function AddInventoryItem({
                 min="0"
                 value={formData.qty}
                 onChange={handleChange}
-                required
-                placeholder="e.g. 10"
                 disabled={loading}
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="reorderPoint">Minimum Stock *</Label>
+            <div className="space-y-2 col-span-2">
+              <Label htmlFor="reorderPoint">Reorder Point</Label>
               <Input
                 id="reorderPoint"
                 name="reorderPoint"
@@ -259,21 +253,6 @@ export default function AddInventoryItem({
                 min="0"
                 value={formData.reorderPoint}
                 onChange={handleChange}
-                required
-                placeholder="e.g. 5"
-                disabled={loading}
-              />
-            </div>
-
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea
-                id="notes"
-                name="notes"
-                value={formData.notes}
-                onChange={handleChange}
-                placeholder="Additional information about this item"
-                rows={3}
                 disabled={loading}
               />
             </div>
@@ -284,7 +263,7 @@ export default function AddInventoryItem({
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? "Submitting..." : "Submit for Approval"}
+              {loading ? "Adding..." : "Add Item"}
             </Button>
           </DialogFooter>
         </form>
