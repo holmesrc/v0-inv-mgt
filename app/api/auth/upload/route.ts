@@ -1,94 +1,46 @@
 import { type NextRequest, NextResponse } from "next/server"
 
+const UPLOAD_PASSWORD = process.env.UPLOAD_PASSWORD || "admin123"
+
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔐 Upload authentication request received")
+    const { password } = await request.json()
 
-    const body = await request.json()
-    const { password } = body
+    console.log("Upload auth attempt:", {
+      passwordProvided: !!password,
+      passwordLength: password?.length || 0,
+      expectedLength: UPLOAD_PASSWORD.length,
+      hasEnvVar: !!process.env.UPLOAD_PASSWORD,
+      passwordsMatch: password === UPLOAD_PASSWORD,
+      // For debugging - remove in production
+      expectedPreview:
+        UPLOAD_PASSWORD.length > 4
+          ? `${UPLOAD_PASSWORD.substring(0, 2)}***${UPLOAD_PASSWORD.substring(UPLOAD_PASSWORD.length - 2)}`
+          : "****",
+      providedPreview:
+        password && password.length > 4
+          ? `${password.substring(0, 2)}***${password.substring(password.length - 2)}`
+          : "****",
+    })
 
-    console.log("📝 Password provided:", password ? "Yes" : "No")
-
-    // Get all possible password sources with detailed logging
-    const envPassword = process.env.UPLOAD_PASSWORD
-    const vercelPassword = process.env.VERCEL_UPLOAD_PASSWORD
-    const nextPublicPassword = process.env.NEXT_PUBLIC_UPLOAD_PASSWORD
-
-    console.log("🔍 Environment variables check:")
-    console.log("  UPLOAD_PASSWORD:", envPassword ? `Set (${envPassword.length} chars)` : "Not set")
-    console.log("  VERCEL_UPLOAD_PASSWORD:", vercelPassword ? `Set (${vercelPassword.length} chars)` : "Not set")
-    console.log(
-      "  NEXT_PUBLIC_UPLOAD_PASSWORD:",
-      nextPublicPassword ? `Set (${nextPublicPassword.length} chars)` : "Not set",
-    )
-
-    // Try multiple password sources as fallbacks
-    const validPasswords = [
-      envPassword,
-      vercelPassword,
-      nextPublicPassword,
-      "admin123", // Fallback for development
-      "upload123", // Another fallback
-    ].filter(Boolean) // Remove undefined/null values
-
-    console.log("✅ Valid passwords found:", validPasswords.length)
-
-    if (!password) {
-      console.log("❌ No password provided in request")
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Password is required",
-          debug: {
-            passwordProvided: false,
-            availablePasswords: validPasswords.length,
-          },
-        },
-        { status: 400 },
-      )
-    }
-
-    // Check if provided password matches any valid password
-    const isValid = validPasswords.some((validPassword) => validPassword && password === validPassword)
-
-    console.log("🔐 Password validation result:", isValid ? "VALID" : "INVALID")
-
-    if (isValid) {
-      console.log("✅ Authentication successful")
-      return NextResponse.json({
-        success: true,
-        message: "Authentication successful",
-        debug: {
-          passwordProvided: true,
-          passwordLength: password.length,
-          matchedPassword: true,
-        },
-      })
+    if (password === UPLOAD_PASSWORD) {
+      return NextResponse.json({ success: true })
     } else {
-      console.log("❌ Authentication failed - password mismatch")
       return NextResponse.json(
         {
           success: false,
           error: "Invalid password",
           debug: {
-            passwordProvided: true,
-            passwordLength: password.length,
-            availablePasswords: validPasswords.length,
-            matchedPassword: false,
+            expectedLength: UPLOAD_PASSWORD.length,
+            providedLength: password?.length || 0,
+            hasEnvVar: !!process.env.UPLOAD_PASSWORD,
           },
         },
         { status: 401 },
       )
     }
   } catch (error) {
-    console.error("💥 Upload auth error:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Authentication service error",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
+    console.error("Upload auth error:", error)
+    return NextResponse.json({ success: false, error: "Invalid request" }, { status: 400 })
   }
 }

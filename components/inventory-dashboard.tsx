@@ -47,12 +47,8 @@ import { getExcelFileMetadata } from "@/lib/storage"
 import ProtectedUploadButton from "./protected-upload-button"
 import PendingChangesDisplay from "./pending-changes-display"
 
-interface InventoryDashboardProps {
-  inventory: InventoryItem[]
-  setInventory: (inventory: InventoryItem[]) => void
-}
-
-export default function InventoryDashboard({ inventory, setInventory }: InventoryDashboardProps) {
+export default function InventoryDashboard() {
+  const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [packageNote, setPackageNote] = useState<string>("")
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
@@ -68,13 +64,9 @@ export default function InventoryDashboard({ inventory, setInventory }: Inventor
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [supabaseConfigured, setSupabaseConfigured] = useState<boolean | null>(null)
-  const [syncStatus, setSyncStatus] = useState({ syncing: false, lastSync: null })
-  const [pendingChanges, setPendingChanges] = useState([])
 
   // Show upload screen if no inventory data
   const [showUpload, setShowUpload] = useState(false)
-
-  const defaultReorderPoint = 10
 
   // Load data from database on component mount
   useEffect(() => {
@@ -379,8 +371,12 @@ export default function InventoryDashboard({ inventory, setInventory }: Inventor
     }
   }
 
+  // Enhance the saveSettingsToDatabase function with better error handling:
+
   const saveSettingsToDatabase = async (settings: AlertSettings) => {
     try {
+      console.log("Saving settings to database:", settings)
+
       const response = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -390,55 +386,63 @@ export default function InventoryDashboard({ inventory, setInventory }: Inventor
         }),
       })
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      const responseText = await response.text()
+      let result
+
+      try {
+        result = JSON.parse(responseText)
+      } catch (parseError) {
+        console.error("Failed to parse settings response:", parseError, "Response:", responseText)
+        throw new Error(`Invalid response: ${responseText.substring(0, 100)}`)
       }
 
-      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || result.details || `HTTP ${response.status}: ${response.statusText}`)
+      }
+
       if (!result.success) {
         throw new Error(result.error || "Failed to save settings")
       }
 
+      console.log("Settings saved successfully:", result)
       localStorage.setItem("alertSettings", JSON.stringify(settings))
+      return result
     } catch (error) {
       console.error("Error saving settings:", error)
       // Still save to localStorage even if database fails
       localStorage.setItem("alertSettings", JSON.stringify(settings))
-      throw error
+
+      // Don't throw the error during sync to prevent the entire sync from failing
+      if (new Error().stack?.includes("handleManualSync")) {
+        console.warn("Settings sync failed but continuing with inventory sync")
+        return { success: false, localOnly: true }
+      } else {
+        throw error
+      }
     }
   }
 
   // Filter and search logic - FIXED to include Location field
   const filteredInventory = useMemo(() => {
-    if (!inventory || inventory.length === 0) return []
-
     return inventory.filter((item) => {
-      // Safely handle undefined/null values
-      const partNumber = item["Part number"] || ""
-      const mfgPartNumber = item["MFG Part number"] || ""
-      const description = item["Part description"] || ""
-      const supplier = item["Supplier"] || ""
-      const location = item["Location"] || ""
-      const packageType = item["Package"] || ""
-
       const matchesSearch =
-        partNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        mfgPartNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        supplier.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        packageType.toLowerCase().includes(searchTerm.toLowerCase())
+        item["Part number"].toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item["MFG Part number"].toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item["Part description"].toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item["Supplier"].toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item["Location"].toLowerCase().includes(searchTerm.toLowerCase()) || // ADDED THIS LINE
+        item["Package"].toLowerCase().includes(searchTerm.toLowerCase()) // ADDED THIS LINE TOO
 
-      const matchesCategory = categoryFilter === "all" || packageType === categoryFilter
-
-      const currentQty = item["QTY"] || 0
-      const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint || 10
+      const matchesCategory = categoryFilter === "all" || item["Package"] === categoryFilter
 
       const matchesStock =
         stockFilter === "all" ||
-        (stockFilter === "low" && currentQty <= reorderPoint) ||
-        (stockFilter === "approaching" && currentQty > reorderPoint && currentQty <= Math.ceil(reorderPoint * 1.5)) ||
-        (stockFilter === "normal" && currentQty > Math.ceil(reorderPoint * 1.5))
+        (stockFilter === "low" && item["QTY"] <= (item.reorderPoint || alertSettings.defaultReorderPoint)) ||
+        (stockFilter === "approaching" &&
+          item["QTY"] > (item.reorderPoint || alertSettings.defaultReorderPoint) &&
+          item["QTY"] <= Math.ceil((item.reorderPoint || alertSettings.defaultReorderPoint) * 1.5)) ||
+        (stockFilter === "normal" &&
+          item["QTY"] > Math.ceil((item.reorderPoint || alertSettings.defaultReorderPoint) * 1.5))
 
       return matchesSearch && matchesCategory && matchesStock
     })
@@ -446,15 +450,8 @@ export default function InventoryDashboard({ inventory, setInventory }: Inventor
 
   // Get unique values for dropdowns - with proper deduplication
   const packageTypes = useMemo(() => {
-    if (!inventory || inventory.length === 0) return []
-    const uniquePackages = Array.from(
-      new Set(
-        inventory
-          .map((item) => item["Package"])
-          .filter((pkg) => pkg && typeof pkg === "string" && pkg.trim().length > 0),
-      ),
-    )
-    return uniquePackages.sort()
+    const uniquePackages = Array.from(new Set(inventory.map((item) => item["Package"]).filter(Boolean)))
+    return uniquePackages.sort() // Sort alphabetically for consistency
   }, [inventory])
 
   const suppliers = useMemo(() => {
@@ -547,9 +544,9 @@ export default function InventoryDashboard({ inventory, setInventory }: Inventor
     }
   }
 
-  // Add new inventory item with enhanced error handling - UPDATED TO INCLUDE REQUESTER
-  const addInventoryItem = async (newItem: Omit<InventoryItem, "id" | "lastUpdated">, requester: string) => {
-    console.log("🚀 addInventoryItem called with:", newItem, "by", requester)
+  // Add new inventory item with enhanced error handling
+  const addInventoryItem = async (newItem: Omit<InventoryItem, "id" | "lastUpdated">) => {
+    console.log("🚀 addInventoryItem called with:", newItem)
 
     try {
       // Transform to database format for approval
@@ -573,16 +570,14 @@ export default function InventoryDashboard({ inventory, setInventory }: Inventor
         body: JSON.stringify({
           changeType: "add",
           itemData,
-          requestedBy: requester, // Use the provided requester
+          requestedBy: "Current User", // You can make this dynamic
         }),
       })
 
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
-          alert(
-            `✅ Item submitted for approval by ${requester}! An approval request has been sent to the inventory alerts channel.`,
-          )
+          alert("✅ Item submitted for approval! An approval request has been sent to the inventory alerts channel.")
 
           // Send Slack approval request
           await fetch("/api/slack/send-approval-request", {
@@ -593,7 +588,7 @@ export default function InventoryDashboard({ inventory, setInventory }: Inventor
             body: JSON.stringify({
               changeType: "add",
               itemData,
-              requestedBy: requester,
+              requestedBy: "Current User",
               changeId: result.data.id,
             }),
           })

@@ -1,21 +1,37 @@
-export async function sendSlackMessage(message: string, channel = "#inventory-alerts") {
+// Function to send a message to Slack
+export async function sendSlackMessage(message: string | { text: string; blocks?: any[] }) {
   try {
-    const response = await fetch("/api/slack/send", {
+    const webhookUrl = process.env.SLACK_WEBHOOK_URL
+
+    if (!webhookUrl) {
+      console.error("SLACK_WEBHOOK_URL is not defined")
+      return { success: false, error: "Slack webhook URL is not configured" }
+    }
+
+    // Prepare the payload based on the message type
+    const payload = typeof message === "string" ? { text: message } : message
+
+    console.log("Sending Slack message:", JSON.stringify(payload, null, 2).substring(0, 500) + "...")
+
+    const response = await fetch(webhookUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ message, channel }),
+      body: JSON.stringify(payload),
     })
 
+    const responseText = await response.text()
+    console.log(`Slack API response (${response.status}):`, responseText || "Empty response")
+
     if (!response.ok) {
-      throw new Error("Failed to send Slack message")
+      throw new Error(`Slack API error: ${response.status} ${response.statusText} - ${responseText}`)
     }
 
-    return await response.json()
+    return { success: true }
   } catch (error) {
     console.error("Error sending Slack message:", error)
-    throw error
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
 
@@ -23,7 +39,7 @@ export async function sendFullLowStockAlert(items: any[], channel = "#inventory-
   try {
     console.log("🚀 Sending text-only full low stock alert")
     const message = createTextOnlyFullLowStockAlert(items)
-    return await sendSlackMessage(message, channel)
+    return await sendSlackMessage(message)
   } catch (error) {
     console.error("❌ Error sending Slack message:", error)
     throw error
@@ -72,7 +88,7 @@ export function createLowStockAlertMessage(items: any[]) {
   if (remainingCount > 0) {
     message += `_...and ${remainingCount} more items need attention_\n\n`
     // Use the correct deployment URL
-    const deploymentUrl = "https://v0-inv-mgt.vercel.app"
+    const deploymentUrl = process.env.NEXT_PUBLIC_APP_URL || "https://v0-inv-mgt.vercel.app"
     message += `📄 <${deploymentUrl}/low-stock|📋 View All ${items.length} Low Stock Items>\n\n`
   }
 
@@ -91,7 +107,7 @@ export function createFullLowStockMessage(items: any[]) {
     message += `${index + 1}. *${item.partNumber}* - ${item.description}\n`
     message += `   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n`
     message += `   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n`
-    message += `   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>\n\n`
+    message += `   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Reorder this item>\n\n`
   })
 
   message += `📋 *Action Required:*\n`
@@ -275,35 +291,44 @@ export function createSimpleFullLowStockBlocks(items: any[]) {
   return blocks
 }
 
-export async function postToSlack(text: string, blocks?: any[], channel = "#inventory-alerts") {
+export async function postToSlack(text: string, blocks?: any[]) {
   try {
-    const response = await fetch("/api/slack/post-message", {
+    const webhookUrl = process.env.SLACK_WEBHOOK_URL
+    if (!webhookUrl) {
+      console.error("Slack webhook URL not configured")
+      return { success: false, error: "Slack webhook URL not configured" }
+    }
+
+    console.log("Posting to Slack:", text.substring(0, 100) + "...")
+
+    const response = await fetch(webhookUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ text, blocks, channel }),
+      body: JSON.stringify({ text, blocks }),
     })
 
+    const responseText = await response.text()
+    console.log(`Slack API response (${response.status}):`, responseText || "Empty response")
+
     if (!response.ok) {
-      const errorData = await response.json()
-      console.error("Slack API error:", errorData)
-      throw new Error(`Failed to post to Slack: ${errorData.error || "Unknown error"}`)
+      throw new Error(`Slack API error: ${response.status} ${response.statusText} - ${responseText}`)
     }
 
-    return await response.json()
+    return { success: true }
   } catch (error) {
     console.error("Error posting to Slack:", error)
-    throw error
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
 
 // Simplified sendInteractiveLowStockAlert function with fallback
-export async function sendInteractiveLowStockAlert(items: any[], channel = "#inventory-alerts") {
+export async function sendInteractiveLowStockAlert(items: any[]) {
   try {
     console.log("🚀 Sending text-only low stock alert (no interactive components)")
     const message = createLowStockAlertMessage(items)
-    return await sendSlackMessage(message, channel)
+    return await sendSlackMessage(message)
   } catch (error) {
     console.error("❌ Error sending Slack message:", error)
     throw error
@@ -311,12 +336,12 @@ export async function sendInteractiveLowStockAlert(items: any[], channel = "#inv
 }
 
 // Simplified sendInteractiveFullLowStockAlert function with fallback
-export async function sendInteractiveFullLowStockAlert(items: any[], channel = "#inventory-alerts") {
+export async function sendInteractiveFullLowStockAlert(items: any[]) {
   try {
     console.log("🚀 Attempting to send interactive full alert")
     // For full alerts, just use text to avoid complexity
     const message = createTextOnlyFullLowStockAlert(items)
-    return await sendSlackMessage(message, channel)
+    return await sendSlackMessage(message)
   } catch (error) {
     console.error("❌ Full alert failed:", error)
     throw error
@@ -367,4 +392,227 @@ export function createTextOnlyFullLowStockAlert(items: any[]) {
   message += `Send completed requests to #PHL10-hw-lab-requests channel.`
 
   return message
+}
+
+// Add the createApprovalBlocks function for approval messages
+export function createApprovalBlocks(change: any) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://v0-inv-mgt.vercel.app"
+  const changeId = change.id
+  const changeType = change.change_type
+  const requester = change.requested_by || change.requester || "Unknown"
+
+  // Determine what data to show based on change type
+  let itemData = change.item_data || {}
+  const originalData = change.original_data || {}
+
+  // For direct field access (newer format)
+  if (change.part_number) {
+    itemData = {
+      part_number: change.part_number,
+      part_description: change.description,
+      qty: change.current_stock,
+      supplier: change.supplier,
+      location: change.location,
+      package: change.package,
+    }
+  }
+
+  // Determine which data to show
+  const displayData = changeType === "delete" ? originalData : itemData
+
+  // Create a summary of the change
+  let summary = ""
+  if (changeType === "add") {
+    summary = `Add new item: ${displayData.part_number || displayData.part_description || "Unknown item"}`
+  } else if (changeType === "delete") {
+    summary = `Delete item: ${displayData.part_number || displayData.part_description || "Unknown item"}`
+  } else if (changeType === "update") {
+    summary = `Update item: ${displayData.part_number || displayData.part_description || "Unknown item"}`
+  }
+
+  // Create direct links to the approval page
+  const approvalPageUrl = `${appUrl}/approval/${changeId}`
+
+  return {
+    text: `Inventory Change Request: ${summary} (requested by ${requester})`,
+    blocks: [
+      {
+        type: "header",
+        text: {
+          type: "plain_text",
+          text: "Inventory Change Request",
+          emoji: true,
+        },
+      },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*${summary}*\nRequested by: ${requester}`,
+        },
+      },
+      {
+        type: "divider",
+      },
+      {
+        type: "section",
+        fields: [
+          {
+            type: "mrkdwn",
+            text: `*Part Number:*\n${displayData.part_number || "N/A"}`,
+          },
+          {
+            type: "mrkdwn",
+            text: `*Description:*\n${displayData.part_description || displayData.description || "N/A"}`,
+          },
+          {
+            type: "mrkdwn",
+            text: `*Quantity:*\n${displayData.qty || displayData.current_stock || "N/A"}`,
+          },
+          {
+            type: "mrkdwn",
+            text: `*Location:*\n${displayData.location || "N/A"}`,
+          },
+        ],
+      },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*Click here to review and approve/reject this change:*\n<${approvalPageUrl}|Review Change #${changeId}>`,
+        },
+      },
+    ],
+  }
+}
+
+// New function to send approval notifications
+export async function sendApprovalNotification(change: any) {
+  try {
+    console.log("Sending approval notification for change:", change.id)
+    const message = createApprovalBlocks(change)
+    return await sendSlackMessage(message)
+  } catch (error) {
+    console.error("Error sending approval notification:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+  }
+}
+
+// Update the testSlackWebhook function to accept custom message and webhook URL
+export async function testSlackWebhook(customMessage?: string, customWebhookUrl?: string) {
+  try {
+    const webhookUrl = customWebhookUrl || process.env.SLACK_WEBHOOK_URL
+    if (!webhookUrl) {
+      return { success: false, error: "Slack webhook URL not configured" }
+    }
+
+    const testMessage = {
+      text: customMessage || "🧪 Test message from Inventory Management System",
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text:
+              customMessage ||
+              "🧪 *Test Message*\n\nThis is a test message to verify the Slack webhook is working correctly.",
+          },
+        },
+        {
+          type: "context",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: `Sent from: ${process.env.NEXT_PUBLIC_APP_URL || "Unknown URL"} at ${new Date().toISOString()}`,
+            },
+          ],
+        },
+      ],
+    }
+
+    console.log("Sending test message to Slack:", JSON.stringify(testMessage, null, 2))
+
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(testMessage),
+    })
+
+    const responseText = await response.text()
+    console.log(`Slack test response (${response.status}):`, responseText || "Empty response")
+
+    if (!response.ok) {
+      throw new Error(`Slack API error: ${response.status} ${response.statusText} - ${responseText}`)
+    }
+
+    return { success: true, message: "Test message sent successfully" }
+  } catch (error) {
+    console.error("Error testing Slack webhook:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+  }
+}
+
+// Function to check if the Slack webhook is configured
+export async function isSlackConfigured() {
+  const webhookUrl = process.env.SLACK_WEBHOOK_URL
+  return { configured: !!webhookUrl }
+}
+
+// Function to create an approval message
+export function createApprovalMessage(change: any, appUrl: string) {
+  console.log("Creating approval message with app URL:", appUrl)
+
+  const changeType = change.change_type || "unknown"
+  const partNumber = change.part_number || "unknown"
+  const description = change.description || "No description"
+  const requester = change.requested_by || "Unknown"
+
+  // Format the message based on change type
+  let actionText = "Unknown action"
+  let detailsText = ""
+
+  if (changeType === "add") {
+    actionText = "Add New Item"
+    detailsText = `*Part:* ${partNumber}\n*Description:* ${description}\n*Requested by:* ${requester}`
+  } else if (changeType === "delete") {
+    actionText = "Delete Item"
+    detailsText = `*Part:* ${partNumber}\n*Description:* ${description}\n*Requested by:* ${requester}`
+  } else if (changeType === "update") {
+    actionText = "Update Item"
+    detailsText = `*Part:* ${partNumber}\n*Description:* ${description}\n*Requested by:* ${requester}`
+  }
+
+  // Create the approval URL
+  const approvalUrl = `${appUrl}/approval/${change.id}`
+  console.log("Generated approval URL:", approvalUrl)
+
+  return {
+    text: `Inventory Change Request: ${actionText} for ${partNumber}`,
+    blocks: [
+      {
+        type: "header",
+        text: {
+          type: "plain_text",
+          text: `Inventory Change Request: ${actionText}`,
+          emoji: true,
+        },
+      },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: detailsText,
+        },
+      },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*<${approvalUrl}|Review Change>*`,
+        },
+      },
+    ],
+  }
 }

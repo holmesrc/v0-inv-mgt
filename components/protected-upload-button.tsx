@@ -1,30 +1,35 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog"
-import { FileUpload } from "@/components/file-upload"
-import { useToast } from "@/components/ui/use-toast"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Upload, Lock } from "lucide-react"
 
-export function ProtectedUploadButton() {
-  const [isOpen, setIsOpen] = useState(false)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+interface ProtectedUploadButtonProps {
+  onUploadAuthorized: () => void
+}
+
+export default function ProtectedUploadButton({ onUploadAuthorized }: ProtectedUploadButtonProps) {
   const [password, setPassword] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [authError, setAuthError] = useState("")
-  const { toast } = useToast()
+  const [isOpen, setIsOpen] = useState(false)
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
 
-  const handleAuthenticate = async () => {
-    setIsLoading(true)
-    setAuthError("")
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError("")
 
     try {
       const response = await fetch("/api/auth/upload", {
@@ -35,92 +40,59 @@ export function ProtectedUploadButton() {
         body: JSON.stringify({ password }),
       })
 
-      const data = await response.json()
+      const result = await response.json()
 
-      if (data.success) {
-        setIsAuthenticated(true)
-        setAuthError("")
+      if (result.success) {
+        setIsOpen(false)
+        setPassword("")
+        onUploadAuthorized()
       } else {
-        setAuthError(data.error || "Authentication failed")
-        // Show hint if provided
-        if (data.hint) {
-          toast({
-            title: "Authentication Hint",
-            description: data.hint,
-            duration: 10000,
-          })
-        }
+        setError("Invalid password")
       }
     } catch (error) {
-      setAuthError("An error occurred during authentication")
-      console.error("Authentication error:", error)
+      setError("Authentication failed")
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
-  const handleClose = () => {
-    setIsOpen(false)
-    setIsAuthenticated(false)
-    setPassword("")
-    setAuthError("")
-  }
-
   return (
-    <>
-      <Button onClick={() => setIsOpen(true)} variant="outline">
-        Upload Excel File
-      </Button>
-
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{isAuthenticated ? "Upload Excel File" : "Authentication Required"}</DialogTitle>
-            <DialogDescription>
-              {isAuthenticated
-                ? "Upload an Excel file to update inventory data."
-                : "Please enter the upload password to continue."}
-            </DialogDescription>
-          </DialogHeader>
-
-          {!isAuthenticated ? (
-            <>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Enter password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        handleAuthenticate()
-                      }
-                    }}
-                  />
-                  {authError && <p className="text-sm text-red-500">{authError}</p>}
-                  {process.env.NODE_ENV !== "production" && (
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Hint: If the environment variable is missing, try using the fallback password.
-                    </p>
-                  )}
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={handleClose}>
-                  Cancel
-                </Button>
-                <Button onClick={handleAuthenticate} disabled={isLoading}>
-                  {isLoading ? "Authenticating..." : "Continue"}
-                </Button>
-              </DialogFooter>
-            </>
-          ) : (
-            <FileUpload onClose={handleClose} />
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline">
+          <Lock className="w-4 h-4 mr-2" />
+          <Upload className="w-4 h-4 mr-2" />
+          Upload New File
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Protected Upload</DialogTitle>
+          <DialogDescription>Enter the admin password to upload a new inventory file.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="password">Admin Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter password"
+              required
+            />
+          </div>
+          {error && <div className="text-sm text-red-600">{error}</div>}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Verifying..." : "Authorize Upload"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

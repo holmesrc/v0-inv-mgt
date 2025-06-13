@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient, canUseSupabase } from "@/lib/supabase"
+import { sendApprovalNotification } from "@/lib/slack"
 
 export async function GET() {
   try {
@@ -13,10 +14,10 @@ export async function GET() {
 
     const supabase = createServerSupabaseClient()
 
-    const { data: pendingChanges, error } = await supabase
+    // Get all pending changes, not just those with status="pending"
+    const { data: allChanges, error } = await supabase
       .from("pending_changes")
       .select("*")
-      .eq("status", "pending")
       .order("created_at", { ascending: false })
 
     if (error) {
@@ -27,9 +28,12 @@ export async function GET() {
       })
     }
 
+    // Filter pending changes on the server side
+    const pendingChanges = allChanges?.filter((change) => change.status === "pending") || []
+
     return NextResponse.json({
       success: true,
-      data: pendingChanges || [],
+      data: pendingChanges,
     })
   } catch (error) {
     console.error("Error in pending changes GET:", error)
@@ -80,10 +84,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Send Slack approval notification
+    console.log("Sending approval notification for new pending change:", pendingChange.id)
+    const notificationResult = await sendApprovalNotification(pendingChange)
+
+    if (!notificationResult.success) {
+      console.warn("Failed to send approval notification:", notificationResult.error)
+    }
+
     return NextResponse.json({
       success: true,
       data: pendingChange,
       message: "Change submitted for approval",
+      notificationSent: notificationResult.success,
+      notificationError: notificationResult.error,
     })
   } catch (error) {
     console.error("Error in pending changes POST:", error)
