@@ -1,40 +1,40 @@
 import { NextResponse } from "next/server"
 
 export async function GET() {
-  // Only show this in development/preview - never in production for security
-  const isProduction = process.env.NODE_ENV === "production" && process.env.VERCEL_ENV === "production"
+  try {
+    // Get relevant environment variables
+    const envVars = {
+      NODE_ENV: process.env.NODE_ENV,
+      SLACK_WEBHOOK_URL: process.env.SLACK_WEBHOOK_URL ? "SET" : "NOT SET",
+      NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+      SUPABASE_URL: process.env.SUPABASE_URL ? "SET" : "NOT SET",
+      SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ? "SET" : "NOT SET",
+      UPLOAD_PASSWORD: process.env.UPLOAD_PASSWORD ? "SET" : "NOT SET",
+    }
 
-  if (isProduction) {
+    // Additional debugging info
+    const debugInfo = {
+      timestamp: new Date().toISOString(),
+      platform: process.platform,
+      nodeVersion: process.version,
+      environment: process.env.NODE_ENV || "unknown",
+    }
+
+    return NextResponse.json({
+      success: true,
+      variables: envVars,
+      debug: debugInfo,
+      message: "Environment variables retrieved successfully",
+    })
+  } catch (error) {
+    console.error("Error retrieving environment variables:", error)
     return NextResponse.json(
       {
-        error: "Environment debug not available in production for security",
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+        message: "Failed to retrieve environment variables",
       },
-      { status: 403 },
+      { status: 500 },
     )
   }
-
-  return NextResponse.json({
-    environment: {
-      NODE_ENV: process.env.NODE_ENV,
-      VERCEL_ENV: process.env.VERCEL_ENV,
-      VERCEL_URL: process.env.VERCEL_URL,
-      VERCEL_BRANCH_URL: process.env.VERCEL_BRANCH_URL,
-    },
-    supabase: {
-      url: process.env.NEXT_PUBLIC_SUPABASE_URL ? "✅ Configured" : "❌ Missing",
-      anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "✅ Configured" : "❌ Missing",
-      serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY ? "✅ Configured" : "❌ Missing",
-    },
-    slack: {
-      webhookUrl: process.env.SLACK_WEBHOOK_URL ? "✅ Configured" : "❌ Missing",
-    },
-    app: {
-      appUrl: process.env.NEXT_PUBLIC_APP_URL || "❌ Not set",
-    },
-    deployment: {
-      url: process.env.VERCEL_URL,
-      branch: process.env.VERCEL_GIT_COMMIT_REF,
-      commit: process.env.VERCEL_GIT_COMMIT_SHA?.substring(0, 7),
-    },
-  })
 }

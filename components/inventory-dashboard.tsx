@@ -76,9 +76,11 @@ export default function InventoryDashboard() {
 
   const checkSlackConfiguration = async () => {
     try {
-      const response = await fetch("/api/debug/slack-config")
+      const response = await fetch("/api/debug/test-slack-webhook")
       const result = await response.json()
-      setSlackConfigured(result.configured)
+
+      // Set configured to true if the test was successful
+      setSlackConfigured(result.configured && result.webhookTest?.success)
     } catch (error) {
       console.error("Error checking Slack configuration:", error)
       setSlackConfigured(false)
@@ -1147,8 +1149,8 @@ export default function InventoryDashboard() {
               <div>
                 <h3 className="font-medium text-yellow-800 mb-1">Slack Notifications Disabled</h3>
                 <p className="text-sm text-yellow-700">
-                  The SLACK_WEBHOOK_URL environment variable is not configured. Slack notifications and alerts are
-                  disabled. Purchase requests will be created locally but not sent to Slack.
+                  Slack webhook test failed. Please check your SLACK_WEBHOOK_URL environment variable and try refreshing
+                  the page.
                 </p>
               </div>
             </div>
