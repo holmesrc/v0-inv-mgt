@@ -1,84 +1,90 @@
 import { NextResponse } from "next/server"
 
-export async function POST(request: Request) {
+export async function GET() {
   try {
-    const { message, webhookUrl } = await request.json()
+    const webhookUrl = process.env.SLACK_WEBHOOK_URL
 
-    // Use custom webhook URL if provided, otherwise use environment variable
-    const finalWebhookUrl = webhookUrl || process.env.SLACK_WEBHOOK_URL
-
-    console.log("🔍 Testing Slack webhook...")
-    console.log("Environment SLACK_WEBHOOK_URL:", process.env.SLACK_WEBHOOK_URL ? "SET" : "NOT SET")
-    console.log("Using webhook URL:", finalWebhookUrl ? "PROVIDED" : "MISSING")
-
-    if (!finalWebhookUrl) {
+    if (!webhookUrl) {
       return NextResponse.json({
         success: false,
-        error: "No webhook URL provided and SLACK_WEBHOOK_URL environment variable is not set",
         configured: false,
+        message: "SLACK_WEBHOOK_URL environment variable is not set",
+        webhookTest: {
+          success: false,
+          error: "No webhook URL configured",
+        },
       })
     }
 
-    const testPayload = {
-      text: message || "🧪 Test message from Inventory Management System",
-      blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text:
-              message ||
-              "🧪 *Test Message*\n\nThis is a test message to verify the Slack webhook is working correctly.",
-          },
-        },
-        {
-          type: "context",
-          elements: [
-            {
+    // Test the webhook by sending a simple message
+    try {
+      const testMessage = {
+        text: "🔧 Test message from Inventory Management System",
+        blocks: [
+          {
+            type: "section",
+            text: {
               type: "mrkdwn",
-              text: `Sent from: ${process.env.NEXT_PUBLIC_APP_URL || "Unknown URL"} at ${new Date().toISOString()}`,
+              text: "✅ *Slack Integration Test*\n\nThis is a test message to verify your Slack webhook is working correctly.",
             },
-          ],
+          },
+        ],
+      }
+
+      const response = await fetch(webhookUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      ],
+        body: JSON.stringify(testMessage),
+      })
+
+      if (response.ok) {
+        return NextResponse.json({
+          success: true,
+          configured: true,
+          message: "Slack webhook URL is configured and working",
+          webhookTest: {
+            success: true,
+            message: "Test message sent successfully to Slack",
+          },
+        })
+      } else {
+        const errorText = await response.text()
+        return NextResponse.json({
+          success: false,
+          configured: true,
+          message: "Slack webhook URL is configured but test failed",
+          webhookTest: {
+            success: false,
+            error: `Webhook test failed: ${response.status} ${response.statusText} - ${errorText}`,
+          },
+        })
+      }
+    } catch (webhookError) {
+      return NextResponse.json({
+        success: false,
+        configured: true,
+        message: "Slack webhook URL is configured but test failed",
+        webhookTest: {
+          success: false,
+          error: `Webhook test error: ${webhookError instanceof Error ? webhookError.message : "Unknown error"}`,
+        },
+      })
     }
-
-    console.log("📤 Sending test payload to Slack...")
-    console.log("Payload:", JSON.stringify(testPayload, null, 2))
-
-    const response = await fetch(finalWebhookUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(testPayload),
-    })
-
-    const responseText = await response.text()
-    console.log(`📡 Slack response (${response.status}):`, responseText || "Empty response")
-
-    if (!response.ok) {
-      throw new Error(`Slack API error: ${response.status} ${response.statusText} - ${responseText}`)
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: "Test message sent successfully to Slack",
-      details: {
-        status: response.status,
-        response: responseText || "ok",
-        webhookUsed: webhookUrl ? "custom" : "environment",
-      },
-    })
   } catch (error) {
-    console.error("❌ Slack webhook test failed:", error)
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-      details: {
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV,
+    console.error("Error in Slack webhook test:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        configured: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+        webhookTest: {
+          success: false,
+          error: "Internal server error",
+        },
       },
-    })
+      { status: 500 },
+    )
   }
 }

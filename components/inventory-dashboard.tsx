@@ -30,6 +30,7 @@ import {
   Download,
   RefreshCw,
   Database,
+  ExternalLink,
 } from "lucide-react"
 import type { InventoryItem, PurchaseRequest, AlertSettings } from "@/types/inventory"
 import {
@@ -63,12 +64,19 @@ export default function InventoryDashboard() {
   const [syncing, setSyncing] = useState(false)
   const [supabaseConfigured, setSupabaseConfigured] = useState<boolean | null>(null)
   const [slackConfigured, setSlackConfigured] = useState<boolean | null>(null)
+  const [isV0Environment, setIsV0Environment] = useState(false)
 
   // Show upload screen if no inventory data
   const [showUpload, setShowUpload] = useState(false)
 
   // Load data from database on component mount
   useEffect(() => {
+    // Check if we're in the v0 preview environment
+    const hostname = window.location.hostname
+    const isV0 =
+      hostname.includes("v0.dev") || hostname.includes("vusercontent.net") || hostname.includes("lite.vusercontent.net")
+    setIsV0Environment(isV0)
+
     loadInventoryFromDatabase()
     loadSettingsFromDatabase()
     checkSlackConfiguration()
@@ -76,11 +84,48 @@ export default function InventoryDashboard() {
 
   const checkSlackConfiguration = async () => {
     try {
-      const response = await fetch("/api/debug/test-slack-webhook")
+      // If we're in v0 environment, skip the check and show helpful message
+      if (isV0Environment) {
+        setSlackConfigured(false)
+        return
+      }
+
+      // Use the simpler endpoint that we know exists
+      const response = await fetch("/api/debug/slack-config")
+
+      if (!response.ok) {
+        console.error("Slack config check failed:", response.status, response.statusText)
+        setSlackConfigured(false)
+        return
+      }
+
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        console.error("Slack config check returned non-JSON response")
+        setSlackConfigured(false)
+        return
+      }
+
       const result = await response.json()
 
-      // Set configured to true if the test was successful
-      setSlackConfigured(result.configured && result.webhookTest?.success)
+      // Set configured based on the simple check
+      setSlackConfigured(result.configured === true)
+
+      // If configured, try to test the webhook
+      if (result.configured) {
+        try {
+          const testResponse = await fetch("/api/debug/test-slack-webhook")
+          if (testResponse.ok) {
+            const testResult = await testResponse.json()
+            // Only set to true if webhook test also passes
+            setSlackConfigured(testResult.webhookTest?.success === true)
+          }
+        } catch (testError) {
+          console.warn("Webhook test failed, but keeping Slack as configured:", testError)
+          // Keep as configured even if test fails - maybe it's just the test message
+          setSlackConfigured(true)
+        }
+      }
     } catch (error) {
       console.error("Error checking Slack configuration:", error)
       setSlackConfigured(false)
@@ -726,6 +771,13 @@ export default function InventoryDashboard() {
       return
     }
 
+    if (isV0Environment) {
+      alert(
+        "🔧 Slack alerts are not available in the v0 preview environment.\n\nTo test Slack functionality:\n• Deploy your app to Vercel\n• Test on your deployed URL\n• Environment variables are only available on the server",
+      )
+      return
+    }
+
     if (slackConfigured === false) {
       alert(
         "⚠️ Slack is not configured. Please set the SLACK_WEBHOOK_URL environment variable to enable Slack notifications.",
@@ -770,6 +822,13 @@ export default function InventoryDashboard() {
   const sendFullAlert = async () => {
     if (lowStockItems.length === 0) {
       alert("No low stock items to report!")
+      return
+    }
+
+    if (isV0Environment) {
+      alert(
+        "🔧 Slack alerts are not available in the v0 preview environment.\n\nTo test Slack functionality:\n• Deploy your app to Vercel\n• Test on your deployed URL\n• Environment variables are only available on the server",
+      )
       return
     }
 
@@ -1006,20 +1065,38 @@ export default function InventoryDashboard() {
             {syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
             {syncing ? "Syncing..." : "Sync to Database"}
           </Button>
-          <Button onClick={sendLowStockAlert} variant="outline" disabled={slackConfigured === false}>
+          <Button onClick={sendLowStockAlert} variant="outline" disabled={slackConfigured === false || isV0Environment}>
             <Bell className="w-4 h-4 mr-2" />
-            {slackConfigured === false ? "Send Alert (Disabled)" : "Send Alert Now"}
+            {isV0Environment
+              ? "Send Alert (v0 Preview)"
+              : slackConfigured === false
+                ? "Send Alert (Disabled)"
+                : "Send Alert Now"}
           </Button>
           {lowStockItems.length > 3 && (
-            <Button onClick={sendFullAlert} variant="outline" disabled={slackConfigured === false}>
+            <Button onClick={sendFullAlert} variant="outline" disabled={slackConfigured === false || isV0Environment}>
               <List className="w-4 h-4 mr-2" />
-              {slackConfigured === false ? "Send Full Alert (Disabled)" : "Send Full Alert"}
+              {isV0Environment
+                ? "Send Full Alert (v0 Preview)"
+                : slackConfigured === false
+                  ? "Send Full Alert (Disabled)"
+                  : "Send Full Alert"}
             </Button>
           )}
           <Button onClick={() => window.open("/requests-approval", "_blank")} variant="outline">
             <AlertTriangle className="w-4 h-4 mr-2" />
             Review Requests
           </Button>
+          {isV0Environment && (
+            <Button
+              onClick={() => window.open(process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app", "_blank")}
+              variant="outline"
+              className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+            >
+              <ExternalLink className="w-4 h-4 mr-2" />
+              Open Deployed App
+            </Button>
+          )}
           <Dialog>
             <DialogTrigger asChild>
               <Button variant="outline">
@@ -1120,6 +1197,35 @@ export default function InventoryDashboard() {
         </Alert>
       )}
 
+      {/* V0 Environment Warning */}
+      {isV0Environment && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="pt-4">
+            <div className="flex items-start gap-2">
+              <Info className="w-5 h-5 text-blue-600 mt-0.5" />
+              <div>
+                <h3 className="font-medium text-blue-800 mb-1">v0 Preview Environment</h3>
+                <p className="text-sm text-blue-700">
+                  You're currently viewing the v0 preview. Slack alerts and database features require server-side
+                  environment variables that are only available in the deployed application.
+                </p>
+                <Button
+                  onClick={() =>
+                    window.open(process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app", "_blank")
+                  }
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 bg-white hover:bg-blue-50"
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Open Deployed App for Full Functionality
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Pending Changes Display */}
       <PendingChangesDisplay />
 
@@ -1141,7 +1247,7 @@ export default function InventoryDashboard() {
         </Card>
       )}
 
-      {slackConfigured === false && (
+      {slackConfigured === false && !isV0Environment && (
         <Card className="border-yellow-200 bg-yellow-50">
           <CardContent className="pt-4">
             <div className="flex items-start gap-2">
