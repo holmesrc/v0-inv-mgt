@@ -37,8 +37,6 @@ import {
   formatPurchaseRequest,
   sendInteractiveLowStockAlert,
   sendInteractiveFullLowStockAlert,
-  createLowStockAlertMessage,
-  createFullLowStockMessage,
 } from "@/lib/slack"
 import { downloadExcelFile } from "@/lib/excel-generator"
 import FileUpload from "./file-upload"
@@ -64,6 +62,7 @@ export default function InventoryDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [supabaseConfigured, setSupabaseConfigured] = useState<boolean | null>(null)
+  const [slackConfigured, setSlackConfigured] = useState<boolean | null>(null)
 
   // Show upload screen if no inventory data
   const [showUpload, setShowUpload] = useState(false)
@@ -72,7 +71,19 @@ export default function InventoryDashboard() {
   useEffect(() => {
     loadInventoryFromDatabase()
     loadSettingsFromDatabase()
+    checkSlackConfiguration()
   }, [])
+
+  const checkSlackConfiguration = async () => {
+    try {
+      const response = await fetch("/api/debug/slack-config")
+      const result = await response.json()
+      setSlackConfigured(result.configured)
+    } catch (error) {
+      console.error("Error checking Slack configuration:", error)
+      setSlackConfigured(false)
+    }
+  }
 
   const loadInventoryFromDatabase = async () => {
     try {
@@ -577,21 +588,7 @@ export default function InventoryDashboard() {
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
-          alert("✅ Item submitted for approval! An approval request has been sent to the inventory alerts channel.")
-
-          // Send Slack approval request
-          await fetch("/api/slack/send-approval-request", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              changeType: "add",
-              itemData,
-              requestedBy: "Current User",
-              changeId: result.data.id,
-            }),
-          })
+          alert("✅ Item submitted for approval! Check the requests-approval page or Slack for notifications.")
         } else {
           throw new Error(result.error || "Failed to submit for approval")
         }
@@ -669,23 +666,7 @@ export default function InventoryDashboard() {
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
-          alert(
-            "✅ Deletion submitted for approval! An approval request has been sent to the inventory alerts channel.",
-          )
-
-          // Send Slack approval request
-          await fetch("/api/slack/send-approval-request", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              changeType: "delete",
-              originalData,
-              requestedBy: "Current User",
-              changeId: result.data.id,
-            }),
-          })
+          alert("✅ Deletion submitted for approval! Check the requests-approval page or Slack for notifications.")
         } else {
           throw new Error(result.error || "Failed to submit for approval")
         }
@@ -716,18 +697,23 @@ export default function InventoryDashboard() {
       description: item["Part description"],
       quantity,
       urgency,
-      requestedBy: requester || "System User", // Use the provided requester
+      requestedBy: requester || "System User",
       requestDate: new Date(),
       status: "pending",
     }
 
     setPurchaseRequests((prev) => [...prev, request])
 
-    // Send to Slack
-    try {
-      await sendSlackMessage(formatPurchaseRequest(request))
-    } catch (error) {
-      console.error("Failed to send purchase request to Slack:", error)
+    // Send to Slack if configured
+    if (slackConfigured) {
+      try {
+        const result = await sendSlackMessage(formatPurchaseRequest(request))
+        if (!result.success && result.configured !== false) {
+          console.error("Failed to send purchase request to Slack:", result.error)
+        }
+      } catch (error) {
+        console.error("Failed to send purchase request to Slack:", error)
+      }
     }
   }
 
@@ -735,6 +721,13 @@ export default function InventoryDashboard() {
   const sendLowStockAlert = async () => {
     if (lowStockItems.length === 0) {
       alert("No low stock items to report!")
+      return
+    }
+
+    if (slackConfigured === false) {
+      alert(
+        "⚠️ Slack is not configured. Please set the SLACK_WEBHOOK_URL environment variable to enable Slack notifications.",
+      )
       return
     }
 
@@ -750,23 +743,24 @@ export default function InventoryDashboard() {
     console.log("Sending low stock alert with items:", formattedItems)
 
     try {
-      // Always try interactive message first
       const result = await sendInteractiveLowStockAlert(formattedItems)
       console.log("Low stock alert result:", result)
-      alert(
-        `Low stock alert sent successfully! Showing ${Math.min(3, formattedItems.length)} items with "Show All" button for ${formattedItems.length} total items.`,
-      )
+
+      if (result.configured === false) {
+        alert("⚠️ Slack webhook URL not configured. Please set SLACK_WEBHOOK_URL environment variable.")
+        return
+      }
+
+      if (result.success) {
+        alert(
+          `✅ Low stock alert sent successfully! Showing ${Math.min(3, formattedItems.length)} items with "Show All" button for ${formattedItems.length} total items.`,
+        )
+      } else {
+        alert(`❌ Failed to send Slack alert: ${result.error}`)
+      }
     } catch (error) {
       console.error("Failed to send interactive low stock alert:", error)
-      try {
-        // Fall back to text message
-        const message = createLowStockAlertMessage(formattedItems)
-        await sendSlackMessage(message)
-        alert("Low stock alert sent as text message (interactive features unavailable)")
-      } catch (fallbackError) {
-        console.error("Failed to send fallback text message:", fallbackError)
-        alert("Failed to send Slack alert. Please check your Slack webhook configuration.")
-      }
+      alert("❌ Failed to send Slack alert. Please check your Slack webhook configuration.")
     }
   }
 
@@ -774,6 +768,13 @@ export default function InventoryDashboard() {
   const sendFullAlert = async () => {
     if (lowStockItems.length === 0) {
       alert("No low stock items to report!")
+      return
+    }
+
+    if (slackConfigured === false) {
+      alert(
+        "⚠️ Slack is not configured. Please set the SLACK_WEBHOOK_URL environment variable to enable Slack notifications.",
+      )
       return
     }
 
@@ -791,20 +792,22 @@ export default function InventoryDashboard() {
     try {
       const result = await sendInteractiveFullLowStockAlert(formattedItems)
       console.log("Full alert result:", result)
-      alert(
-        `Full low stock alert sent successfully! Showing all ${formattedItems.length} items with individual reorder buttons.`,
-      )
+
+      if (result.configured === false) {
+        alert("⚠️ Slack webhook URL not configured. Please set SLACK_WEBHOOK_URL environment variable.")
+        return
+      }
+
+      if (result.success) {
+        alert(
+          `✅ Full low stock alert sent successfully! Showing all ${formattedItems.length} items with individual reorder buttons.`,
+        )
+      } else {
+        alert(`❌ Failed to send full Slack alert: ${result.error}`)
+      }
     } catch (error) {
       console.error("Failed to send interactive full alert:", error)
-      try {
-        // Fall back to text message
-        const message = createFullLowStockMessage(formattedItems)
-        await sendSlackMessage(message)
-        alert("Full alert sent as text message (interactive features unavailable)")
-      } catch (fallbackError) {
-        console.error("Failed to send fallback text message:", fallbackError)
-        alert("Failed to send full Slack alert. Please check your Slack webhook configuration.")
-      }
+      alert("❌ Failed to send full Slack alert. Please check your Slack webhook configuration.")
     }
   }
 
@@ -1001,16 +1004,20 @@ export default function InventoryDashboard() {
             {syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
             {syncing ? "Syncing..." : "Sync to Database"}
           </Button>
-          <Button onClick={sendLowStockAlert} variant="outline">
+          <Button onClick={sendLowStockAlert} variant="outline" disabled={slackConfigured === false}>
             <Bell className="w-4 h-4 mr-2" />
-            Send Alert Now
+            {slackConfigured === false ? "Send Alert (Disabled)" : "Send Alert Now"}
           </Button>
           {lowStockItems.length > 3 && (
-            <Button onClick={sendFullAlert} variant="outline">
+            <Button onClick={sendFullAlert} variant="outline" disabled={slackConfigured === false}>
               <List className="w-4 h-4 mr-2" />
-              Send Full Alert
+              {slackConfigured === false ? "Send Full Alert (Disabled)" : "Send Full Alert"}
             </Button>
           )}
+          <Button onClick={() => window.open("/requests-approval", "_blank")} variant="outline">
+            <AlertTriangle className="w-4 h-4 mr-2" />
+            Review Requests
+          </Button>
           <Dialog>
             <DialogTrigger asChild>
               <Button variant="outline">
@@ -1125,6 +1132,23 @@ export default function InventoryDashboard() {
                 <p className="text-sm text-orange-700">
                   Supabase database connection failed. Your data is being stored locally in your browser only. Please
                   check your environment variables and database setup
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {slackConfigured === false && (
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardContent className="pt-4">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
+              <div>
+                <h3 className="font-medium text-yellow-800 mb-1">Slack Notifications Disabled</h3>
+                <p className="text-sm text-yellow-700">
+                  The SLACK_WEBHOOK_URL environment variable is not configured. Slack notifications and alerts are
+                  disabled. Purchase requests will be created locally but not sent to Slack.
                 </p>
               </div>
             </div>

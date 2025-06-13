@@ -20,9 +20,10 @@ export default function ApprovalTestPage() {
     const origin = window.location.origin
     setAppUrl(origin)
 
-    if (origin.includes("vusercontent.net") || origin.includes("vercel.app")) {
+    // Only show warning for actual preview environments, not vercel.app domains
+    if (origin.includes("vusercontent.net")) {
       setError(
-        "You appear to be in a preview environment. The approval links may not work correctly. Please deploy your app and update the URL below.",
+        "You appear to be in a v0 preview environment. Please deploy your app to Vercel and update the URL below.",
       )
     }
   }, [])
@@ -211,6 +212,27 @@ export default function ApprovalTestPage() {
             </Alert>
           )}
 
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <h3 className="font-semibold text-blue-900 mb-2">Environment Setup Instructions</h3>
+            <p className="text-blue-800 text-sm mb-2">
+              If you're seeing "Supabase setup failed", you need to configure your environment variables in Vercel:
+            </p>
+            <ol className="text-blue-800 text-sm space-y-1 ml-4">
+              <li>1. Go to your Vercel dashboard</li>
+              <li>2. Select your project (v0-inv-mgt)</li>
+              <li>3. Go to Settings → Environment Variables</li>
+              <li>4. Add the following variables:</li>
+              <ul className="ml-4 mt-1 space-y-1">
+                <li>• NEXT_PUBLIC_SUPABASE_URL</li>
+                <li>• NEXT_PUBLIC_SUPABASE_ANON_KEY</li>
+                <li>• SUPABASE_SERVICE_ROLE_KEY</li>
+                <li>• SLACK_WEBHOOK_URL</li>
+                <li>• NEXT_PUBLIC_APP_URL (set to: https://v0-inv-mgt.vercel.app)</li>
+              </ul>
+              <li>5. Redeploy your application</li>
+            </ol>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="app-url">App URL</Label>
             <Input
@@ -220,7 +242,7 @@ export default function ApprovalTestPage() {
               placeholder="https://your-deployed-app.com"
             />
             <p className="text-sm text-gray-500">
-              This is the URL that will be used for approval links. Make sure it's your actual deployed application URL.
+              This is the URL that will be used for approval links. Your deployed app URL looks correct!
             </p>
           </div>
 

@@ -4,8 +4,8 @@ export async function sendSlackMessage(message: string | { text: string; blocks?
     const webhookUrl = process.env.SLACK_WEBHOOK_URL
 
     if (!webhookUrl) {
-      console.error("SLACK_WEBHOOK_URL is not defined")
-      return { success: false, error: "Slack webhook URL is not configured" }
+      console.warn("SLACK_WEBHOOK_URL is not configured - Slack notifications disabled")
+      return { success: false, error: "Slack webhook URL is not configured", configured: false }
     }
 
     // Prepare the payload based on the message type
@@ -28,10 +28,10 @@ export async function sendSlackMessage(message: string | { text: string; blocks?
       throw new Error(`Slack API error: ${response.status} ${response.statusText} - ${responseText}`)
     }
 
-    return { success: true }
+    return { success: true, configured: true }
   } catch (error) {
     console.error("Error sending Slack message:", error)
-    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error", configured: true }
   }
 }
 
@@ -111,7 +111,7 @@ export function createFullLowStockMessage(items: any[]) {
   })
 
   message += `📋 *Action Required:*\n`
-  message += `Click the purchase request links above to create orders.\n`
+  message += `Click the purchase request links above to create purchase requests.\n`
   message += `Send completed requests to #PHL10-hw-lab-requests channel.`
 
   return message
@@ -394,53 +394,39 @@ export function createTextOnlyFullLowStockAlert(items: any[]) {
   return message
 }
 
-// Add the createApprovalBlocks function for approval messages
-export function createApprovalBlocks(change: any) {
+// NEW: Simple approval notification function
+export function createSimpleApprovalMessage(change: any) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://v0-inv-mgt.vercel.app"
-  const changeId = change.id
-  const changeType = change.change_type
-  const requester = change.requested_by || change.requester || "Unknown"
+  const changeType = change.change_type || "unknown"
+  const partNumber = change.part_number || "unknown"
+  const description = change.description || "No description"
+  const requester = change.requested_by || "Unknown"
 
-  // Determine what data to show based on change type
-  let itemData = change.item_data || {}
-  const originalData = change.original_data || {}
+  // Format the message based on change type
+  let actionText = "Unknown action"
+  let emoji = "📝"
 
-  // For direct field access (newer format)
-  if (change.part_number) {
-    itemData = {
-      part_number: change.part_number,
-      part_description: change.description,
-      qty: change.current_stock,
-      supplier: change.supplier,
-      location: change.location,
-      package: change.package,
-    }
-  }
-
-  // Determine which data to show
-  const displayData = changeType === "delete" ? originalData : itemData
-
-  // Create a summary of the change
-  let summary = ""
   if (changeType === "add") {
-    summary = `Add new item: ${displayData.part_number || displayData.part_description || "Unknown item"}`
+    actionText = "Add New Item"
+    emoji = "➕"
   } else if (changeType === "delete") {
-    summary = `Delete item: ${displayData.part_number || displayData.part_description || "Unknown item"}`
+    actionText = "Delete Item"
+    emoji = "🗑️"
   } else if (changeType === "update") {
-    summary = `Update item: ${displayData.part_number || displayData.part_description || "Unknown item"}`
+    actionText = "Update Item"
+    emoji = "✏️"
   }
 
-  // Create direct links to the approval page
-  const approvalPageUrl = `${appUrl}/approval/${changeId}`
+  const approvalUrl = `${appUrl}/requests-approval`
 
   return {
-    text: `Inventory Change Request: ${summary} (requested by ${requester})`,
+    text: `${emoji} Inventory Change Request: ${actionText} for ${partNumber}`,
     blocks: [
       {
         type: "header",
         text: {
           type: "plain_text",
-          text: "Inventory Change Request",
+          text: `${emoji} Inventory Change Request`,
           emoji: true,
         },
       },
@@ -448,38 +434,14 @@ export function createApprovalBlocks(change: any) {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `*${summary}*\nRequested by: ${requester}`,
+          text: `*Action:* ${actionText}\n*Part:* ${partNumber}\n*Description:* ${description}\n*Requested by:* ${requester}`,
         },
-      },
-      {
-        type: "divider",
-      },
-      {
-        type: "section",
-        fields: [
-          {
-            type: "mrkdwn",
-            text: `*Part Number:*\n${displayData.part_number || "N/A"}`,
-          },
-          {
-            type: "mrkdwn",
-            text: `*Description:*\n${displayData.part_description || displayData.description || "N/A"}`,
-          },
-          {
-            type: "mrkdwn",
-            text: `*Quantity:*\n${displayData.qty || displayData.current_stock || "N/A"}`,
-          },
-          {
-            type: "mrkdwn",
-            text: `*Location:*\n${displayData.location || "N/A"}`,
-          },
-        ],
       },
       {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `*Click here to review and approve/reject this change:*\n<${approvalPageUrl}|Review Change #${changeId}>`,
+          text: `🔗 *<${approvalUrl}|Review All Pending Changes>*`,
         },
       },
     ],
@@ -489,9 +451,16 @@ export function createApprovalBlocks(change: any) {
 // New function to send approval notifications
 export async function sendApprovalNotification(change: any) {
   try {
-    console.log("Sending approval notification for change:", change.id)
-    const message = createApprovalBlocks(change)
-    return await sendSlackMessage(message)
+    console.log("Sending simple approval notification for change:", change.id)
+    const message = createSimpleApprovalMessage(change)
+    const result = await sendSlackMessage(message)
+
+    if (!result.configured) {
+      console.warn("Slack not configured, skipping notification")
+      return { success: true, skipped: true, reason: "Slack not configured" }
+    }
+
+    return result
   } catch (error) {
     console.error("Error sending approval notification:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
@@ -555,64 +524,7 @@ export async function testSlackWebhook(customMessage?: string, customWebhookUrl?
 }
 
 // Function to check if the Slack webhook is configured
-export async function isSlackConfigured() {
+export function isSlackConfigured() {
   const webhookUrl = process.env.SLACK_WEBHOOK_URL
-  return { configured: !!webhookUrl }
-}
-
-// Function to create an approval message
-export function createApprovalMessage(change: any, appUrl: string) {
-  console.log("Creating approval message with app URL:", appUrl)
-
-  const changeType = change.change_type || "unknown"
-  const partNumber = change.part_number || "unknown"
-  const description = change.description || "No description"
-  const requester = change.requested_by || "Unknown"
-
-  // Format the message based on change type
-  let actionText = "Unknown action"
-  let detailsText = ""
-
-  if (changeType === "add") {
-    actionText = "Add New Item"
-    detailsText = `*Part:* ${partNumber}\n*Description:* ${description}\n*Requested by:* ${requester}`
-  } else if (changeType === "delete") {
-    actionText = "Delete Item"
-    detailsText = `*Part:* ${partNumber}\n*Description:* ${description}\n*Requested by:* ${requester}`
-  } else if (changeType === "update") {
-    actionText = "Update Item"
-    detailsText = `*Part:* ${partNumber}\n*Description:* ${description}\n*Requested by:* ${requester}`
-  }
-
-  // Create the approval URL
-  const approvalUrl = `${appUrl}/approval/${change.id}`
-  console.log("Generated approval URL:", approvalUrl)
-
-  return {
-    text: `Inventory Change Request: ${actionText} for ${partNumber}`,
-    blocks: [
-      {
-        type: "header",
-        text: {
-          type: "plain_text",
-          text: `Inventory Change Request: ${actionText}`,
-          emoji: true,
-        },
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: detailsText,
-        },
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `*<${approvalUrl}|Review Change>*`,
-        },
-      },
-    ],
-  }
+  return { configured: !!webhookUrl, webhookUrl: webhookUrl ? "***configured***" : "not set" }
 }
