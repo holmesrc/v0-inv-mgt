@@ -294,7 +294,9 @@ export default function EnvCheckPage() {
 
             <div>
               <h4 className="font-medium mb-2">Current URL for testing:</h4>
-              <code className="bg-gray-100 px-2 py-1 rounded text-sm">{window.location.origin}</code>
+              <code className="bg-gray-100 px-2 py-1 rounded text-sm">
+                {typeof window !== "undefined" ? window.location.origin : "Loading..."}
+              </code>
             </div>
           </div>
         </CardContent>

@@ -528,3 +528,37 @@ export function isSlackConfigured() {
   const webhookUrl = process.env.SLACK_WEBHOOK_URL
   return { configured: !!webhookUrl, webhookUrl: webhookUrl ? "***configured***" : "not set" }
 }
+
+// Export the missing functions that are being imported elsewhere
+export function createApprovalBlocks(change: any) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://v0-inv-mgt.vercel.app"
+  const approvalUrl = `${appUrl}/approval/${change.id}`
+
+  return [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*${change.change_type.toUpperCase()}* request for *${change.part_number}*\n${change.description || "No description"}\nRequested by: ${change.requested_by || "Unknown"}`,
+      },
+    },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: "Review Request",
+          },
+          url: approvalUrl,
+          style: "primary",
+        },
+      ],
+    },
+  ]
+}
+
+export function createApprovalMessage(change: any) {
+  return createSimpleApprovalMessage(change)
+}

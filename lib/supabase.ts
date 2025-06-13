@@ -36,3 +36,6 @@ export const createServerSupabaseClient = () => {
 export const canUseSupabase = () => {
   return isSupabaseConfigured() && supabase !== null
 }
+
+// Add the missing export
+export { createClient } from "@supabase/supabase-js"
