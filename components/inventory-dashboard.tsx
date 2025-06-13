@@ -90,45 +90,47 @@ export default function InventoryDashboard() {
         return
       }
 
-      // Use the simpler endpoint that we know exists
-      const response = await fetch("/api/debug/slack-config")
+      console.log("🔍 Checking Slack configuration...")
+
+      // Use the test-slack-webhook endpoint which is more reliable
+      const response = await fetch("/api/debug/test-slack-webhook", {
+        method: "GET",
+        headers: { "Cache-Control": "no-cache" },
+      })
 
       if (!response.ok) {
-        console.error("Slack config check failed:", response.status, response.statusText)
-        setSlackConfigured(false)
-        return
-      }
-
-      const contentType = response.headers.get("content-type")
-      if (!contentType || !contentType.includes("application/json")) {
-        console.error("Slack config check returned non-JSON response")
+        console.error("Slack webhook test failed:", response.status, response.statusText)
         setSlackConfigured(false)
         return
       }
 
       const result = await response.json()
+      console.log("📊 Slack test result:", result)
 
-      // Set configured based on the simple check
-      setSlackConfigured(result.configured === true)
-
-      // If configured, try to test the webhook
-      if (result.configured) {
-        try {
-          const testResponse = await fetch("/api/debug/test-slack-webhook")
-          if (testResponse.ok) {
-            const testResult = await testResponse.json()
-            // Only set to true if webhook test also passes
-            setSlackConfigured(testResult.webhookTest?.success === true)
-          }
-        } catch (testError) {
-          console.warn("Webhook test failed, but keeping Slack as configured:", testError)
-          // Keep as configured even if test fails - maybe it's just the test message
-          setSlackConfigured(true)
-        }
+      // If the webhook test was successful, Slack is configured
+      if (result.success && result.configured) {
+        console.log("✅ Slack is properly configured")
+        setSlackConfigured(true)
+      } else {
+        console.log("❌ Slack configuration failed:", result.error)
+        setSlackConfigured(false)
       }
     } catch (error) {
       console.error("Error checking Slack configuration:", error)
-      setSlackConfigured(false)
+      // Don't assume it's not configured if there's a network error
+      // Instead, try a simple check
+      try {
+        const simpleCheck = await fetch("/api/debug/slack-config")
+        if (simpleCheck.ok) {
+          const simpleResult = await simpleCheck.json()
+          setSlackConfigured(simpleResult.configured === true)
+        } else {
+          setSlackConfigured(false)
+        }
+      } catch (fallbackError) {
+        console.error("Fallback Slack check also failed:", fallbackError)
+        setSlackConfigured(false)
+      }
     }
   }
 
@@ -778,13 +780,6 @@ export default function InventoryDashboard() {
       return
     }
 
-    if (slackConfigured === false) {
-      alert(
-        "⚠️ Slack is not configured. Please set the SLACK_WEBHOOK_URL environment variable to enable Slack notifications.",
-      )
-      return
-    }
-
     const formattedItems = lowStockItems.map((item) => ({
       partNumber: item["Part number"],
       description: item["Part description"],
@@ -794,11 +789,11 @@ export default function InventoryDashboard() {
       reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
     }))
 
-    console.log("Sending low stock alert with items:", formattedItems)
+    console.log("🚀 Sending low stock alert with items:", formattedItems)
 
     try {
       const result = await sendInteractiveLowStockAlert(formattedItems)
-      console.log("Low stock alert result:", result)
+      console.log("📊 Low stock alert result:", result)
 
       if (result.configured === false) {
         alert("⚠️ Slack webhook URL not configured. Please set SLACK_WEBHOOK_URL environment variable.")
@@ -832,13 +827,6 @@ export default function InventoryDashboard() {
       return
     }
 
-    if (slackConfigured === false) {
-      alert(
-        "⚠️ Slack is not configured. Please set the SLACK_WEBHOOK_URL environment variable to enable Slack notifications.",
-      )
-      return
-    }
-
     const formattedItems = lowStockItems.map((item) => ({
       partNumber: item["Part number"],
       description: item["Part description"],
@@ -848,11 +836,11 @@ export default function InventoryDashboard() {
       reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
     }))
 
-    console.log("Sending full alert with items:", formattedItems)
+    console.log("🚀 Sending full alert with items:", formattedItems)
 
     try {
       const result = await sendInteractiveFullLowStockAlert(formattedItems)
-      console.log("Full alert result:", result)
+      console.log("📊 Full alert result:", result)
 
       if (result.configured === false) {
         alert("⚠️ Slack webhook URL not configured. Please set SLACK_WEBHOOK_URL environment variable.")
@@ -1065,22 +1053,14 @@ export default function InventoryDashboard() {
             {syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
             {syncing ? "Syncing..." : "Sync to Database"}
           </Button>
-          <Button onClick={sendLowStockAlert} variant="outline" disabled={slackConfigured === false || isV0Environment}>
+          <Button onClick={sendLowStockAlert} variant="outline" disabled={isV0Environment}>
             <Bell className="w-4 h-4 mr-2" />
-            {isV0Environment
-              ? "Send Alert (v0 Preview)"
-              : slackConfigured === false
-                ? "Send Alert (Disabled)"
-                : "Send Alert Now"}
+            {isV0Environment ? "Send Alert (v0 Preview)" : "Send Alert Now"}
           </Button>
           {lowStockItems.length > 3 && (
-            <Button onClick={sendFullAlert} variant="outline" disabled={slackConfigured === false || isV0Environment}>
+            <Button onClick={sendFullAlert} variant="outline" disabled={isV0Environment}>
               <List className="w-4 h-4 mr-2" />
-              {isV0Environment
-                ? "Send Full Alert (v0 Preview)"
-                : slackConfigured === false
-                  ? "Send Full Alert (Disabled)"
-                  : "Send Full Alert"}
+              {isV0Environment ? "Send Full Alert (v0 Preview)" : "Send Full Alert"}
             </Button>
           )}
           <Button onClick={() => window.open("/requests-approval", "_blank")} variant="outline">
@@ -1240,6 +1220,23 @@ export default function InventoryDashboard() {
                 <p className="text-sm text-orange-700">
                   Supabase database connection failed. Your data is being stored locally in your browser only. Please
                   check your environment variables and database setup
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Slack Status Display */}
+      {slackConfigured === true && (
+        <Card className="border-green-200 bg-green-50">
+          <CardContent className="pt-4">
+            <div className="flex items-start gap-2">
+              <Bell className="w-5 h-5 text-green-600 mt-0.5" />
+              <div>
+                <h3 className="font-medium text-green-800 mb-1">Slack Notifications Enabled</h3>
+                <p className="text-sm text-green-700">
+                  Slack webhook is properly configured and working. You can send low stock alerts to your Slack channel.
                 </p>
               </div>
             </div>
