@@ -92,45 +92,27 @@ export default function InventoryDashboard() {
 
       console.log("🔍 Checking Slack configuration...")
 
-      // Use the test-slack-webhook endpoint which is more reliable
-      const response = await fetch("/api/debug/test-slack-webhook", {
+      // REMOVED: Automatic test message sending
+      // Just check if the webhook URL is configured without sending a test message
+      const response = await fetch("/api/debug/slack-config", {
         method: "GET",
         headers: { "Cache-Control": "no-cache" },
       })
 
       if (!response.ok) {
-        console.error("Slack webhook test failed:", response.status, response.statusText)
+        console.error("Slack config check failed:", response.status, response.statusText)
         setSlackConfigured(false)
         return
       }
 
       const result = await response.json()
-      console.log("📊 Slack test result:", result)
+      console.log("📊 Slack config result:", result)
 
-      // If the webhook test was successful, Slack is configured
-      if (result.success && result.configured) {
-        console.log("✅ Slack is properly configured")
-        setSlackConfigured(true)
-      } else {
-        console.log("❌ Slack configuration failed:", result.error)
-        setSlackConfigured(false)
-      }
+      // Set configured based on the simple check
+      setSlackConfigured(result.configured === true)
     } catch (error) {
       console.error("Error checking Slack configuration:", error)
-      // Don't assume it's not configured if there's a network error
-      // Instead, try a simple check
-      try {
-        const simpleCheck = await fetch("/api/debug/slack-config")
-        if (simpleCheck.ok) {
-          const simpleResult = await simpleCheck.json()
-          setSlackConfigured(simpleResult.configured === true)
-        } else {
-          setSlackConfigured(false)
-        }
-      } catch (fallbackError) {
-        console.error("Fallback Slack check also failed:", fallbackError)
-        setSlackConfigured(false)
-      }
+      setSlackConfigured(false)
     }
   }
 

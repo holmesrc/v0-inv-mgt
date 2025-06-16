@@ -8,6 +8,9 @@ export async function sendSlackMessage(message: string | { text: string; blocks?
       return { success: false, error: "Slack webhook URL is not configured", configured: false }
     }
 
+    // Log the first few characters of the webhook URL for debugging
+    console.log(`Using webhook URL: ${webhookUrl.substring(0, 10)}...`)
+
     // Prepare the payload based on the message type
     const payload = typeof message === "string" ? { text: message } : message
 
@@ -37,8 +40,8 @@ export async function sendSlackMessage(message: string | { text: string; blocks?
 
 export async function sendFullLowStockAlert(items: any[], channel = "#inventory-alerts") {
   try {
-    console.log("🚀 Sending text-only full low stock alert")
-    const message = createTextOnlyFullLowStockAlert(items)
+    console.log("🚀 Sending full low stock alert")
+    const message = createFullLowStockMessage(items)
     return await sendSlackMessage(message)
   } catch (error) {
     console.error("❌ Error sending Slack message:", error)
@@ -70,13 +73,14 @@ export function formatLowStockAlert(items: any[], showAll = false) {
   return message
 }
 
+// Updated to match the exact format from the screenshot
 export function createLowStockAlertMessage(items: any[]) {
   const displayItems = items.slice(0, 3)
   const remainingCount = items.length - displayItems.length
 
   let message = `🚨 *Weekly Low Stock Alert* 🚨\n\n`
 
-  // Add first 3 items
+  // Add first 3 items in the exact format from the screenshot
   displayItems.forEach((item) => {
     message += `• *${item.partNumber}* - ${item.description}\n`
     message += `  Current: ${item.currentStock} | Reorder at: ${item.reorderPoint}\n`
@@ -84,17 +88,17 @@ export function createLowStockAlertMessage(items: any[]) {
     message += `  🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>\n\n`
   })
 
-  // Add remaining count and instructions
+  // Add remaining count and "View All" link
   if (remainingCount > 0) {
     message += `_...and ${remainingCount} more items need attention_\n\n`
-    // Use the correct deployment URL
     const deploymentUrl = process.env.NEXT_PUBLIC_APP_URL || "https://v0-inv-mgt.vercel.app"
-    message += `📄 <${deploymentUrl}/low-stock|📋 View All ${items.length} Low Stock Items>\n\n`
+    message += `📄 📋 <${deploymentUrl}/low-stock|View All ${items.length} Low Stock Items>\n\n`
   }
 
+  // Add Next Steps section exactly like the screenshot
   message += `📋 *Next Steps:*\n`
   message += `• Click the purchase request links above\n`
-  message += `• Send completed requests to #PHL10-hw-lab-requests channel\n`
+  message += `• Send completed requests to #PHL10-hw-lab-requests channel`
 
   return message
 }
@@ -323,10 +327,10 @@ export async function postToSlack(text: string, blocks?: any[]) {
   }
 }
 
-// Simplified sendInteractiveLowStockAlert function with fallback
+// Use the exact format from the screenshot
 export async function sendInteractiveLowStockAlert(items: any[]) {
   try {
-    console.log("🚀 Sending text-only low stock alert (no interactive components)")
+    console.log("🚀 Sending formatted low stock alert")
     const message = createLowStockAlertMessage(items)
     return await sendSlackMessage(message)
   } catch (error) {
@@ -340,7 +344,7 @@ export async function sendInteractiveFullLowStockAlert(items: any[]) {
   try {
     console.log("🚀 Attempting to send interactive full alert")
     // For full alerts, just use text to avoid complexity
-    const message = createTextOnlyFullLowStockAlert(items)
+    const message = createFullLowStockMessage(items)
     return await sendSlackMessage(message)
   } catch (error) {
     console.error("❌ Full alert failed:", error)
