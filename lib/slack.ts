@@ -1,5 +1,5 @@
-// Enhanced debugging version - temporarily add logging
-const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL
+// Use the working webhook URL directly for now, then move back to env var
+const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || process.env.SLACK_WEBHOOK_URL_BACKUP
 
 export interface LowStockItem {
   partNumber: string
