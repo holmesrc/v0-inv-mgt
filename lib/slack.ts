@@ -1,5 +1,5 @@
-// Updated Slack webhook integration with new URL
-const SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
+// Updated Slack webhook integration with new persistent URL
+const SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
 
 export interface LowStockItem {
   partNumber: string
