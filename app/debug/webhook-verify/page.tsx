@@ -1,110 +1,79 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function WebhookVerifyPage() {
-  const [result, setResult] = useState<any>(null)
+  const [webhookInfo, setWebhookInfo] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
-  const testWebhook = async () => {
+  const checkWebhook = async () => {
     setLoading(true)
     try {
-      const response = await fetch("/api/debug/test-webhook-simple", {
-        method: "POST",
-      })
+      const response = await fetch("/api/debug/webhook-check")
       const data = await response.json()
-      setResult(data)
+      setWebhookInfo(data)
     } catch (error) {
-      setResult({ error: error instanceof Error ? error.message : "Unknown error" })
-    }
-    setLoading(false)
-  }
-
-  const testDirectFetch = async () => {
-    setLoading(true)
-    try {
-      // Test the webhook directly from the browser
-      const webhookUrl = "https://hooks.slack.com/services/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"
-
-      const response = await fetch(webhookUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: "🧪 Direct browser test - if you see this, webhook works!",
-        }),
-      })
-
-      const responseText = await response.text()
-
-      setResult({
-        type: "direct",
-        success: response.ok,
-        status: response.status,
-        response: responseText,
-      })
-    } catch (error) {
-      setResult({
-        type: "direct",
+      setWebhookInfo({
         error: error instanceof Error ? error.message : "Unknown error",
       })
     }
     setLoading(false)
   }
 
+  useEffect(() => {
+    checkWebhook()
+  }, [])
+
   return (
     <div className="container mx-auto p-6">
       <Card>
         <CardHeader>
-          <CardTitle>🔍 Webhook Verification</CardTitle>
+          <CardTitle>🔍 Webhook URL Verification</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <p>
-              <strong>Testing webhook:</strong>
-            </p>
-            <code className="bg-gray-100 p-2 rounded text-sm block">
-              https://hooks.slack.com/services/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
-            </code>
-          </div>
+          <Button onClick={checkWebhook} disabled={loading}>
+            {loading ? "🔄 Checking..." : "🔍 Check Current Webhook"}
+          </Button>
 
-          <div className="flex gap-4">
-            <Button onClick={testWebhook} disabled={loading}>
-              Test via API Route
-            </Button>
-            <Button onClick={testDirectFetch} disabled={loading} variant="outline">
-              Test Direct from Browser
-            </Button>
-          </div>
+          {webhookInfo && (
+            <div className="mt-4">
+              <h3 className="font-semibold mb-2">Current Webhook Info:</h3>
+              <pre className="bg-gray-100 p-4 rounded text-sm">{JSON.stringify(webhookInfo, null, 2)}</pre>
 
-          {loading && <div className="text-blue-600">Testing webhook...</div>}
-
-          {result && (
-            <div className="mt-6">
-              <h3 className="font-semibold mb-2">Test Result:</h3>
-              <pre className="bg-gray-100 p-4 rounded text-sm overflow-auto">{JSON.stringify(result, null, 2)}</pre>
-
-              {result.success && (
-                <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded">
-                  <p className="text-green-800">
-                    ✅ <strong>Webhook is working!</strong> Check your #inventory-alerts channel for the test message.
+              {webhookInfo.exists && (
+                <div className="mt-4 space-y-2">
+                  <p>
+                    <strong>Length:</strong> {webhookInfo.length} characters
                   </p>
-                </div>
-              )}
-
-              {!result.success && result.status === 400 && (
-                <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded">
-                  <p className="text-yellow-800">
-                    ⚠️ <strong>Invalid payload format.</strong> The webhook URL is valid but the message format needs
-                    adjustment.
+                  <p>
+                    <strong>First part:</strong> {webhookInfo.firstPart}...
+                  </p>
+                  <p>
+                    <strong>Last part:</strong> ...{webhookInfo.lastPart}
+                  </p>
+                  <p>
+                    <strong>Hash:</strong> {webhookInfo.hash}
+                  </p>
+                  <p>
+                    <strong>Valid format:</strong> {webhookInfo.format ? "✅ Yes" : "❌ No"}
                   </p>
                 </div>
               )}
             </div>
           )}
+
+          <div className="mt-6 p-4 bg-yellow-50 rounded">
+            <h4 className="font-semibold mb-2">🔧 If the webhook hasn't changed:</h4>
+            <ol className="list-decimal list-inside space-y-1 text-sm">
+              <li>Double-check you saved the new webhook in Vercel</li>
+              <li>Make sure you selected "Production" environment</li>
+              <li>Try clearing your browser cache</li>
+              <li>Wait a few more minutes for propagation</li>
+              <li>Try a hard refresh of this page</li>
+            </ol>
+          </div>
         </CardContent>
       </Card>
     </div>
