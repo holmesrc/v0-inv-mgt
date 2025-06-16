@@ -1,4 +1,4 @@
-// COMPLETELY SECURE Slack integration - ZERO URL exposure
+// Enhanced debugging version - temporarily add logging
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL
 
 export interface LowStockItem {
@@ -16,44 +16,60 @@ export interface SlackResult {
   itemCount?: number
 }
 
-// Core Slack message sending function - NO URL EXPOSURE
+// Core Slack message sending function with debugging
 export async function sendSlackMessage(message: string): Promise<SlackResult> {
   try {
     if (!SLACK_WEBHOOK_URL) {
+      console.log("❌ SLACK_WEBHOOK_URL not found")
       return {
         success: false,
         error: "Slack not configured",
       }
     }
 
-    // NO LOGGING - this was exposing the webhook
+    console.log("🔍 Webhook URL exists:", !!SLACK_WEBHOOK_URL)
+    console.log("🔍 Message length:", message.length)
+    console.log("🔍 Message preview:", message.substring(0, 100) + "...")
+
+    const payload = { text: message }
+    console.log("🔍 Payload:", JSON.stringify(payload, null, 2))
+
     const response = await fetch(SLACK_WEBHOOK_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ text: message }),
+      body: JSON.stringify(payload),
     })
 
+    console.log("🔍 Response status:", response.status)
+    console.log("🔍 Response headers:", Object.fromEntries(response.headers.entries()))
+
+    const responseText = await response.text()
+    console.log("🔍 Response body:", responseText)
+
     if (!response.ok) {
-      // NO ERROR DETAILS - could expose webhook info
+      console.error("❌ Slack request failed")
       return {
         success: false,
-        error: "Slack delivery failed",
+        error: `HTTP ${response.status}: ${responseText}`,
       }
     }
 
+    console.log("✅ Slack message sent successfully")
     return { success: true }
   } catch (error) {
+    console.error("❌ Slack error:", error)
     return {
       success: false,
-      error: "Slack service unavailable",
+      error: error instanceof Error ? error.message : "Unknown error",
     }
   }
 }
 
-// Test connection - NO URL EXPOSURE
+// Test connection with detailed logging
 export async function testSlackConnection(): Promise<SlackResult> {
+  console.log("🧪 Testing Slack connection...")
   return await sendSlackMessage("✅ Slack integration test successful!")
 }
 
