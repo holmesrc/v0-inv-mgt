@@ -1,4 +1,4 @@
-// Secure Slack integration - NO URL exposure
+// COMPLETELY SECURE Slack integration - ZERO URL exposure
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL
 
 export interface LowStockItem {
@@ -16,133 +16,91 @@ export interface SlackResult {
   itemCount?: number
 }
 
-// Core Slack message sending function
-export async function sendSlackMessage(payload: any): Promise<SlackResult> {
+// Core Slack message sending function - NO URL EXPOSURE
+export async function sendSlackMessage(message: string): Promise<SlackResult> {
   try {
     if (!SLACK_WEBHOOK_URL) {
-      throw new Error("SLACK_WEBHOOK_URL environment variable is not set")
+      return {
+        success: false,
+        error: "Slack not configured",
+      }
     }
 
-    console.log("📤 Sending Slack message...")
-
+    // NO LOGGING - this was exposing the webhook
     const response = await fetch(SLACK_WEBHOOK_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ text: message }),
     })
 
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error("❌ Slack message failed:", errorText)
-      throw new Error(`HTTP ${response.status}: ${errorText}`)
+      // NO ERROR DETAILS - could expose webhook info
+      return {
+        success: false,
+        error: "Slack delivery failed",
+      }
     }
 
-    console.log("✅ Slack message sent successfully")
     return { success: true }
   } catch (error) {
-    console.error("❌ Slack message failed:", error)
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: "Slack service unavailable",
     }
   }
 }
 
-// Test the Slack connection with a simple message
+// Test connection - NO URL EXPOSURE
 export async function testSlackConnection(): Promise<SlackResult> {
-  try {
-    if (!SLACK_WEBHOOK_URL) {
-      throw new Error("SLACK_WEBHOOK_URL environment variable is not set")
-    }
-
-    const testPayload = {
-      text: "✅ Slack integration test successful! Your inventory alerts are working.",
-    }
-
-    console.log("🧪 Testing Slack connection...")
-
-    const response = await fetch(SLACK_WEBHOOK_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(testPayload),
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("❌ Slack test failed:", errorText)
-      throw new Error(`HTTP ${response.status}: ${errorText}`)
-    }
-
-    console.log("✅ Slack test successful")
-    return { success: true }
-  } catch (error) {
-    console.error("❌ Slack connection test failed:", error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    }
-  }
+  return await sendSlackMessage("✅ Slack integration test successful!")
 }
 
 // Create clean low stock alert message
-export function createCleanLowStockAlertMessage(items: LowStockItem[]): any {
+export function createCleanLowStockAlertMessage(items: LowStockItem[]): string {
   const itemCount = items.length
   const itemText = itemCount === 1 ? "item" : "items"
 
-  let message = `🚨 *Low Stock Alert* - ${itemCount} ${itemText} need attention:\n\n`
+  let message = `🚨 Low Stock Alert - ${itemCount} ${itemText} need attention:\n\n`
 
   items.forEach((item, index) => {
-    message += `${index + 1}. *${item.partNumber}* - ${item.description}\n`
-    message += `   📍 Location: ${item.location}\n`
-    message += `   📦 Current: ${item.currentStock} | Reorder at: ${item.reorderPoint}\n`
-    message += `   🏢 Supplier: ${item.supplier}\n\n`
+    message += `${index + 1}. ${item.partNumber} - ${item.description}\n`
+    message += `   Location: ${item.location}\n`
+    message += `   Current: ${item.currentStock} | Reorder at: ${item.reorderPoint}\n`
+    message += `   Supplier: ${item.supplier}\n\n`
   })
 
-  return {
-    text: message,
-    username: "Inventory Bot",
-    icon_emoji: ":warning:",
-  }
+  return message
 }
 
-// Create approval message with secure links
-export function createApprovalMessage(changeId: string, changeData: any, appUrl: string): any {
-  const { type, data } = changeData
+// Create approval message
+export function createApprovalMessage(changeId: string, changeData: any, appUrl: string): string {
+  const { change_type, item_data } = changeData
 
   let actionText = ""
   let itemDetails = ""
 
-  switch (type) {
+  switch (change_type) {
     case "add":
-      actionText = "➕ *New Item Addition Request*"
-      itemDetails = `Part: ${data.partNumber}\nDescription: ${data.description}\nQuantity: ${data.quantity}`
+      actionText = "➕ New Item Addition Request"
+      itemDetails = `Part: ${item_data.part_number}\nDescription: ${item_data.part_description}\nQuantity: ${item_data.qty}`
       break
     case "update":
-      actionText = "✏️ *Item Update Request*"
-      itemDetails = `Part: ${data.partNumber}\nChanges: ${JSON.stringify(data.changes, null, 2)}`
+      actionText = "✏️ Item Update Request"
+      itemDetails = `Part: ${item_data.part_number}\nDescription: ${item_data.part_description}`
       break
     case "delete":
-      actionText = "🗑️ *Item Deletion Request*"
-      itemDetails = `Part: ${data.partNumber}\nDescription: ${data.description}`
+      actionText = "🗑️ Item Deletion Request"
+      itemDetails = `Part: ${item_data.part_number}\nDescription: ${item_data.part_description}`
       break
     default:
-      actionText = "📝 *Inventory Change Request*"
-      itemDetails = `Type: ${type}\nData: ${JSON.stringify(data, null, 2)}`
+      actionText = "📝 Inventory Change Request"
+      itemDetails = `Type: ${change_type}`
   }
 
   const approvalUrl = `${appUrl}/approval/${changeId}`
-
-  const message = `${actionText}\n\n${itemDetails}\n\nRequested by: ${changeData.requester || "System"}\n\n🔗 Review and approve: ${approvalUrl}`
-
-  return {
-    text: message,
-    username: "Inventory Approval Bot",
-    icon_emoji: ":clipboard:",
-  }
+  return `${actionText}\n\n${itemDetails}\n\nRequested by: ${changeData.requested_by || "System"}\n\n🔗 Review: ${approvalUrl}`
 }
 
 // Send approval notification
@@ -155,16 +113,15 @@ export async function sendApprovalNotification(
     const message = createApprovalMessage(changeId, changeData, appUrl)
     return await sendSlackMessage(message)
   } catch (error) {
-    console.error("❌ Failed to send approval notification:", error)
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: "Failed to send approval notification",
     }
   }
 }
 
 // Send low stock alert
-export async function sendLowStockAlert(items: LowStockItem[]): Promise<SlackResult> {
+export async function sendInteractiveLowStockAlert(items: LowStockItem[]): Promise<SlackResult> {
   try {
     if (!items || items.length === 0) {
       return { success: true, itemCount: 0 }
@@ -178,10 +135,9 @@ export async function sendLowStockAlert(items: LowStockItem[]): Promise<SlackRes
       itemCount: items.length,
     }
   } catch (error) {
-    console.error("❌ Failed to send low stock alert:", error)
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: "Failed to send low stock alert",
       itemCount: items?.length || 0,
     }
   }

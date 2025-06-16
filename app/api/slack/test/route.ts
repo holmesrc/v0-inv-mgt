@@ -5,26 +5,17 @@ export async function POST(request: NextRequest) {
   try {
     const result = await testSlackConnection()
 
-    if (result.success) {
-      return NextResponse.json({
-        success: true,
-        message: "Slack test message sent successfully!",
-      })
-    } else {
-      return NextResponse.json(
-        {
-          success: false,
-          error: result.error || "Failed to send test message",
-        },
-        { status: 500 },
-      )
-    }
+    return NextResponse.json({
+      success: result.success,
+      message: result.success ? "Test message sent successfully" : "Test failed",
+      // NO SENSITIVE DATA in response
+    })
   } catch (error) {
-    console.error("Error in slack test API:", error)
     return NextResponse.json(
       {
-        error: "Failed to test Slack connection",
-        details: error instanceof Error ? error.message : "Unknown error",
+        success: false,
+        error: "Test failed",
+        // NO ERROR DETAILS
       },
       { status: 500 },
     )
