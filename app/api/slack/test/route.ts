@@ -1,40 +1,32 @@
 import { type NextRequest, NextResponse } from "next/server"
-
-export async function GET() {
-  return NextResponse.json({
-    success: true,
-    message: "Slack interaction endpoint is working!",
-    timestamp: new Date().toISOString(),
-    domain: process.env.VERCEL_URL || "localhost",
-    environment: {
-      webhookUrl: process.env.SLACK_WEBHOOK_URL ? "✅ Configured" : "❌ Missing",
-      nodeEnv: process.env.NODE_ENV,
-    },
-    endpoints: {
-      test: "/api/slack/test",
-      interactions: "/api/slack/interactions",
-      send: "/api/slack/send",
-    },
-  })
-}
+import { testSlackConnection } from "@/lib/slack"
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.text()
-    console.log("=== SLACK TEST ENDPOINT ===")
-    console.log("Received POST request")
-    console.log("Headers:", Object.fromEntries(request.headers.entries()))
-    console.log("Body preview:", body.substring(0, 200))
+    const result = await testSlackConnection()
 
-    return NextResponse.json({
-      success: true,
-      message: "Test endpoint received your request",
-      timestamp: new Date().toISOString(),
-      bodyLength: body.length,
-      method: request.method,
-    })
+    if (result.success) {
+      return NextResponse.json({
+        success: true,
+        message: "Slack test message sent successfully!",
+      })
+    } else {
+      return NextResponse.json(
+        {
+          success: false,
+          error: result.error || "Failed to send test message",
+        },
+        { status: 500 },
+      )
+    }
   } catch (error) {
-    console.error("Test endpoint error:", error)
-    return NextResponse.json({ error: "Test failed" }, { status: 500 })
+    console.error("Error in slack test API:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to test Slack connection",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }

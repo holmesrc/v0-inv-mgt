@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient, canUseSupabase } from "@/lib/supabase"
-import { sendApprovalNotification } from "@/lib/slack"
 
 // GET all pending changes
 export async function GET() {
@@ -113,7 +112,7 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const { ids, status, processChanges = false, sendNotification = false } = await request.json()
+    const { ids, status, processChanges = false } = await request.json()
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json(
@@ -305,33 +304,10 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    // If we need to send notifications, do that now
-    const notificationResults = []
-    if (sendNotification) {
-      for (const change of changes || []) {
-        try {
-          const result = await sendApprovalNotification(change)
-          notificationResults.push({
-            id: change.id,
-            success: result.success,
-            message: result.success ? "Notification sent" : result.error,
-          })
-        } catch (error) {
-          console.error(`Error sending notification for change ${change.id}:`, error)
-          notificationResults.push({
-            id: change.id,
-            success: false,
-            error: error instanceof Error ? error.message : "Unknown error",
-          })
-        }
-      }
-    }
-
     return NextResponse.json({
       success: true,
       message: `${ids.length} changes updated to ${status}`,
       processResults: processChanges ? results : undefined,
-      notificationResults: sendNotification ? notificationResults : undefined,
     })
   } catch (error) {
     console.error("Error in PATCH pending changes:", error)

@@ -24,21 +24,14 @@ import {
   Search,
   Settings,
   ShoppingCart,
-  Bell,
   Info,
-  List,
   Download,
   RefreshCw,
   Database,
   ExternalLink,
+  Bell,
 } from "lucide-react"
 import type { InventoryItem, PurchaseRequest, AlertSettings } from "@/types/inventory"
-import {
-  sendSlackMessage,
-  formatPurchaseRequest,
-  sendInteractiveLowStockAlert,
-  sendInteractiveFullLowStockAlert,
-} from "@/lib/slack"
 import { downloadExcelFile } from "@/lib/excel-generator"
 import FileUpload from "./file-upload"
 import AddInventoryItem from "./add-inventory-item"
@@ -63,8 +56,8 @@ export default function InventoryDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [supabaseConfigured, setSupabaseConfigured] = useState<boolean | null>(null)
-  const [slackConfigured, setSlackConfigured] = useState<boolean | null>(null)
   const [isV0Environment, setIsV0Environment] = useState(false)
+  const [sendingAlert, setSendingAlert] = useState(false)
 
   // Show upload screen if no inventory data
   const [showUpload, setShowUpload] = useState(false)
@@ -79,42 +72,7 @@ export default function InventoryDashboard() {
 
     loadInventoryFromDatabase()
     loadSettingsFromDatabase()
-    checkSlackConfiguration()
   }, [])
-
-  const checkSlackConfiguration = async () => {
-    try {
-      // If we're in v0 environment, skip the check and show helpful message
-      if (isV0Environment) {
-        setSlackConfigured(false)
-        return
-      }
-
-      console.log("🔍 Checking Slack configuration...")
-
-      // REMOVED: Automatic test message sending
-      // Just check if the webhook URL is configured without sending a test message
-      const response = await fetch("/api/debug/slack-config", {
-        method: "GET",
-        headers: { "Cache-Control": "no-cache" },
-      })
-
-      if (!response.ok) {
-        console.error("Slack config check failed:", response.status, response.statusText)
-        setSlackConfigured(false)
-        return
-      }
-
-      const result = await response.json()
-      console.log("📊 Slack config result:", result)
-
-      // Set configured based on the simple check
-      setSlackConfigured(result.configured === true)
-    } catch (error) {
-      console.error("Error checking Slack configuration:", error)
-      setSlackConfigured(false)
-    }
-  }
 
   const loadInventoryFromDatabase = async () => {
     try {
@@ -586,6 +544,66 @@ export default function InventoryDashboard() {
     }
   }
 
+  // Send Slack alert
+  const sendSlackAlert = async () => {
+    if (lowStockItems.length === 0) {
+      alert("No low stock items to report!")
+      return
+    }
+
+    if (isV0Environment) {
+      alert(
+        "🔧 Slack alerts are not available in the v0 preview environment.\n\nTo test Slack functionality:\n• Deploy your app to Vercel\n• Test on your deployed URL\n• Environment variables are only available on the server",
+      )
+      return
+    }
+
+    try {
+      setSendingAlert(true)
+
+      // Format items for Slack
+      const formattedItems = lowStockItems.map((item) => ({
+        partNumber: item["Part number"],
+        description: item["Part description"],
+        supplier: item["Supplier"],
+        location: item["Location"],
+        currentStock: item["QTY"],
+        reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
+      }))
+
+      console.log("🚀 Sending Slack alert for", formattedItems.length, "items")
+
+      const response = await fetch("/api/slack/send-alert", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          items: formattedItems,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+
+      if (result.success) {
+        alert(
+          `✅ Slack alert sent successfully!\n\nSent alert for ${result.itemCount} low stock items to #inventory-alerts channel.`,
+        )
+      } else {
+        throw new Error(result.error || "Failed to send alert")
+      }
+    } catch (error) {
+      console.error("Failed to send Slack alert:", error)
+      alert(`❌ Failed to send Slack alert:\n\n${error instanceof Error ? error.message : "Unknown error"}`)
+    } finally {
+      setSendingAlert(false)
+    }
+  }
+
   // Add new inventory item with enhanced error handling
   const addInventoryItem = async (newItem: Omit<InventoryItem, "id" | "lastUpdated">) => {
     console.log("🚀 addInventoryItem called with:", newItem)
@@ -619,7 +637,7 @@ export default function InventoryDashboard() {
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
-          alert("✅ Item submitted for approval! Check the requests-approval page or Slack for notifications.")
+          alert("✅ Item submitted for approval! Check the requests-approval page for notifications.")
         } else {
           throw new Error(result.error || "Failed to submit for approval")
         }
@@ -697,7 +715,7 @@ export default function InventoryDashboard() {
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
-          alert("✅ Deletion submitted for approval! Check the requests-approval page or Slack for notifications.")
+          alert("✅ Deletion submitted for approval! Check the requests-approval page for notifications.")
         } else {
           throw new Error(result.error || "Failed to submit for approval")
         }
@@ -735,111 +753,8 @@ export default function InventoryDashboard() {
 
     setPurchaseRequests((prev) => [...prev, request])
 
-    // Send to Slack if configured
-    if (slackConfigured) {
-      try {
-        const result = await sendSlackMessage(formatPurchaseRequest(request))
-        if (!result.success && result.configured !== false) {
-          console.error("Failed to send purchase request to Slack:", result.error)
-        }
-      } catch (error) {
-        console.error("Failed to send purchase request to Slack:", error)
-      }
-    }
-  }
-
-  // Send low stock alert
-  const sendLowStockAlert = async () => {
-    if (lowStockItems.length === 0) {
-      alert("No low stock items to report!")
-      return
-    }
-
-    if (isV0Environment) {
-      alert(
-        "🔧 Slack alerts are not available in the v0 preview environment.\n\nTo test Slack functionality:\n• Deploy your app to Vercel\n• Test on your deployed URL\n• Environment variables are only available on the server",
-      )
-      return
-    }
-
-    const formattedItems = lowStockItems.map((item) => ({
-      partNumber: item["Part number"],
-      description: item["Part description"],
-      supplier: item["Supplier"],
-      location: item["Location"],
-      currentStock: item["QTY"],
-      reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
-    }))
-
-    console.log("🚀 Sending low stock alert with items:", formattedItems)
-
-    try {
-      const result = await sendInteractiveLowStockAlert(formattedItems)
-      console.log("📊 Low stock alert result:", result)
-
-      if (result.configured === false) {
-        alert("⚠️ Slack webhook URL not configured. Please set SLACK_WEBHOOK_URL environment variable.")
-        return
-      }
-
-      if (result.success) {
-        alert(
-          `✅ Low stock alert sent successfully! Showing ${Math.min(3, formattedItems.length)} items with "Show All" button for ${formattedItems.length} total items.`,
-        )
-      } else {
-        alert(`❌ Failed to send Slack alert: ${result.error}`)
-      }
-    } catch (error) {
-      console.error("Failed to send interactive low stock alert:", error)
-      alert("❌ Failed to send Slack alert. Please check your Slack webhook configuration.")
-    }
-  }
-
-  // Send full low stock alert
-  const sendFullAlert = async () => {
-    if (lowStockItems.length === 0) {
-      alert("No low stock items to report!")
-      return
-    }
-
-    if (isV0Environment) {
-      alert(
-        "🔧 Slack alerts are not available in the v0 preview environment.\n\nTo test Slack functionality:\n• Deploy your app to Vercel\n• Test on your deployed URL\n• Environment variables are only available on the server",
-      )
-      return
-    }
-
-    const formattedItems = lowStockItems.map((item) => ({
-      partNumber: item["Part number"],
-      description: item["Part description"],
-      supplier: item["Supplier"],
-      location: item["Location"],
-      currentStock: item["QTY"],
-      reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
-    }))
-
-    console.log("🚀 Sending full alert with items:", formattedItems)
-
-    try {
-      const result = await sendInteractiveFullLowStockAlert(formattedItems)
-      console.log("📊 Full alert result:", result)
-
-      if (result.configured === false) {
-        alert("⚠️ Slack webhook URL not configured. Please set SLACK_WEBHOOK_URL environment variable.")
-        return
-      }
-
-      if (result.success) {
-        alert(
-          `✅ Full low stock alert sent successfully! Showing all ${formattedItems.length} items with individual reorder buttons.`,
-        )
-      } else {
-        alert(`❌ Failed to send full Slack alert: ${result.error}`)
-      }
-    } catch (error) {
-      console.error("Failed to send interactive full alert:", error)
-      alert("❌ Failed to send full Slack alert. Please check your Slack webhook configuration.")
-    }
+    // Show success message instead of sending to Slack
+    alert(`✅ Purchase request created for ${item["Part number"]}! Quantity: ${quantity}, Urgency: ${urgency}`)
   }
 
   // Handle data loading
@@ -1035,16 +950,10 @@ export default function InventoryDashboard() {
             {syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
             {syncing ? "Syncing..." : "Sync to Database"}
           </Button>
-          <Button onClick={sendLowStockAlert} variant="outline" disabled={isV0Environment}>
-            <Bell className="w-4 h-4 mr-2" />
-            {isV0Environment ? "Send Alert (v0 Preview)" : "Send Alert Now"}
+          <Button onClick={sendSlackAlert} variant="outline" disabled={sendingAlert || isV0Environment}>
+            {sendingAlert ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Bell className="w-4 h-4 mr-2" />}
+            {sendingAlert ? "Sending..." : isV0Environment ? "Send Alert (v0 Preview)" : "Send Slack Alert"}
           </Button>
-          {lowStockItems.length > 3 && (
-            <Button onClick={sendFullAlert} variant="outline" disabled={isV0Environment}>
-              <List className="w-4 h-4 mr-2" />
-              {isV0Environment ? "Send Full Alert (v0 Preview)" : "Send Full Alert"}
-            </Button>
-          )}
           <Button onClick={() => window.open("/requests-approval", "_blank")} variant="outline">
             <AlertTriangle className="w-4 h-4 mr-2" />
             Review Requests
@@ -1209,33 +1118,17 @@ export default function InventoryDashboard() {
         </Card>
       )}
 
-      {/* Slack Status Display */}
-      {slackConfigured === true && (
-        <Card className="border-green-200 bg-green-50">
-          <CardContent className="pt-4">
-            <div className="flex items-start gap-2">
-              <Bell className="w-5 h-5 text-green-600 mt-0.5" />
-              <div>
-                <h3 className="font-medium text-green-800 mb-1">Slack Notifications Enabled</h3>
-                <p className="text-sm text-green-700">
-                  Slack webhook is properly configured and working. You can send low stock alerts to your Slack channel.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {slackConfigured === false && !isV0Environment && (
+      {/* Slack Alert Status */}
+      {lowStockItems.length > 0 && !isV0Environment && (
         <Card className="border-yellow-200 bg-yellow-50">
           <CardContent className="pt-4">
             <div className="flex items-start gap-2">
-              <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
+              <Bell className="w-5 h-5 text-yellow-600 mt-0.5" />
               <div>
-                <h3 className="font-medium text-yellow-800 mb-1">Slack Notifications Disabled</h3>
+                <h3 className="font-medium text-yellow-800 mb-1">Low Stock Alert Available</h3>
                 <p className="text-sm text-yellow-700">
-                  Slack webhook test failed. Please check your SLACK_WEBHOOK_URL environment variable and try refreshing
-                  the page.
+                  You have {lowStockItems.length} items with low stock. Click "Send Slack Alert" to notify your team in
+                  the #inventory-alerts channel.
                 </p>
               </div>
             </div>
