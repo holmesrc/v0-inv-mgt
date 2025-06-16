@@ -73,16 +73,16 @@ export function formatLowStockAlert(items: any[], showAll = false) {
   return message
 }
 
-// CLEAN VERSION - No emojis, no shortcut links, ASCII only
+// COMPLETELY PLAIN TEXT VERSION - No markdown, no asterisks, no formatting
 export function createCleanLowStockAlertMessage(items: any[]) {
   const displayItems = items.slice(0, 3)
   const remainingCount = items.length - displayItems.length
 
-  let message = `*Weekly Low Stock Alert*\n\n`
+  let message = `Weekly Low Stock Alert\n\n`
 
-  // Add first 3 items in clean format
+  // Add first 3 items in completely plain format
   displayItems.forEach((item) => {
-    message += `• *${item.partNumber}* - ${item.description}\n`
+    message += `• ${item.partNumber} - ${item.description}\n`
     message += `  Current: ${item.currentStock} | Reorder at: ${item.reorderPoint}\n`
     message += `  Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n`
     message += `  Create Purchase Request: Reply to this message with "${item.partNumber}"\n\n`
@@ -96,7 +96,7 @@ export function createCleanLowStockAlertMessage(items: any[]) {
   }
 
   // Add Next Steps section
-  message += `*Next Steps:*\n`
+  message += `Next Steps:\n`
   message += `• Reply to this message with part numbers to create purchase requests\n`
   message += `• Send completed requests to #PHL10-hw-lab-requests channel`
 
@@ -139,16 +139,16 @@ export function createFullLowStockMessage(items: any[]) {
 }
 
 export function createCleanFullLowStockMessage(items: any[]) {
-  let message = `*Complete Low Stock Report*\n\n`
+  let message = `Complete Low Stock Report\n\n`
   message += `${items.length} items are below their reorder points:\n\n`
 
   items.forEach((item, index) => {
-    message += `${index + 1}. *${item.partNumber}* - ${item.description}\n`
+    message += `${index + 1}. ${item.partNumber} - ${item.description}\n`
     message += `   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n`
     message += `   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n\n`
   })
 
-  message += `*Action Required:*\n`
+  message += `Action Required:\n`
   message += `Review the items above and create purchase requests as needed.\n`
   message += `Send completed requests to #PHL10-hw-lab-requests channel.`
 
