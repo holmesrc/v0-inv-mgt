@@ -41,7 +41,7 @@ export async function sendSlackMessage(message: string | { text: string; blocks?
 export async function sendFullLowStockAlert(items: any[], channel = "#inventory-alerts") {
   try {
     console.log("🚀 Sending full low stock alert")
-    const message = createFullLowStockMessage(items)
+    const message = createCleanFullLowStockMessage(items)
     return await sendSlackMessage(message)
   } catch (error) {
     console.error("❌ Error sending Slack message:", error)
@@ -60,10 +60,10 @@ export function formatLowStockAlert(items: any[], showAll = false) {
     )
     .join("\n")
 
-  let message = `🚨 *Weekly Low Stock Alert* 🚨\n\nThe following items are below their reorder points:\n\n${itemList}`
+  let message = `Weekly Low Stock Alert\n\nThe following items are below their reorder points:\n\n${itemList}`
 
   if (!showAll && remainingCount > 0) {
-    message += `\n\n_...and ${remainingCount} more items_`
+    message += `\n\n...and ${remainingCount} more items`
   }
 
   if (!showAll) {
@@ -73,98 +73,105 @@ export function formatLowStockAlert(items: any[], showAll = false) {
   return message
 }
 
-// Updated to match the exact format from the screenshot
-export function createLowStockAlertMessage(items: any[]) {
+// CLEAN VERSION - No emojis, no shortcut links, ASCII only
+export function createCleanLowStockAlertMessage(items: any[]) {
   const displayItems = items.slice(0, 3)
   const remainingCount = items.length - displayItems.length
 
-  let message = `🚨 *Weekly Low Stock Alert* 🚨\n\n`
+  let message = `*Weekly Low Stock Alert*\n\n`
 
-  // Add first 3 items in the exact format from the screenshot
+  // Add first 3 items in clean format
   displayItems.forEach((item) => {
     message += `• *${item.partNumber}* - ${item.description}\n`
     message += `  Current: ${item.currentStock} | Reorder at: ${item.reorderPoint}\n`
     message += `  Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n`
-    message += `  🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>\n\n`
+    message += `  Create Purchase Request: Reply to this message with "${item.partNumber}"\n\n`
   })
 
   // Add remaining count and "View All" link
   if (remainingCount > 0) {
-    message += `_...and ${remainingCount} more items need attention_\n\n`
+    message += `...and ${remainingCount} more items need attention\n\n`
     const deploymentUrl = process.env.NEXT_PUBLIC_APP_URL || "https://v0-inv-mgt.vercel.app"
-    message += `📄 📋 <${deploymentUrl}/low-stock|View All ${items.length} Low Stock Items>\n\n`
+    message += `View All ${items.length} Low Stock Items: ${deploymentUrl}/low-stock\n\n`
   }
 
-  // Add Next Steps section exactly like the screenshot
-  message += `📋 *Next Steps:*\n`
-  message += `• Click the purchase request links above\n`
+  // Add Next Steps section
+  message += `*Next Steps:*\n`
+  message += `• Reply to this message with part numbers to create purchase requests\n`
   message += `• Send completed requests to #PHL10-hw-lab-requests channel`
 
   return message
 }
 
+// ALTERNATIVE: Even simpler version with minimal formatting
+export function createSimplestLowStockMessage(items: any[]) {
+  const displayItems = items.slice(0, 3)
+  const remainingCount = items.length - displayItems.length
+
+  let message = `Weekly Low Stock Alert\n\n`
+  message += `The following items are below their reorder points:\n\n`
+
+  // Add first 3 items with minimal formatting
+  displayItems.forEach((item, index) => {
+    message += `${index + 1}. ${item.partNumber} - ${item.description}\n`
+    message += `   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n`
+    message += `   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n\n`
+  })
+
+  // Add remaining count
+  if (remainingCount > 0) {
+    message += `...and ${remainingCount} more items need attention\n\n`
+    const deploymentUrl = process.env.NEXT_PUBLIC_APP_URL || "https://v0-inv-mgt.vercel.app"
+    message += `View all items: ${deploymentUrl}/low-stock\n\n`
+  }
+
+  // Simple instructions
+  message += `Next Steps:\n`
+  message += `- Review the items above\n`
+  message += `- Create purchase requests as needed\n`
+  message += `- Send requests to #PHL10-hw-lab-requests channel`
+
+  return message
+}
+
 export function createFullLowStockMessage(items: any[]) {
-  let message = `🚨 *Complete Low Stock Report* 🚨\n\n`
-  message += `*${items.length} items* are below their reorder points:\n\n`
+  return createCleanFullLowStockMessage(items)
+}
+
+export function createCleanFullLowStockMessage(items: any[]) {
+  let message = `*Complete Low Stock Report*\n\n`
+  message += `${items.length} items are below their reorder points:\n\n`
 
   items.forEach((item, index) => {
     message += `${index + 1}. *${item.partNumber}* - ${item.description}\n`
     message += `   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n`
-    message += `   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n`
-    message += `   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Reorder this item>\n\n`
+    message += `   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n\n`
   })
 
-  message += `📋 *Action Required:*\n`
-  message += `Click the purchase request links above to create purchase requests.\n`
+  message += `*Action Required:*\n`
+  message += `Review the items above and create purchase requests as needed.\n`
   message += `Send completed requests to #PHL10-hw-lab-requests channel.`
 
   return message
 }
 
 export function formatPurchaseRequest(request: any) {
-  const urgencyEmoji = {
-    low: "🟢",
-    medium: "🟡",
-    high: "🔴",
-  }
+  const urgencyLevel = request.urgency.toUpperCase()
 
   return (
-    `📋 *New Purchase Request* ${urgencyEmoji[request.urgency]}\n\n` +
+    `*New Purchase Request* - ${urgencyLevel} Priority\n\n` +
     `Part: ${request.partNumber} - ${request.description}\n` +
     `Quantity: ${request.quantity}\n` +
-    `Urgency: ${request.urgency.toUpperCase()}\n` +
+    `Urgency: ${urgencyLevel}\n` +
     `Requested by: ${request.requestedBy}\n` +
     `Date: ${new Date(request.requestDate).toLocaleDateString()}\n\n` +
-    `Use this shortcut to process: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031`
+    `Please process this request and send to #PHL10-hw-lab-requests channel`
   )
 }
 
 // Simple text-only version for when interactive components don't work
 export function createSimpleTextAlert(items: any[]) {
-  const displayItems = items.slice(0, 3)
-  const remainingCount = items.length - displayItems.length
-
-  let message = `🚨 *Weekly Low Stock Alert* 🚨\n\n`
-  message += `The following items are below their reorder points:\n\n`
-
-  displayItems.forEach((item, index) => {
-    message += `${index + 1}. *${item.partNumber}* - ${item.description}\n`
-    message += `   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n`
-    message += `   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n`
-    message += `   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Reorder this item>\n\n`
-  })
-
-  if (remainingCount > 0) {
-    message += `_...and ${remainingCount} more items need attention_\n\n`
-    message += `📄 *For complete list, reply with "show all" or use the dashboard.*\n\n`
-  }
-
-  message += `📋 *Instructions:*\n`
-  message += `• Click the reorder links above to create purchase requests\n`
-  message += `• Send completed requests to #PHL10-hw-lab-requests\n`
-  message += `• Reply "show all" for the complete list`
-
-  return message
+  return createCleanLowStockAlertMessage(items)
 }
 
 // Updated to include individual reorder buttons for each item
@@ -178,11 +185,11 @@ export function createSimpleLowStockBlocks(items: any[]) {
     type: "section",
     text: {
       type: "mrkdwn",
-      text: "🚨 *Weekly Low Stock Alert* 🚨\n\nThe following items are below their reorder points:",
+      text: "*Weekly Low Stock Alert*\n\nThe following items are below their reorder points:",
     },
   })
 
-  // Add each item as a separate section with its own button
+  // Add each item as a separate section
   displayItems.forEach((item) => {
     // Truncate description if too long
     const description = item.description.length > 60 ? item.description.substring(0, 57) + "..." : item.description
@@ -193,14 +200,6 @@ export function createSimpleLowStockBlocks(items: any[]) {
         type: "mrkdwn",
         text: `• *${item.partNumber}* - ${description}\n  Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n  Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}`,
       },
-      accessory: {
-        type: "button",
-        text: {
-          type: "plain_text",
-          text: "Reorder",
-        },
-        url: "https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031",
-      },
     })
   })
 
@@ -210,25 +209,8 @@ export function createSimpleLowStockBlocks(items: any[]) {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `_...and ${remainingCount} more items need attention_`,
+        text: `...and ${remainingCount} more items need attention`,
       },
-    })
-
-    // Add Show All button - SIMPLIFIED to avoid JSON parsing issues
-    blocks.push({
-      type: "actions",
-      elements: [
-        {
-          type: "button",
-          text: {
-            type: "plain_text",
-            text: "Show All Items",
-          },
-          action_id: "show_all_low_stock",
-          // IMPORTANT: Use a simple string, not JSON
-          value: "show_all",
-        },
-      ],
     })
   }
 
@@ -246,11 +228,11 @@ export function createSimpleFullLowStockBlocks(items: any[]) {
     type: "section",
     text: {
       type: "mrkdwn",
-      text: `🚨 *Complete Low Stock Report* 🚨\n\n*${items.length} items* are below their reorder points:`,
+      text: `*Complete Low Stock Report*\n\n${items.length} items are below their reorder points:`,
     },
   })
 
-  // Add each item as a separate section with its own button
+  // Add each item as a separate section
   displayItems.forEach((item, index) => {
     // Truncate description if too long
     const description = item.description.length > 50 ? item.description.substring(0, 47) + "..." : item.description
@@ -261,14 +243,6 @@ export function createSimpleFullLowStockBlocks(items: any[]) {
         type: "mrkdwn",
         text: `${index + 1}. *${item.partNumber}* - ${description}\n   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}`,
       },
-      accessory: {
-        type: "button",
-        text: {
-          type: "plain_text",
-          text: "Reorder",
-        },
-        url: "https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031",
-      },
     })
   })
 
@@ -278,7 +252,7 @@ export function createSimpleFullLowStockBlocks(items: any[]) {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `_...and ${items.length - 15} more items (showing first 15 due to Slack limits)_`,
+        text: `...and ${items.length - 15} more items (showing first 15 due to Slack limits)`,
       },
     })
   }
@@ -288,7 +262,7 @@ export function createSimpleFullLowStockBlocks(items: any[]) {
     type: "section",
     text: {
       type: "mrkdwn",
-      text: "📋 *Instructions:* Click the 'Reorder' buttons above to create purchase requests. Send completed requests to #PHL10-hw-lab-requests channel.",
+      text: "*Instructions:* Review the items above and create purchase requests as needed. Send completed requests to #PHL10-hw-lab-requests channel.",
     },
   })
 
@@ -327,11 +301,11 @@ export async function postToSlack(text: string, blocks?: any[]) {
   }
 }
 
-// Use the exact format from the screenshot
+// Use the clean format
 export async function sendInteractiveLowStockAlert(items: any[]) {
   try {
-    console.log("🚀 Sending formatted low stock alert")
-    const message = createLowStockAlertMessage(items)
+    console.log("🚀 Sending clean low stock alert")
+    const message = createCleanLowStockAlertMessage(items)
     return await sendSlackMessage(message)
   } catch (error) {
     console.error("❌ Error sending Slack message:", error)
@@ -342,9 +316,8 @@ export async function sendInteractiveLowStockAlert(items: any[]) {
 // Simplified sendInteractiveFullLowStockAlert function with fallback
 export async function sendInteractiveFullLowStockAlert(items: any[]) {
   try {
-    console.log("🚀 Attempting to send interactive full alert")
-    // For full alerts, just use text to avoid complexity
-    const message = createFullLowStockMessage(items)
+    console.log("🚀 Attempting to send clean full alert")
+    const message = createCleanFullLowStockMessage(items)
     return await sendSlackMessage(message)
   } catch (error) {
     console.error("❌ Full alert failed:", error)
@@ -354,48 +327,12 @@ export async function sendInteractiveFullLowStockAlert(items: any[]) {
 
 // Create a text-only version that works with webhooks
 export function createTextOnlyLowStockAlert(items: any[]) {
-  const displayItems = items.slice(0, 3)
-  const remainingCount = items.length - displayItems.length
-
-  let message = `🚨 *Weekly Low Stock Alert* 🚨\n\n`
-  message += `The following items are below their reorder points:\n\n`
-
-  displayItems.forEach((item, index) => {
-    message += `${index + 1}. *${item.partNumber}* - ${item.description}\n`
-    message += `   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n`
-    message += `   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n`
-    message += `   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Reorder this item>\n\n`
-  })
-
-  if (remainingCount > 0) {
-    message += `_...and ${remainingCount} more items need attention_\n\n`
-    message += `To see all low stock items, click here: <https://v0-inv-mgt.vercel.app/low-stock|View All Low Stock Items>\n\n`
-  }
-
-  message += `📋 *Instructions:*\n`
-  message += `• Click the reorder links above to create purchase requests\n`
-  message += `• Send completed requests to #PHL10-hw-lab-requests\n`
-
-  return message
+  return createSimplestLowStockMessage(items)
 }
 
 // Create a text-only version of the full alert
 export function createTextOnlyFullLowStockAlert(items: any[]) {
-  let message = `🚨 *Complete Low Stock Report* 🚨\n\n`
-  message += `*${items.length} items* are below their reorder points:\n\n`
-
-  items.forEach((item, index) => {
-    message += `${index + 1}. *${item.partNumber}* - ${item.description}\n`
-    message += `   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n`
-    message += `   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n`
-    message += `   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Reorder this item>\n\n`
-  })
-
-  message += `📋 *Action Required:*\n`
-  message += `Click the purchase request links above to create purchase requests.\n`
-  message += `Send completed requests to #PHL10-hw-lab-requests channel.`
-
-  return message
+  return createCleanFullLowStockMessage(items)
 }
 
 // NEW: Simple approval notification function
@@ -408,29 +345,25 @@ export function createSimpleApprovalMessage(change: any) {
 
   // Format the message based on change type
   let actionText = "Unknown action"
-  let emoji = "📝"
 
   if (changeType === "add") {
     actionText = "Add New Item"
-    emoji = "➕"
   } else if (changeType === "delete") {
     actionText = "Delete Item"
-    emoji = "🗑️"
   } else if (changeType === "update") {
     actionText = "Update Item"
-    emoji = "✏️"
   }
 
   const approvalUrl = `${appUrl}/requests-approval`
 
   return {
-    text: `${emoji} Inventory Change Request: ${actionText} for ${partNumber}`,
+    text: `Inventory Change Request: ${actionText} for ${partNumber}`,
     blocks: [
       {
         type: "header",
         text: {
           type: "plain_text",
-          text: `${emoji} Inventory Change Request`,
+          text: "Inventory Change Request",
           emoji: true,
         },
       },
@@ -445,7 +378,7 @@ export function createSimpleApprovalMessage(change: any) {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `🔗 *<${approvalUrl}|Review All Pending Changes>*`,
+          text: `*Review All Pending Changes:* ${approvalUrl}`,
         },
       },
     ],
@@ -480,7 +413,7 @@ export async function testSlackWebhook(customMessage?: string, customWebhookUrl?
     }
 
     const testMessage = {
-      text: customMessage || "🧪 Test message from Inventory Management System",
+      text: customMessage || "Test message from Inventory Management System",
       blocks: [
         {
           type: "section",
@@ -488,7 +421,7 @@ export async function testSlackWebhook(customMessage?: string, customWebhookUrl?
             type: "mrkdwn",
             text:
               customMessage ||
-              "🧪 *Test Message*\n\nThis is a test message to verify the Slack webhook is working correctly.",
+              "*Test Message*\n\nThis is a test message to verify the Slack webhook is working correctly.",
           },
         },
         {
