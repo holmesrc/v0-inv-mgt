@@ -10,8 +10,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 export default function SlackTestPage() {
   const [result, setResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  // ✅ UPDATED: Using your CORRECT webhook URL
   const [customWebhook, setCustomWebhook] = useState(
-    "https://hooks.slack.com/services/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",
+    "https://hooks.slack.com/services/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",
   )
 
   const testDirectWebhook = async () => {
@@ -61,14 +62,14 @@ export default function SlackTestPage() {
         },
       ]
 
-      console.log("🧪 Testing full alert with webhook:", customWebhook)
+      console.log("🧪 Testing full alert with CORRECT webhook:", customWebhook)
 
       const response = await fetch("/api/slack/send-alert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           items: testItems,
-          webhookUrl: customWebhook,
+          webhookUrl: customWebhook, // ✅ This will use the correct URL
         }),
       })
 
@@ -86,10 +87,10 @@ export default function SlackTestPage() {
     setLoading(true)
     try {
       const testPayload = {
-        text: "🧪 Direct webhook test - if you see this, your webhook is working!",
+        text: "🧪 Direct webhook test - Using your CORRECT webhook URL!",
       }
 
-      console.log("🧪 Testing custom webhook:", customWebhook)
+      console.log("🧪 Testing CORRECT webhook:", customWebhook)
 
       const response = await fetch(customWebhook, {
         method: "POST",
@@ -123,6 +124,15 @@ export default function SlackTestPage() {
           <CardTitle>🧪 Enhanced Slack Integration Debug</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Webhook URL Display */}
+          <Alert>
+            <AlertDescription>
+              <strong>Current Webhook:</strong> {customWebhook.substring(0, 60)}...
+              <br />
+              <strong>Webhook ID:</strong> B0921PKHJ2V ✅ (This should be your correct one!)
+            </AlertDescription>
+          </Alert>
+
           {/* Custom Webhook Input */}
           <div className="space-y-2">
             <Label htmlFor="webhook">Webhook URL:</Label>
@@ -166,6 +176,9 @@ export default function SlackTestPage() {
                 <strong>✅ Test Order:</strong> Try "Test Direct Webhook" first, then "Test Full Alert"
               </p>
               <p>
+                <strong>Your Webhook ID:</strong> B0921PKHJ2V (should see this in results)
+              </p>
+              <p>
                 <strong>404 "no_service":</strong> Webhook expired - create new one at api.slack.com/apps
               </p>
               <p>
@@ -173,9 +186,6 @@ export default function SlackTestPage() {
               </p>
               <p>
                 <strong>403 Forbidden:</strong> Permission denied - check app permissions in Slack
-              </p>
-              <p>
-                <strong>Timeout:</strong> Network issue - check internet connection
               </p>
             </CardContent>
           </Card>

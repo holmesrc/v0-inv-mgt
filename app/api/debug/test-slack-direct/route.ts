@@ -2,14 +2,17 @@ import { NextResponse } from "next/server"
 
 export async function GET() {
   try {
-    // Updated webhook URL
-    const webhookUrl = "https://hooks.slack.com/services/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"
+    // Use the CORRECT new webhook URL
+    const webhookUrl =
+      process.env.SLACK_WEBHOOK_URL || "https://hooks.slack.com/services/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"
 
     const testPayload = {
-      text: "🧪 Direct webhook test from debug API - New persistent webhook!",
+      text: "🧪 Direct webhook test - Using the CORRECT new webhook URL!",
     }
 
-    console.log("Testing direct webhook:", webhookUrl.substring(0, 50) + "...")
+    console.log("Testing CORRECT webhook URL...")
+    console.log("Webhook source:", process.env.SLACK_WEBHOOK_URL ? "environment" : "fallback")
+    console.log("Webhook URL:", webhookUrl.substring(0, 50) + "...")
 
     const response = await fetch(webhookUrl, {
       method: "POST",
@@ -27,12 +30,14 @@ export async function GET() {
       response: responseText,
       webhookUrl: webhookUrl.substring(0, 50) + "...",
       fullWebhookForDebug: webhookUrl,
+      webhookSource: process.env.SLACK_WEBHOOK_URL ? "environment" : "fallback",
+      environmentVariableSet: !!process.env.SLACK_WEBHOOK_URL,
     })
   } catch (error) {
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
-      webhookUrl: "https://hooks.slack.com/services/T053GDZ6J/B091G2FJ64B/...",
+      environmentVariableSet: !!process.env.SLACK_WEBHOOK_URL,
     })
   }
 }
