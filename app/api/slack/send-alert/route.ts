@@ -14,38 +14,22 @@ export async function POST(request: NextRequest) {
     console.log("🚀 Slack send-alert API called")
 
     const body = await request.json()
-    console.log("📦 Request body:", body)
-
     const { items } = body
 
     if (!items || !Array.isArray(items)) {
-      console.error("❌ Invalid items data:", items)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid items data - expected array",
-        },
-        { status: 400 },
-      )
+      return NextResponse.json({ success: false, error: "Invalid items data" }, { status: 400 })
     }
 
     if (items.length === 0) {
-      console.log("⚠️ No items to alert")
-      return NextResponse.json(
-        {
-          success: false,
-          error: "No items to alert",
-        },
-        { status: 400 },
-      )
+      return NextResponse.json({ success: false, error: "No items to alert" }, { status: 400 })
     }
 
     console.log(`📊 Processing ${items.length} low stock items`)
 
-    // Hardcoded webhook URL
-    const webhookUrl = "https://hooks.slack.com/services/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"
+    // Updated webhook URL
+    const webhookUrl = "https://hooks.slack.com/services/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"
 
-    // Create the message text
+    // Create the message text - simplified format to avoid payload issues
     let messageText = "🚨 Weekly Low Stock Alert 🚨\n\n"
 
     // Show first 3 items in detail
@@ -69,15 +53,12 @@ export async function POST(request: NextRequest) {
     messageText += "• Click the purchase request links above\n"
     messageText += "• Send completed requests to #PHL10-hw-lab-requests channel"
 
+    // Simplified payload to avoid invalid_payload error
     const payload = {
-      channel: "#inventory-alerts",
-      username: "Part Order APP",
-      icon_emoji: ":package:",
       text: messageText,
     }
 
     console.log("📤 Sending to Slack:", {
-      url: webhookUrl.substring(0, 50) + "...",
       itemCount: items.length,
       messageLength: messageText.length,
     })
@@ -91,7 +72,6 @@ export async function POST(request: NextRequest) {
     })
 
     console.log("📡 Slack response status:", response.status)
-    console.log("📡 Slack response headers:", Object.fromEntries(response.headers.entries()))
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -122,7 +102,6 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
-        details: error instanceof Error ? error.stack : String(error),
       },
       { status: 500 },
     )

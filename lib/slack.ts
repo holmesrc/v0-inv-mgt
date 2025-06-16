@@ -1,5 +1,5 @@
-// Simple Slack webhook integration
-const SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
+// Updated Slack webhook integration with new URL
+const SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
 
 export interface LowStockItem {
   partNumber: string
@@ -20,13 +20,10 @@ export interface SlackResult {
 export async function testSlackConnection(): Promise<SlackResult> {
   try {
     const testPayload = {
-      channel: "#inventory-alerts",
-      username: "Part Order APP",
-      icon_emoji: ":white_check_mark:",
       text: "✅ Slack integration test successful! Your inventory alerts are working.",
     }
 
-    console.log("🧪 Testing Slack connection...")
+    console.log("🧪 Testing Slack connection with new webhook...")
 
     const response = await fetch(SLACK_WEBHOOK_URL, {
       method: "POST",
