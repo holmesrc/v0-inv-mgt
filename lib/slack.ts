@@ -1,5 +1,5 @@
-// Use the working webhook URL directly for now, then move back to env var
-const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || process.env.SLACK_WEBHOOK_URL_BACKUP
+// Completely bypass the cached SLACK_WEBHOOK_URL and use only the backup
+const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL_NEW || process.env.SLACK_WEBHOOK_URL_BACKUP
 
 export interface LowStockItem {
   partNumber: string
@@ -20,14 +20,16 @@ export interface SlackResult {
 export async function sendSlackMessage(message: string): Promise<SlackResult> {
   try {
     if (!SLACK_WEBHOOK_URL) {
-      console.log("❌ SLACK_WEBHOOK_URL not found")
+      console.log("❌ No webhook URL found in any environment variable")
       return {
         success: false,
-        error: "Slack not configured",
+        error: "Slack not configured - no webhook URL found",
       }
     }
 
-    console.log("🔍 Webhook URL exists:", !!SLACK_WEBHOOK_URL)
+    console.log("🔍 Using webhook URL exists:", !!SLACK_WEBHOOK_URL)
+    console.log("🔍 Webhook URL length:", SLACK_WEBHOOK_URL.length)
+    console.log("🔍 Webhook URL ends with:", SLACK_WEBHOOK_URL.slice(-10))
     console.log("🔍 Message length:", message.length)
     console.log("🔍 Message preview:", message.substring(0, 100) + "...")
 

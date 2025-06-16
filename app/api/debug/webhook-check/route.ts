@@ -2,29 +2,53 @@ import { type NextRequest, NextResponse } from "next/server"
 
 export async function GET(request: NextRequest) {
   try {
-    const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL
-
-    if (!SLACK_WEBHOOK_URL) {
-      return NextResponse.json({
-        exists: false,
-        message: "SLACK_WEBHOOK_URL not found",
-      })
+    // Check all possible webhook environment variables
+    const webhookUrls = {
+      SLACK_WEBHOOK_URL: process.env.SLACK_WEBHOOK_URL,
+      SLACK_WEBHOOK_URL_BACKUP: process.env.SLACK_WEBHOOK_URL_BACKUP,
+      SLACK_WEBHOOK_URL_NEW: process.env.SLACK_WEBHOOK_URL_NEW,
     }
 
-    // Show first and last few characters to verify it's different
-    const urlLength = SLACK_WEBHOOK_URL.length
-    const firstPart = SLACK_WEBHOOK_URL.substring(0, 35)
-    const lastPart = SLACK_WEBHOOK_URL.substring(urlLength - 10)
+    const results: any = {
+      environmentVariables: {},
+      activeWebhook: null,
+    }
 
-    return NextResponse.json({
-      exists: true,
-      length: urlLength,
-      firstPart,
-      lastPart,
-      format: SLACK_WEBHOOK_URL.startsWith("https://hooks.slack.com/services/"),
-      // This will help us see if it's actually a different URL
-      hash: SLACK_WEBHOOK_URL.split("/").pop()?.substring(0, 8) + "...",
-    })
+    // Check each environment variable
+    for (const [name, url] of Object.entries(webhookUrls)) {
+      if (url) {
+        const urlLength = url.length
+        const firstPart = url.substring(0, 35)
+        const lastPart = url.substring(urlLength - 10)
+        const hash = url.split("/").pop()?.substring(0, 8) + "..."
+
+        results.environmentVariables[name] = {
+          exists: true,
+          length: urlLength,
+          firstPart,
+          lastPart,
+          format: url.startsWith("https://hooks.slack.com/services/"),
+          hash,
+        }
+      } else {
+        results.environmentVariables[name] = {
+          exists: false,
+        }
+      }
+    }
+
+    // Determine which webhook is actually being used (same logic as lib/slack.ts)
+    const activeUrl = process.env.SLACK_WEBHOOK_URL_NEW || process.env.SLACK_WEBHOOK_URL_BACKUP
+    if (activeUrl) {
+      results.activeWebhook = {
+        source: activeUrl === process.env.SLACK_WEBHOOK_URL_NEW ? "SLACK_WEBHOOK_URL_NEW" : "SLACK_WEBHOOK_URL_BACKUP",
+        length: activeUrl.length,
+        lastPart: activeUrl.substring(activeUrl.length - 10),
+        hash: activeUrl.split("/").pop()?.substring(0, 8) + "...",
+      }
+    }
+
+    return NextResponse.json(results)
   } catch (error) {
     return NextResponse.json(
       {
