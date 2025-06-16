@@ -2,55 +2,37 @@ import { NextResponse } from "next/server"
 
 export async function GET() {
   try {
-    console.log("🧪 Testing Slack webhook directly...")
+    // Updated webhook URL
+    const webhookUrl = "https://hooks.slack.com/services/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"
 
-    const webhookUrl = "https://hooks.slack.com/services/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"
-
-    // Simple test message
-    const payload = {
-      text: "🧪 Direct webhook test from debug endpoint",
-      channel: "#inventory-alerts",
-      username: "Debug Test",
-      icon_emoji: ":test_tube:",
+    const testPayload = {
+      text: "🧪 Direct webhook test from debug API",
     }
 
-    console.log("📤 Sending test payload:", payload)
+    console.log("Testing direct webhook:", webhookUrl.substring(0, 50) + "...")
 
     const response = await fetch(webhookUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(testPayload),
     })
-
-    console.log("📡 Response status:", response.status)
-    console.log("📡 Response headers:", Object.fromEntries(response.headers.entries()))
 
     const responseText = await response.text()
-    console.log("📡 Response body:", responseText)
-
-    if (!response.ok) {
-      return NextResponse.json({
-        success: false,
-        error: `Slack webhook failed: ${response.status}`,
-        details: responseText,
-        webhookUrl: webhookUrl.substring(0, 50) + "...",
-      })
-    }
 
     return NextResponse.json({
-      success: true,
-      message: "Slack webhook test successful!",
-      responseText,
+      success: response.ok,
       status: response.status,
+      response: responseText,
+      webhookUrl: webhookUrl.substring(0, 50) + "...",
+      fullWebhookForDebug: webhookUrl,
     })
   } catch (error) {
-    console.error("❌ Direct Slack test error:", error)
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
-      stack: error instanceof Error ? error.stack : undefined,
+      webhookUrl: "https://hooks.slack.com/services/T053GDZ6J/B092BBK0Z6U/...",
     })
   }
 }
