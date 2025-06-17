@@ -135,53 +135,19 @@ export async function POST(request: NextRequest) {
 
     // Now try to upsert the settings
     try {
-      // First check if the setting already exists
-      const { data: existingSettings, error: checkError } = await supabase
-        .from("settings")
-        .select("*")
-        .eq("key", key)
-        .maybeSingle()
+      const { error } = await supabase.from("settings").upsert({
+        key,
+        value,
+        updated_at: new Date().toISOString(),
+      })
 
-      if (checkError) {
-        console.error("Error checking existing settings:", checkError)
-        return NextResponse.json(
-          {
-            error: "Failed to check existing settings",
-            details: checkError.message,
-          },
-          { status: 500 },
-        )
-      }
-
-      let result
-
-      if (existingSettings) {
-        // Update existing setting
-        console.log(`Setting ${key} exists, updating...`)
-        result = await supabase
-          .from("settings")
-          .update({
-            value,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("key", key)
-      } else {
-        // Insert new setting
-        console.log(`Setting ${key} doesn't exist, inserting...`)
-        result = await supabase.from("settings").insert({
-          key,
-          value,
-          updated_at: new Date().toISOString(),
-        })
-      }
-
-      if (result.error) {
-        console.error("Error saving settings:", result.error)
+      if (error) {
+        console.error("Error saving settings:", error)
         return NextResponse.json(
           {
             error: "Failed to save settings",
-            details: result.error.message,
-            code: result.error.code,
+            details: error.message,
+            code: error.code,
           },
           { status: 500 },
         )

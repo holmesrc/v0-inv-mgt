@@ -24,13 +24,21 @@ import {
   Search,
   Settings,
   ShoppingCart,
+  Bell,
   Info,
+  List,
   Download,
   RefreshCw,
   Database,
-  ExternalLink,
 } from "lucide-react"
 import type { InventoryItem, PurchaseRequest, AlertSettings } from "@/types/inventory"
+import {
+  sendSlackMessage,
+  formatPurchaseRequest,
+  sendInteractiveLowStockAlert,
+  sendInteractiveFullLowStockAlert,
+  testSlackConnection,
+} from "@/lib/slack"
 import { downloadExcelFile } from "@/lib/excel-generator"
 import FileUpload from "./file-upload"
 import AddInventoryItem from "./add-inventory-item"
@@ -55,22 +63,31 @@ export default function InventoryDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [supabaseConfigured, setSupabaseConfigured] = useState<boolean | null>(null)
-  const [isV0Environment, setIsV0Environment] = useState(false)
+  const [slackConfigured, setSlackConfigured] = useState<boolean | null>(null)
 
   // Show upload screen if no inventory data
   const [showUpload, setShowUpload] = useState(false)
 
   // Load data from database on component mount
   useEffect(() => {
-    // Check if we're in the v0 preview environment
-    const hostname = window.location.hostname
-    const isV0 =
-      hostname.includes("v0.dev") || hostname.includes("vusercontent.net") || hostname.includes("lite.vusercontent.net")
-    setIsV0Environment(isV0)
-
     loadInventoryFromDatabase()
     loadSettingsFromDatabase()
+    checkSlackConfiguration()
   }, [])
+
+  // Check Slack configuration
+  const checkSlackConfiguration = async () => {
+    try {
+      const result = await testSlackConnection()
+      setSlackConfigured(result.success)
+      if (!result.success) {
+        console.warn("Slack configuration issue:", result.message)
+      }
+    } catch (error) {
+      console.error("Error checking Slack configuration:", error)
+      setSlackConfigured(false)
+    }
+  }
 
   const loadInventoryFromDatabase = async () => {
     try {
@@ -369,12 +386,8 @@ export default function InventoryDashboard() {
     }
   }
 
-  // Enhance the saveSettingsToDatabase function with better error handling:
-
   const saveSettingsToDatabase = async (settings: AlertSettings) => {
     try {
-      console.log("Saving settings to database:", settings)
-
       const response = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -384,39 +397,21 @@ export default function InventoryDashboard() {
         }),
       })
 
-      const responseText = await response.text()
-      let result
-
-      try {
-        result = JSON.parse(responseText)
-      } catch (parseError) {
-        console.error("Failed to parse settings response:", parseError, "Response:", responseText)
-        throw new Error(`Invalid response: ${responseText.substring(0, 100)}`)
-      }
-
       if (!response.ok) {
-        throw new Error(result.error || result.details || `HTTP ${response.status}: ${response.statusText}`)
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
+      const result = await response.json()
       if (!result.success) {
         throw new Error(result.error || "Failed to save settings")
       }
 
-      console.log("Settings saved successfully:", result)
       localStorage.setItem("alertSettings", JSON.stringify(settings))
-      return result
     } catch (error) {
       console.error("Error saving settings:", error)
       // Still save to localStorage even if database fails
       localStorage.setItem("alertSettings", JSON.stringify(settings))
-
-      // Don't throw the error during sync to prevent the entire sync from failing
-      if (new Error().stack?.includes("handleManualSync")) {
-        console.warn("Settings sync failed but continuing with inventory sync")
-        return { success: false, localOnly: true }
-      } else {
-        throw error
-      }
+      throw error
     }
   }
 
@@ -575,7 +570,30 @@ export default function InventoryDashboard() {
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
-          alert("✅ Item submitted for approval! Check the requests-approval page for notifications.")
+          if (slackConfigured) {
+            alert("✅ Item submitted for approval! An approval request has been sent to the inventory alerts channel.")
+
+            // Send Slack approval request
+            try {
+              await fetch("/api/slack/send-approval-request", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  changeType: "add",
+                  itemData,
+                  requestedBy: "Current User",
+                  changeId: result.data.id,
+                }),
+              })
+            } catch (slackError) {
+              console.error("Failed to send Slack notification:", slackError)
+              // Don't fail the entire operation if Slack fails
+            }
+          } else {
+            alert("✅ Item submitted for approval! (Slack notifications are not configured)")
+          }
         } else {
           throw new Error(result.error || "Failed to submit for approval")
         }
@@ -653,7 +671,32 @@ export default function InventoryDashboard() {
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
-          alert("✅ Deletion submitted for approval! Check the requests-approval page for notifications.")
+          if (slackConfigured) {
+            alert(
+              "✅ Deletion submitted for approval! An approval request has been sent to the inventory alerts channel.",
+            )
+
+            // Send Slack approval request
+            try {
+              await fetch("/api/slack/send-approval-request", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  changeType: "delete",
+                  originalData,
+                  requestedBy: "Current User",
+                  changeId: result.data.id,
+                }),
+              })
+            } catch (slackError) {
+              console.error("Failed to send Slack notification:", slackError)
+              // Don't fail the entire operation if Slack fails
+            }
+          } else {
+            alert("✅ Deletion submitted for approval! (Slack notifications are not configured)")
+          }
         } else {
           throw new Error(result.error || "Failed to submit for approval")
         }
@@ -684,15 +727,132 @@ export default function InventoryDashboard() {
       description: item["Part description"],
       quantity,
       urgency,
-      requestedBy: requester || "System User",
+      requestedBy: requester || "System User", // Use the provided requester
       requestDate: new Date(),
       status: "pending",
     }
 
     setPurchaseRequests((prev) => [...prev, request])
 
-    // Show success message
-    alert(`✅ Purchase request created for ${item["Part number"]}! Quantity: ${quantity}, Urgency: ${urgency}`)
+    // Send to Slack if configured
+    if (slackConfigured) {
+      try {
+        await sendSlackMessage(formatPurchaseRequest(request))
+        alert(`✅ Purchase request created and sent to Slack for ${item["Part number"]}!`)
+      } catch (error) {
+        console.error("Failed to send purchase request to Slack:", error)
+        alert(`✅ Purchase request created for ${item["Part number"]} (Slack notification failed)`)
+      }
+    } else {
+      alert(`✅ Purchase request created for ${item["Part number"]} (Slack not configured)`)
+    }
+  }
+
+  // Send low stock alert with better error handling
+  const sendLowStockAlert = async () => {
+    if (lowStockItems.length === 0) {
+      alert("No low stock items to report!")
+      return
+    }
+
+    if (!slackConfigured) {
+      alert("❌ Slack is not configured. Please check your SLACK_WEBHOOK_URL environment variable.")
+      return
+    }
+
+    const formattedItems = lowStockItems.map((item) => ({
+      partNumber: item["Part number"],
+      description: item["Part description"],
+      supplier: item["Supplier"],
+      location: item["Location"],
+      currentStock: item["QTY"],
+      reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
+    }))
+
+    console.log("Sending low stock alert with items:", formattedItems)
+
+    try {
+      // Always try interactive message first
+      const result = await sendInteractiveLowStockAlert(formattedItems)
+      console.log("Low stock alert result:", result)
+      alert(
+        `✅ Low stock alert sent successfully! Showing ${Math.min(3, formattedItems.length)} items with "Show All" button for ${formattedItems.length} total items.`,
+      )
+    } catch (error) {
+      console.error("Failed to send interactive low stock alert:", error)
+
+      // Provide specific error messages based on the error type
+      if (error instanceof Error) {
+        if (error.message.includes("webhook URL is invalid") || error.message.includes("no_service")) {
+          alert(`❌ Slack webhook configuration error:
+
+${error.message}
+
+Please check your Slack webhook URL in the environment variables.`)
+        } else {
+          alert(`❌ Failed to send Slack alert:
+
+${error.message}
+
+Please check your Slack configuration.`)
+        }
+      } else {
+        alert("❌ Failed to send Slack alert. Please check your Slack webhook configuration.")
+      }
+    }
+  }
+
+  // Send full low stock alert with better error handling
+  const sendFullAlert = async () => {
+    if (lowStockItems.length === 0) {
+      alert("No low stock items to report!")
+      return
+    }
+
+    if (!slackConfigured) {
+      alert("❌ Slack is not configured. Please check your SLACK_WEBHOOK_URL environment variable.")
+      return
+    }
+
+    const formattedItems = lowStockItems.map((item) => ({
+      partNumber: item["Part number"],
+      description: item["Part description"],
+      supplier: item["Supplier"],
+      location: item["Location"],
+      currentStock: item["QTY"],
+      reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
+    }))
+
+    console.log("Sending full alert with items:", formattedItems)
+
+    try {
+      const result = await sendInteractiveFullLowStockAlert(formattedItems)
+      console.log("Full alert result:", result)
+      alert(
+        `✅ Full low stock alert sent successfully! Showing all ${formattedItems.length} items with individual reorder buttons.`,
+      )
+    } catch (error) {
+      console.error("Failed to send interactive full alert:", error)
+
+      // Provide specific error messages based on the error type
+      if (error instanceof Error) {
+        if (error.message.includes("webhook URL is invalid") || error.message.includes("no_service")) {
+          alert(`❌ Slack webhook configuration error:
+
+${error.message}
+
+Please check your Slack webhook URL in the environment variables.`)
+        } else {
+          alert(`❌ Failed to send full Slack alert:
+
+${error.message}
+
+Please check your Slack configuration.`)
+        }
+      } else {
+        alert("❌ Failed to send full Slack alert. Please check your Slack webhook configuration.")
+      }
+    }
   }
 
   // Handle data loading
@@ -888,18 +1048,14 @@ export default function InventoryDashboard() {
             {syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
             {syncing ? "Syncing..." : "Sync to Database"}
           </Button>
-          <Button onClick={() => window.open("/requests-approval", "_blank")} variant="outline">
-            <AlertTriangle className="w-4 h-4 mr-2" />
-            Review Requests
+          <Button onClick={sendLowStockAlert} variant="outline" disabled={!slackConfigured}>
+            <Bell className="w-4 h-4 mr-2" />
+            {slackConfigured ? "Send Alert Now" : "Send Alert (Not Configured)"}
           </Button>
-          {isV0Environment && (
-            <Button
-              onClick={() => window.open(process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app", "_blank")}
-              variant="outline"
-              className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
-            >
-              <ExternalLink className="w-4 h-4 mr-2" />
-              Open Deployed App
+          {lowStockItems.length > 3 && (
+            <Button onClick={sendFullAlert} variant="outline" disabled={!slackConfigured}>
+              <List className="w-4 h-4 mr-2" />
+              {slackConfigured ? "Send Full Alert" : "Send Full Alert (Not Configured)"}
             </Button>
           )}
           <Dialog>
@@ -912,9 +1068,47 @@ export default function InventoryDashboard() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Alert Settings</DialogTitle>
-                <DialogDescription>Configure your inventory alert settings</DialogDescription>
+                <DialogDescription>Configure your weekly low stock alerts</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={alertSettings.enabled}
+                    onChange={(e) => handleSettingsUpdate({ ...alertSettings, enabled: e.target.checked })}
+                  />
+                  <Label>Enable weekly alerts</Label>
+                </div>
+                <div>
+                  <Label>Day of week</Label>
+                  <Select
+                    value={alertSettings.dayOfWeek.toString()}
+                    onValueChange={(value) =>
+                      handleSettingsUpdate({ ...alertSettings, dayOfWeek: Number.parseInt(value) })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Sunday</SelectItem>
+                      <SelectItem value="1">Monday</SelectItem>
+                      <SelectItem value="2">Tuesday</SelectItem>
+                      <SelectItem value="3">Wednesday</SelectItem>
+                      <SelectItem value="4">Thursday</SelectItem>
+                      <SelectItem value="5">Friday</SelectItem>
+                      <SelectItem value="6">Saturday</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Time</Label>
+                  <Input
+                    type="time"
+                    value={alertSettings.time}
+                    onChange={(e) => handleSettingsUpdate({ ...alertSettings, time: e.target.value })}
+                  />
+                </div>
                 <div>
                   <Label>Default reorder point</Label>
                   <Input
@@ -964,37 +1158,26 @@ export default function InventoryDashboard() {
         </Alert>
       )}
 
-      {/* V0 Environment Warning */}
-      {isV0Environment && (
-        <Card className="border-blue-200 bg-blue-50">
+      {/* Pending Changes Display */}
+      <PendingChangesDisplay />
+
+      {/* Slack Configuration Warning */}
+      {slackConfigured === false && (
+        <Card className="border-yellow-200 bg-yellow-50">
           <CardContent className="pt-4">
             <div className="flex items-start gap-2">
-              <Info className="w-5 h-5 text-blue-600 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
               <div>
-                <h3 className="font-medium text-blue-800 mb-1">v0 Preview Environment</h3>
-                <p className="text-sm text-blue-700">
-                  You're currently viewing the v0 preview. Database features require server-side environment variables
-                  that are only available in the deployed application.
+                <h3 className="font-medium text-yellow-800 mb-1">Slack Not Configured</h3>
+                <p className="text-sm text-yellow-700">
+                  Slack webhook URL is invalid or not configured. Slack alerts and notifications will not work. Please
+                  check your SLACK_WEBHOOK_URL environment variable.
                 </p>
-                <Button
-                  onClick={() =>
-                    window.open(process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app", "_blank")
-                  }
-                  variant="outline"
-                  size="sm"
-                  className="mt-2 bg-white hover:bg-blue-50"
-                >
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Open Deployed App for Full Functionality
-                </Button>
               </div>
             </div>
           </CardContent>
         </Card>
       )}
-
-      {/* Pending Changes Display */}
-      <PendingChangesDisplay />
 
       {/* Supabase Not Configured Warning */}
       {supabaseConfigured === false && (
