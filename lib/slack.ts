@@ -1,4 +1,4 @@
-// TEMPORARY: Hardcode the working webhook URL to bypass Vercel caching issues
+// TEMPORARY: Use the correct working webhook URL to bypass Vercel caching issues
 // TODO: Remove this once environment variables work properly
 const WORKING_WEBHOOK_URL = "https://hooks.slack.com/services/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"
 

@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 
 export async function GET(request: NextRequest) {
   try {
-    // This mirrors the exact logic from lib/slack.ts
+    // This mirrors the exact logic from lib/slack.ts - CORRECTED URL
     const WORKING_WEBHOOK_URL = "https://hooks.slack.com/services/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"
 
     const SLACK_WEBHOOK_URL =
