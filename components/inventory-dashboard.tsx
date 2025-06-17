@@ -29,7 +29,6 @@ import {
   RefreshCw,
   Database,
   ExternalLink,
-  Bell,
 } from "lucide-react"
 import type { InventoryItem, PurchaseRequest, AlertSettings } from "@/types/inventory"
 import { downloadExcelFile } from "@/lib/excel-generator"
@@ -57,7 +56,6 @@ export default function InventoryDashboard() {
   const [syncing, setSyncing] = useState(false)
   const [supabaseConfigured, setSupabaseConfigured] = useState<boolean | null>(null)
   const [isV0Environment, setIsV0Environment] = useState(false)
-  const [sendingAlert, setSendingAlert] = useState(false)
 
   // Show upload screen if no inventory data
   const [showUpload, setShowUpload] = useState(false)
@@ -544,66 +542,6 @@ export default function InventoryDashboard() {
     }
   }
 
-  // Send Slack alert
-  const sendSlackAlert = async () => {
-    if (lowStockItems.length === 0) {
-      alert("No low stock items to report!")
-      return
-    }
-
-    if (isV0Environment) {
-      alert(
-        "🔧 Slack alerts are not available in the v0 preview environment.\n\nTo test Slack functionality:\n• Deploy your app to Vercel\n• Test on your deployed URL\n• Environment variables are only available on the server",
-      )
-      return
-    }
-
-    try {
-      setSendingAlert(true)
-
-      // Format items for Slack
-      const formattedItems = lowStockItems.map((item) => ({
-        partNumber: item["Part number"],
-        description: item["Part description"],
-        supplier: item["Supplier"],
-        location: item["Location"],
-        currentStock: item["QTY"],
-        reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
-      }))
-
-      console.log("🚀 Sending Slack alert for", formattedItems.length, "items")
-
-      const response = await fetch("/api/slack/send-alert", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          items: formattedItems,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-
-      const result = await response.json()
-
-      if (result.success) {
-        alert(
-          `✅ Slack alert sent successfully!\n\nSent alert for ${result.itemCount} low stock items to #inventory-alerts channel.`,
-        )
-      } else {
-        throw new Error(result.error || "Failed to send alert")
-      }
-    } catch (error) {
-      console.error("Failed to send Slack alert:", error)
-      alert(`❌ Failed to send Slack alert:\n\n${error instanceof Error ? error.message : "Unknown error"}`)
-    } finally {
-      setSendingAlert(false)
-    }
-  }
-
   // Add new inventory item with enhanced error handling
   const addInventoryItem = async (newItem: Omit<InventoryItem, "id" | "lastUpdated">) => {
     console.log("🚀 addInventoryItem called with:", newItem)
@@ -753,7 +691,7 @@ export default function InventoryDashboard() {
 
     setPurchaseRequests((prev) => [...prev, request])
 
-    // Show success message instead of sending to Slack
+    // Show success message
     alert(`✅ Purchase request created for ${item["Part number"]}! Quantity: ${quantity}, Urgency: ${urgency}`)
   }
 
@@ -950,10 +888,6 @@ export default function InventoryDashboard() {
             {syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
             {syncing ? "Syncing..." : "Sync to Database"}
           </Button>
-          <Button onClick={sendSlackAlert} variant="outline" disabled={sendingAlert || isV0Environment}>
-            {sendingAlert ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Bell className="w-4 h-4 mr-2" />}
-            {sendingAlert ? "Sending..." : isV0Environment ? "Send Alert (v0 Preview)" : "Send Slack Alert"}
-          </Button>
           <Button onClick={() => window.open("/requests-approval", "_blank")} variant="outline">
             <AlertTriangle className="w-4 h-4 mr-2" />
             Review Requests
@@ -978,47 +912,9 @@ export default function InventoryDashboard() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Alert Settings</DialogTitle>
-                <DialogDescription>Configure your weekly low stock alerts</DialogDescription>
+                <DialogDescription>Configure your inventory alert settings</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={alertSettings.enabled}
-                    onChange={(e) => handleSettingsUpdate({ ...alertSettings, enabled: e.target.checked })}
-                  />
-                  <Label>Enable weekly alerts</Label>
-                </div>
-                <div>
-                  <Label>Day of week</Label>
-                  <Select
-                    value={alertSettings.dayOfWeek.toString()}
-                    onValueChange={(value) =>
-                      handleSettingsUpdate({ ...alertSettings, dayOfWeek: Number.parseInt(value) })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0">Sunday</SelectItem>
-                      <SelectItem value="1">Monday</SelectItem>
-                      <SelectItem value="2">Tuesday</SelectItem>
-                      <SelectItem value="3">Wednesday</SelectItem>
-                      <SelectItem value="4">Thursday</SelectItem>
-                      <SelectItem value="5">Friday</SelectItem>
-                      <SelectItem value="6">Saturday</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Time</Label>
-                  <Input
-                    type="time"
-                    value={alertSettings.time}
-                    onChange={(e) => handleSettingsUpdate({ ...alertSettings, time: e.target.value })}
-                  />
-                </div>
                 <div>
                   <Label>Default reorder point</Label>
                   <Input
@@ -1077,8 +973,8 @@ export default function InventoryDashboard() {
               <div>
                 <h3 className="font-medium text-blue-800 mb-1">v0 Preview Environment</h3>
                 <p className="text-sm text-blue-700">
-                  You're currently viewing the v0 preview. Slack alerts and database features require server-side
-                  environment variables that are only available in the deployed application.
+                  You're currently viewing the v0 preview. Database features require server-side environment variables
+                  that are only available in the deployed application.
                 </p>
                 <Button
                   onClick={() =>
@@ -1111,24 +1007,6 @@ export default function InventoryDashboard() {
                 <p className="text-sm text-orange-700">
                   Supabase database connection failed. Your data is being stored locally in your browser only. Please
                   check your environment variables and database setup
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Slack Alert Status */}
-      {lowStockItems.length > 0 && !isV0Environment && (
-        <Card className="border-yellow-200 bg-yellow-50">
-          <CardContent className="pt-4">
-            <div className="flex items-start gap-2">
-              <Bell className="w-5 h-5 text-yellow-600 mt-0.5" />
-              <div>
-                <h3 className="font-medium text-yellow-800 mb-1">Low Stock Alert Available</h3>
-                <p className="text-sm text-yellow-700">
-                  You have {lowStockItems.length} items with low stock. Click "Send Slack Alert" to notify your team in
-                  the #inventory-alerts channel.
                 </p>
               </div>
             </div>
