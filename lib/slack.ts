@@ -1,10 +1,5 @@
-// TEMPORARY: Use the correct working webhook URL to bypass Vercel caching issues
-// TODO: Remove this once environment variables work properly
-const WORKING_WEBHOOK_URL = "https://hooks.slack.com/services/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"
-
-// Use hardcoded URL as fallback if env vars are still cached
-const SLACK_WEBHOOK_URL =
-  process.env.SLACK_WEBHOOK_URL_NEW || process.env.SLACK_WEBHOOK_URL_BACKUP || WORKING_WEBHOOK_URL
+// Use ONLY environment variables - no hardcoded webhooks
+const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL_NEW || process.env.SLACK_WEBHOOK_URL_BACKUP
 
 export interface LowStockItem {
   partNumber: string
@@ -21,25 +16,18 @@ export interface SlackResult {
   itemCount?: number
 }
 
-// Core Slack message sending function with debugging
+// Core Slack message sending function
 export async function sendSlackMessage(message: string): Promise<SlackResult> {
   try {
     if (!SLACK_WEBHOOK_URL) {
-      console.log("❌ No webhook URL found")
+      console.log("❌ No webhook URL found in environment variables")
       return {
         success: false,
         error: "Slack not configured - no webhook URL found",
       }
     }
 
-    console.log("🔍 Using webhook URL exists:", !!SLACK_WEBHOOK_URL)
-    console.log("🔍 Webhook URL length:", SLACK_WEBHOOK_URL.length)
-    console.log("🔍 Webhook URL ends with:", SLACK_WEBHOOK_URL.slice(-10))
-    console.log("🔍 Message length:", message.length)
-    console.log("🔍 Message preview:", message.substring(0, 100) + "...")
-
     const payload = { text: message }
-    console.log("🔍 Payload:", JSON.stringify(payload, null, 2))
 
     const response = await fetch(SLACK_WEBHOOK_URL, {
       method: "POST",
@@ -49,24 +37,17 @@ export async function sendSlackMessage(message: string): Promise<SlackResult> {
       body: JSON.stringify(payload),
     })
 
-    console.log("🔍 Response status:", response.status)
-    console.log("🔍 Response headers:", Object.fromEntries(response.headers.entries()))
-
     const responseText = await response.text()
-    console.log("🔍 Response body:", responseText)
 
     if (!response.ok) {
-      console.error("❌ Slack request failed")
       return {
         success: false,
         error: `HTTP ${response.status}: ${responseText}`,
       }
     }
 
-    console.log("✅ Slack message sent successfully")
     return { success: true }
   } catch (error) {
-    console.error("❌ Slack error:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -74,9 +55,8 @@ export async function sendSlackMessage(message: string): Promise<SlackResult> {
   }
 }
 
-// Test connection with detailed logging
+// Test connection
 export async function testSlackConnection(): Promise<SlackResult> {
-  console.log("🧪 Testing Slack connection...")
   return await sendSlackMessage("✅ Slack integration test successful!")
 }
 
