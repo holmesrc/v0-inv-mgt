@@ -1,5 +1,10 @@
-// Completely bypass the cached SLACK_WEBHOOK_URL and use only the backup
-const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL_NEW || process.env.SLACK_WEBHOOK_URL_BACKUP
+// TEMPORARY: Hardcode the working webhook URL to bypass Vercel caching issues
+// TODO: Remove this once environment variables work properly
+const WORKING_WEBHOOK_URL = "https://hooks.slack.com/services/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"
+
+// Use hardcoded URL as fallback if env vars are still cached
+const SLACK_WEBHOOK_URL =
+  process.env.SLACK_WEBHOOK_URL_NEW || process.env.SLACK_WEBHOOK_URL_BACKUP || WORKING_WEBHOOK_URL
 
 export interface LowStockItem {
   partNumber: string
@@ -20,7 +25,7 @@ export interface SlackResult {
 export async function sendSlackMessage(message: string): Promise<SlackResult> {
   try {
     if (!SLACK_WEBHOOK_URL) {
-      console.log("❌ No webhook URL found in any environment variable")
+      console.log("❌ No webhook URL found")
       return {
         success: false,
         error: "Slack not configured - no webhook URL found",
