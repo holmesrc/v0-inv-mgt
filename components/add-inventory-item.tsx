@@ -20,7 +20,7 @@ import { Plus, AlertTriangle } from "lucide-react"
 import type { InventoryItem } from "@/types/inventory"
 
 interface AddInventoryItemProps {
-  onAddItem: (item: Omit<InventoryItem, "id" | "lastUpdated">) => void
+  onAddItem: (item: Omit<InventoryItem, "id" | "lastUpdated">, requester: string) => void
   packageTypes: string[]
   suppliers: string[]
   locations: string[]
@@ -39,6 +39,7 @@ export default function AddInventoryItem({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [formData, setFormData] = useState({
+    requester: "",
     partNumber: "",
     mfgPartNumber: "",
     qty: 0,
@@ -155,6 +156,14 @@ export default function AddInventoryItem({
 
     try {
       // Validate required fields
+      if (!formData.requester.trim()) {
+        throw new Error("Requester name is required")
+      }
+
+      if (formData.requester.trim().toLowerCase() === "current user") {
+        throw new Error("'Current User' is not a valid requester name. Please enter your actual name.")
+      }
+
       if (!formData.partNumber.trim()) {
         throw new Error("Part number is required and cannot be empty")
       }
@@ -172,40 +181,16 @@ export default function AddInventoryItem({
         reorderPoint: formData.reorderPoint,
       }
 
-      // First try to add directly to the database
-      try {
-        console.log("📤 Sending item directly to API...")
-        const response = await fetch("/api/inventory/add-item", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ item: newItem }),
-        })
+      console.log("📤 Calling onAddItem with:", newItem, "requester:", formData.requester)
 
-        const result = await response.json()
+      // Call the parent function to add the item (which will submit for approval)
+      await onAddItem(newItem, formData.requester.trim())
 
-        if (!response.ok) {
-          console.warn("⚠️ API returned error:", result)
-          throw new Error(result.error || result.details || "Failed to add item to database")
-        }
-
-        console.log("✅ Item added to database successfully:", result)
-        setSuccess("Item added successfully!")
-      } catch (apiError) {
-        console.error("❌ Error adding item via API:", apiError)
-        // Continue with local add even if API fails
-      }
-
-      console.log("📤 Calling onAddItem with:", newItem)
-
-      // Call the parent function to add the item locally
-      await onAddItem(newItem)
-
-      console.log("✅ Item added successfully")
+      console.log("✅ Item submitted for approval successfully")
 
       // Reset form
       setFormData({
+        requester: "",
         partNumber: "",
         mfgPartNumber: "",
         qty: 0,
@@ -219,14 +204,16 @@ export default function AddInventoryItem({
       setUseCustomLocation(false)
       setUseCustomPackage(false)
 
+      setSuccess("Item submitted for approval!")
+
       // Show success message briefly before closing
       setTimeout(() => {
         setOpen(false)
         setSuccess(null)
       }, 1500)
     } catch (error) {
-      console.error("❌ Error adding item:", error)
-      setError(error instanceof Error ? error.message : "Failed to add item")
+      console.error("❌ Error submitting item for approval:", error)
+      setError(error instanceof Error ? error.message : "Failed to submit item for approval")
     } finally {
       setLoading(false)
     }
@@ -292,6 +279,20 @@ export default function AddInventoryItem({
 
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="space-y-2 col-span-2">
+              <Label htmlFor="requester">Requester Name *</Label>
+              <Input
+                id="requester"
+                value={formData.requester}
+                onChange={(e) => handleInputChange("requester", e.target.value)}
+                placeholder="Enter your name"
+                required
+                disabled={loading}
+              />
+              <p className="text-xs text-muted-foreground">
+                Required for approval tracking. 'Current User' is not allowed.
+              </p>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="partNumber">Part Number *</Label>
               <Input

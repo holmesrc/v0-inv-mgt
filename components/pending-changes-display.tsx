@@ -46,7 +46,9 @@ export default function PendingChangesDisplay() {
     return null
   }
 
-  if (pendingChanges.length === 0) {
+  const activePendingChanges = pendingChanges.filter((change) => change.status === "pending")
+
+  if (activePendingChanges.length === 0) {
     return null
   }
 
@@ -58,12 +60,12 @@ export default function PendingChangesDisplay() {
           Pending Changes
         </CardTitle>
         <CardDescription>
-          {pendingChanges.length} change{pendingChanges.length !== 1 ? "s" : ""} awaiting approval
+          {activePendingChanges.length} change{activePendingChanges.length !== 1 ? "s" : ""} awaiting approval
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
-          {pendingChanges.map((change) => (
+        <div className={`space-y-3 ${activePendingChanges.length > 3 ? "max-h-64 overflow-y-auto pr-2" : ""}`}>
+          {activePendingChanges.map((change) => (
             <div key={change.id} className="flex items-center justify-between p-3 bg-white rounded border">
               <div className="flex items-center gap-3">
                 <AlertCircle className="w-4 h-4 text-yellow-600" />

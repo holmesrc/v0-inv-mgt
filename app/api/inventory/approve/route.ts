@@ -1,31 +1,50 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient, canUseSupabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
+
+const supabaseUrl = process.env.SUPABASE_URL
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error("Missing Supabase environment variables")
+}
+
+const supabase = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null
 
 export async function POST(request: NextRequest) {
   try {
-    if (!canUseSupabase()) {
+    if (!supabase) {
       return NextResponse.json(
         {
           success: false,
           error: "Database not configured",
         },
-        { status: 503 },
+        { status: 500 },
       )
     }
 
-    const { changeId, action, approvedBy } = await request.json()
+    const body = await request.json()
+    const { changeId, action, approvedBy } = body
 
+    // Validate required fields
     if (!changeId || !action || !approvedBy) {
       return NextResponse.json(
         {
           success: false,
-          error: "Missing required fields",
+          error: "Missing required fields: changeId, action, approvedBy",
         },
         { status: 400 },
       )
     }
 
-    const supabase = createServerSupabaseClient()
+    if (!["approve", "reject"].includes(action)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid action. Must be 'approve' or 'reject'",
+        },
+        { status: 400 },
+      )
+    }
 
     // Get the pending change
     const { data: pendingChange, error: fetchError } = await supabase
@@ -39,63 +58,94 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: "Pending change not found",
+          error: "Pending change not found or already processed",
         },
         { status: 404 },
       )
     }
 
-    if (action === "approve") {
-      // Apply the change to the inventory
-      const { change_type, item_data, original_data } = pendingChange
-
-      if (change_type === "add") {
-        // Add new item to inventory
-        const { error: insertError } = await supabase.from("inventory").insert({
-          part_number: item_data.part_number,
-          mfg_part_number: item_data.mfg_part_number,
-          qty: item_data.qty,
-          part_description: item_data.part_description,
-          supplier: item_data.supplier,
-          location: item_data.location,
-          package: item_data.package,
-          reorder_point: item_data.reorder_point,
-          last_updated: new Date().toISOString(),
+    if (action === "reject") {
+      // Just update the status to rejected
+      const { error: updateError } = await supabase
+        .from("pending_changes")
+        .update({
+          status: "rejected",
+          approved_by: approvedBy,
+          approved_at: new Date().toISOString(),
         })
+        .eq("id", changeId)
 
-        if (insertError) {
-          throw new Error(`Failed to add item: ${insertError.message}`)
-        }
-      } else if (change_type === "delete") {
-        // Delete item from inventory
-        const { error: deleteError } = await supabase
-          .from("inventory")
-          .delete()
-          .eq("part_number", original_data.part_number)
+      if (updateError) {
+        console.error("Error updating pending change:", updateError)
+        return NextResponse.json(
+          {
+            success: false,
+            error: updateError.message,
+          },
+          { status: 500 },
+        )
+      }
 
-        if (deleteError) {
-          throw new Error(`Failed to delete item: ${deleteError.message}`)
-        }
-      } else if (change_type === "update") {
-        // Update existing item
-        const { error: updateError } = await supabase
-          .from("inventory")
-          .update({
-            part_number: item_data.part_number,
-            mfg_part_number: item_data.mfg_part_number,
-            qty: item_data.qty,
-            part_description: item_data.part_description,
-            supplier: item_data.supplier,
-            location: item_data.location,
-            package: item_data.package,
-            reorder_point: item_data.reorder_point,
-            last_updated: new Date().toISOString(),
-          })
-          .eq("part_number", original_data.part_number)
+      return NextResponse.json({
+        success: true,
+        message: "Change rejected successfully",
+      })
+    }
 
-        if (updateError) {
-          throw new Error(`Failed to update item: ${updateError.message}`)
-        }
+    // Handle approval - apply the change to the inventory
+    let inventoryResult = null
+
+    if (pendingChange.change_type === "add") {
+      // Add new item
+      const { data, error } = await supabase.from("inventory").insert(pendingChange.item_data).select().single()
+
+      if (error) {
+        console.error("Error adding inventory item:", error)
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Failed to add item: ${error.message}`,
+          },
+          { status: 500 },
+        )
+      }
+      inventoryResult = data
+    } else if (pendingChange.change_type === "update") {
+      // Update existing item
+      const { data, error } = await supabase
+        .from("inventory")
+        .update(pendingChange.item_data)
+        .eq("part_number", pendingChange.original_data.part_number)
+        .select()
+        .single()
+
+      if (error) {
+        console.error("Error updating inventory item:", error)
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Failed to update item: ${error.message}`,
+          },
+          { status: 500 },
+        )
+      }
+      inventoryResult = data
+    } else if (pendingChange.change_type === "delete") {
+      // Delete item
+      const { error } = await supabase
+        .from("inventory")
+        .delete()
+        .eq("part_number", pendingChange.original_data.part_number)
+
+      if (error) {
+        console.error("Error deleting inventory item:", error)
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Failed to delete item: ${error.message}`,
+          },
+          { status: 500 },
+        )
       }
     }
 
@@ -103,7 +153,7 @@ export async function POST(request: NextRequest) {
     const { error: updateError } = await supabase
       .from("pending_changes")
       .update({
-        status: action === "approve" ? "approved" : "rejected",
+        status: "approved",
         approved_by: approvedBy,
         approved_at: new Date().toISOString(),
       })
@@ -114,7 +164,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: "Failed to update change status",
+          error: updateError.message,
         },
         { status: 500 },
       )
@@ -122,14 +172,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Change ${action}d successfully`,
+      message: "Change approved and applied successfully",
+      inventoryResult,
     })
   } catch (error) {
-    console.error("Error in approve route:", error)
+    console.error("Error in POST /api/inventory/approve:", error)
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Server error",
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )

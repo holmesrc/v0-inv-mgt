@@ -1,114 +1,90 @@
 import { type NextRequest, NextResponse } from "next/server"
 
+const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL
+
 export async function POST(request: NextRequest) {
   try {
-    const { changeType, itemData, originalData, requestedBy, changeId } = await request.json()
-
-    const webhookUrl = process.env.SLACK_WEBHOOK_URL
-    if (!webhookUrl) {
-      throw new Error("Slack webhook URL not configured")
+    if (!SLACK_WEBHOOK_URL) {
+      return NextResponse.json({
+        success: false,
+        error: "Slack webhook URL not configured in environment variables",
+        reason: "environment_not_configured",
+      })
     }
 
-    let message = ""
-    let actionText = ""
+    const body = await request.json()
+    const { changeType, itemData, originalData, requestedBy, changeId } = body
+
+    // Format the message based on change type
+    let message = `🔄 *Inventory Change Request*\n\n`
+    message += `*Type:* ${changeType.toUpperCase()}\n`
+    message += `*Requested by:* ${requestedBy}\n`
+    message += `*Change ID:* ${changeId}\n\n`
 
     if (changeType === "add") {
-      actionText = "Add New Item"
-      message =
-        `🔔 *Inventory Change Approval Required*\n\n` +
-        `**Action:** ${actionText}\n` +
-        `**Requested by:** ${requestedBy}\n\n` +
-        `**New Item Details:**\n` +
-        `• Part Number: ${itemData.part_number}\n` +
-        `• Description: ${itemData.part_description}\n` +
-        `• Quantity: ${itemData.qty}\n` +
-        `• Supplier: ${itemData.supplier}\n` +
-        `• Location: ${itemData.location}\n` +
-        `• Package: ${itemData.package}`
-    } else if (changeType === "delete") {
-      actionText = "Delete Item"
-      message =
-        `🔔 *Inventory Change Approval Required*\n\n` +
-        `**Action:** ${actionText}\n` +
-        `**Requested by:** ${requestedBy}\n\n` +
-        `**Item to Delete:**\n` +
-        `• Part Number: ${originalData.part_number}\n` +
-        `• Description: ${originalData.part_description}\n` +
-        `• Current Quantity: ${originalData.qty}`
+      message += `*Adding New Item:*\n`
+      message += `• Part Number: ${itemData.part_number}\n`
+      message += `• Description: ${itemData.part_description}\n`
+      message += `• Quantity: ${itemData.qty}\n`
+      message += `• Location: ${itemData.location}\n`
+      message += `• Supplier: ${itemData.supplier}\n`
     } else if (changeType === "update") {
-      actionText = "Update Item"
-      message =
-        `🔔 *Inventory Change Approval Required*\n\n` +
-        `**Action:** ${actionText}\n` +
-        `**Requested by:** ${requestedBy}\n\n` +
-        `**Changes:**\n` +
-        `• Part Number: ${originalData.part_number}\n`
-
-      // Show what's changing
-      if (itemData.qty !== originalData.qty) {
+      message += `*Updating Item:* ${originalData.part_number}\n`
+      if (originalData.qty !== itemData.qty) {
         message += `• Quantity: ${originalData.qty} → ${itemData.qty}\n`
       }
-      if (itemData.reorder_point !== originalData.reorder_point) {
+      if (originalData.reorder_point !== itemData.reorder_point) {
         message += `• Reorder Point: ${originalData.reorder_point} → ${itemData.reorder_point}\n`
       }
+    } else if (changeType === "delete") {
+      message += `*Deleting Item:*\n`
+      message += `• Part Number: ${originalData.part_number}\n`
+      message += `• Description: ${originalData.part_description}\n`
+      message += `• Current Quantity: ${originalData.qty}\n`
     }
 
-    // Add approval buttons
-    const blocks = [
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: message,
-        },
-      },
-      {
-        type: "actions",
-        elements: [
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "✅ Approve",
-            },
-            style: "primary",
-            action_id: "approve_change",
-            value: JSON.stringify({ changeId, action: "approve" }),
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "❌ Reject",
-            },
-            style: "danger",
-            action_id: "reject_change",
-            value: JSON.stringify({ changeId, action: "reject" }),
-          },
-        ],
-      },
-    ]
+    message += `\n📋 Please review this change in the approval dashboard: ${process.env.NEXT_PUBLIC_APP_URL || "your-app"}/approvals`
 
-    const response = await fetch(webhookUrl, {
+    const slackPayload = {
+      text: message,
+      username: "Inventory Bot",
+      icon_emoji: ":package:",
+    }
+
+    const response = await fetch(SLACK_WEBHOOK_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        text: `Inventory Change Approval Required: ${actionText}`,
-        blocks,
-      }),
+      body: JSON.stringify(slackPayload),
     })
 
     if (!response.ok) {
-      throw new Error(`Slack API error: ${response.status}`)
+      const errorText = await response.text()
+      console.error("Slack API error:", response.status, errorText)
+
+      return NextResponse.json({
+        success: false,
+        error: `Slack API error: ${response.status} - ${errorText}`,
+        details: {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText,
+        },
+      })
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({
+      success: true,
+      message: "Approval request sent to Slack successfully",
+    })
   } catch (error) {
-    console.error("Error sending approval request:", error)
+    console.error("Error sending approval request to Slack:", error)
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : "Unknown error" },
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error occurred",
+      },
       { status: 500 },
     )
   }

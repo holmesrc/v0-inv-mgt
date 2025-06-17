@@ -1,29 +1,38 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
-    const { text, blocks, channel } = await request.json()
+    const { text, blocks, channel = "#inventory-alerts" } = await request.json()
 
     const webhookUrl = process.env.SLACK_WEBHOOK_URL
 
+    // Debug logging
+    console.log("🔍 POST-MESSAGE SLACK_WEBHOOK_URL Debug:")
+    console.log("  - Exists:", !!webhookUrl)
+    console.log("  - Length:", webhookUrl?.length || 0)
+    console.log("  - Prefix:", webhookUrl ? webhookUrl.substring(0, 50) + "..." : "Not set")
+    console.log("  - Suffix:", webhookUrl ? "..." + webhookUrl.substring(webhookUrl.length - 20) : "Not set")
+
     if (!webhookUrl) {
-      return NextResponse.json({ error: "Slack webhook URL not configured" }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: "Slack webhook URL not configured",
+          details: "SLACK_WEBHOOK_URL environment variable is not set",
+        },
+        { status: 500 },
+      )
     }
 
-    // Create a simple payload
-    const payload = {
-      channel: channel || "#inventory-alerts",
-      text: text || "Low stock alert",
-      username: "Inventory Bot",
-      icon_emoji: ":package:",
+    console.log("🚀 Posting to Slack with URL:", webhookUrl.substring(0, 50) + "...")
+
+    const payload: any = {
+      text,
+      channel,
     }
 
-    // Only add blocks if they're provided
-    if (blocks && Array.isArray(blocks) && blocks.length > 0) {
+    if (blocks) {
       payload.blocks = blocks
     }
-
-    console.log("Sending payload to Slack:", JSON.stringify(payload, null, 2))
 
     const response = await fetch(webhookUrl, {
       method: "POST",
@@ -33,39 +42,33 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(payload),
     })
 
+    const responseText = await response.text()
+
+    console.log("📥 Post-message Slack response:")
+    console.log("  - Status:", response.status)
+    console.log("  - OK:", response.ok)
+    console.log("  - Body:", responseText)
+
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error("Slack API error response:", errorText)
-
-      // If blocks are causing the issue, try without them
-      if (payload.blocks && errorText.includes("invalid_blocks")) {
-        console.log("Retrying without blocks...")
-        delete payload.blocks
-
-        const retryResponse = await fetch(webhookUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        })
-
-        if (retryResponse.ok) {
-          return NextResponse.json({ success: true, fallback: true })
-        }
-      }
-
-      throw new Error(`Slack API error: ${response.status} ${response.statusText} - ${errorText}`)
+      return NextResponse.json(
+        {
+          error: "Slack API error",
+          details: `HTTP ${response.status}: ${responseText}`,
+        },
+        { status: response.status },
+      )
     }
 
-    const responseText = await response.text()
-    console.log("Slack response:", responseText)
-    return NextResponse.json({ success: true, response: responseText })
+    return NextResponse.json({
+      success: true,
+      message: "Message posted successfully",
+      slackResponse: responseText,
+    })
   } catch (error) {
-    console.error("Error posting to Slack:", error)
+    console.error("❌ Error in /api/slack/post-message:", error)
     return NextResponse.json(
       {
-        error: "Failed to post message",
+        error: "Internal server error",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },

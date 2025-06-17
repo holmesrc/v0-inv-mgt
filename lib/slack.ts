@@ -8,22 +8,26 @@ export async function sendSlackMessage(message: string, channel = "#inventory-al
       body: JSON.stringify({ message, channel }),
     })
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+    const responseData = await response.json().catch(() => ({ error: "Invalid JSON response" }))
 
-      // Handle specific Slack errors
-      if (response.status === 404 || errorData.details?.includes("no_service")) {
+    if (!response.ok) {
+      // Handle specific configuration errors more gracefully
+      if (response.status === 400 && responseData.details?.includes("environment variable")) {
+        throw new Error("Slack webhook URL not configured in environment variables")
+      }
+
+      if (response.status === 404 || responseData.details?.includes("no_service")) {
         throw new Error(
           "Slack webhook URL is invalid or expired. Please check your SLACK_WEBHOOK_URL environment variable.",
         )
       }
 
       throw new Error(
-        `Slack API error: ${response.status} - ${errorData.error || errorData.details || "Unknown error"}`,
+        `Slack API error: ${response.status} - ${responseData.error || responseData.details || "Unknown error"}`,
       )
     }
 
-    return await response.json()
+    return responseData
   } catch (error) {
     console.error("Error sending Slack message:", error)
     throw error
@@ -387,9 +391,19 @@ export async function testSlackConnection() {
     await sendSlackMessage(testMessage)
     return { success: true, message: "Test message sent successfully" }
   } catch (error) {
+    // Handle configuration errors gracefully
+    if (error instanceof Error && error.message.includes("not configured in environment variables")) {
+      return {
+        success: false,
+        message: "Slack webhook URL not configured (this is normal in preview environments)",
+        reason: "environment_not_configured",
+      }
+    }
+
     return {
       success: false,
       message: error instanceof Error ? error.message : "Unknown error occurred",
+      reason: "connection_error",
     }
   }
 }

@@ -65,6 +65,9 @@ export default function InventoryDashboard() {
   const [supabaseConfigured, setSupabaseConfigured] = useState<boolean | null>(null)
   const [slackConfigured, setSlackConfigured] = useState<boolean | null>(null)
 
+  // Track temporary quantity changes before confirmation
+  const [tempQuantityChanges, setTempQuantityChanges] = useState<Record<string, number>>({})
+
   // Show upload screen if no inventory data
   const [showUpload, setShowUpload] = useState(false)
 
@@ -75,13 +78,21 @@ export default function InventoryDashboard() {
     checkSlackConfiguration()
   }, [])
 
-  // Check Slack configuration
+  // Check Slack configuration with better error handling
   const checkSlackConfiguration = async () => {
     try {
       const result = await testSlackConnection()
-      setSlackConfigured(result.success)
-      if (!result.success) {
-        console.warn("Slack configuration issue:", result.message)
+
+      // Handle different types of configuration issues
+      if (result.reason === "environment_not_configured") {
+        setSlackConfigured(false)
+        console.log("ℹ️ Slack not configured (normal in preview environments)")
+      } else if (result.success) {
+        setSlackConfigured(true)
+        console.log("✅ Slack configuration verified")
+      } else {
+        setSlackConfigured(false)
+        console.warn("⚠️ Slack configuration issue:", result.message)
       }
     } catch (error) {
       console.error("Error checking Slack configuration:", error)
@@ -415,6 +426,70 @@ export default function InventoryDashboard() {
     }
   }
 
+  // Submit change for approval - UPDATED to require requester
+  const submitChangeForApproval = async (
+    changeType: "add" | "update" | "delete",
+    itemData?: any,
+    originalData?: any,
+    requester?: string,
+  ) => {
+    try {
+      // Validate requester
+      if (!requester || requester.trim() === "" || requester.trim().toLowerCase() === "current user") {
+        throw new Error("Please provide a valid requester name. 'Current User' is not allowed.")
+      }
+
+      const response = await fetch("/api/inventory/pending", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          changeType,
+          itemData,
+          originalData,
+          requestedBy: requester.trim(),
+        }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          // Send Slack notification (non-interactive)
+          if (slackConfigured) {
+            try {
+              await fetch("/api/slack/send-approval-request", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  changeType,
+                  itemData,
+                  originalData,
+                  requestedBy: requester.trim(),
+                  changeId: result.data.id,
+                }),
+              })
+            } catch (slackError) {
+              console.error("Failed to send Slack notification:", slackError)
+              // Don't fail the entire operation if Slack fails
+            }
+          }
+
+          return result
+        } else {
+          throw new Error(result.error || "Failed to submit for approval")
+        }
+      } else {
+        throw new Error("Failed to submit change for approval")
+      }
+    } catch (error) {
+      console.error("❌ Error submitting change for approval:", error)
+      throw error
+    }
+  }
+
   // Filter and search logic - FIXED to include Location field
   const filteredInventory = useMemo(() => {
     return inventory.filter((item) => {
@@ -537,9 +612,9 @@ export default function InventoryDashboard() {
     }
   }
 
-  // Add new inventory item with enhanced error handling
-  const addInventoryItem = async (newItem: Omit<InventoryItem, "id" | "lastUpdated">) => {
-    console.log("🚀 addInventoryItem called with:", newItem)
+  // Add new inventory item - UPDATED to require requester
+  const addInventoryItem = async (newItem: Omit<InventoryItem, "id" | "lastUpdated">, requester: string) => {
+    console.log("🚀 addInventoryItem called with:", newItem, "requester:", requester)
 
     try {
       // Transform to database format for approval
@@ -554,52 +629,9 @@ export default function InventoryDashboard() {
         reorder_point: isNaN(Number(newItem.reorderPoint)) ? 10 : Math.max(0, Number(newItem.reorderPoint)),
       }
 
-      // Submit for approval instead of adding directly
-      const response = await fetch("/api/inventory/pending", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          changeType: "add",
-          itemData,
-          requestedBy: "Current User", // You can make this dynamic
-        }),
-      })
+      const result = await submitChangeForApproval("add", itemData, null, requester)
 
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success) {
-          if (slackConfigured) {
-            alert("✅ Item submitted for approval! An approval request has been sent to the inventory alerts channel.")
-
-            // Send Slack approval request
-            try {
-              await fetch("/api/slack/send-approval-request", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  changeType: "add",
-                  itemData,
-                  requestedBy: "Current User",
-                  changeId: result.data.id,
-                }),
-              })
-            } catch (slackError) {
-              console.error("Failed to send Slack notification:", slackError)
-              // Don't fail the entire operation if Slack fails
-            }
-          } else {
-            alert("✅ Item submitted for approval! (Slack notifications are not configured)")
-          }
-        } else {
-          throw new Error(result.error || "Failed to submit for approval")
-        }
-      } else {
-        throw new Error("Failed to submit change for approval")
-      }
+      alert("✅ New item submitted for approval! Check the pending changes section or approval dashboard.")
     } catch (error) {
       console.error("❌ Error submitting item for approval:", error)
       setError(`Failed to submit item for approval: ${error instanceof Error ? error.message : "Unknown error"}`)
@@ -607,43 +639,160 @@ export default function InventoryDashboard() {
     }
   }
 
-  // Update reorder point
-  const updateReorderPoint = async (itemId: string, newReorderPoint: number) => {
-    const updatedInventory = inventory.map((item) =>
-      item.id === itemId ? { ...item, reorderPoint: newReorderPoint } : item,
-    )
-    setInventory(updatedInventory)
+  // Update reorder point - UPDATED to require requester
+  const updateReorderPoint = async (itemId: string, newReorderPoint: number, requester: string) => {
+    const item = inventory.find((i) => i.id === itemId)
+    if (!item) return
 
     try {
-      await saveInventoryToDatabase(updatedInventory, packageNote)
+      const originalData = {
+        part_number: String(item["Part number"]).trim(),
+        mfg_part_number: String(item["MFG Part number"] || "").trim(),
+        qty: item["QTY"],
+        part_description: String(item["Part description"] || "").trim(),
+        supplier: String(item.Supplier || "").trim(),
+        location: String(item.Location || "").trim(),
+        package: String(item.Package || "").trim(),
+        reorder_point: item.reorderPoint || alertSettings.defaultReorderPoint,
+      }
+
+      const itemData = {
+        ...originalData,
+        reorder_point: newReorderPoint,
+      }
+
+      await submitChangeForApproval("update", itemData, originalData, requester)
+
+      alert("✅ Reorder point change submitted for approval!")
     } catch (error) {
-      console.error("Failed to save reorder point to database:", error)
-      setError("Update saved locally but failed to sync to database")
+      console.error("Failed to submit reorder point change:", error)
+      setError("Failed to submit reorder point change for approval")
     }
   }
 
-  // Update inventory item quantity
-  const updateItemQuantity = async (itemId: string, newQuantity: number) => {
-    const updatedInventory = inventory.map((item) =>
-      item.id === itemId ? { ...item, QTY: newQuantity, lastUpdated: new Date() } : item,
-    )
-    setInventory(updatedInventory)
+  // Update inventory item quantity - UPDATED to require requester
+  const updateItemQuantity = async (itemId: string, newQuantity: number, requester: string) => {
+    const item = inventory.find((i) => i.id === itemId)
+    if (!item) return
 
     try {
-      await saveInventoryToDatabase(updatedInventory, packageNote)
+      const originalData = {
+        part_number: String(item["Part number"]).trim(),
+        mfg_part_number: String(item["MFG Part number"] || "").trim(),
+        qty: item["QTY"],
+        part_description: String(item["Part description"] || "").trim(),
+        supplier: String(item.Supplier || "").trim(),
+        location: String(item.Location || "").trim(),
+        package: String(item.Package || "").trim(),
+        reorder_point: item.reorderPoint || alertSettings.defaultReorderPoint,
+      }
+
+      const itemData = {
+        ...originalData,
+        qty: newQuantity,
+      }
+
+      await submitChangeForApproval("update", itemData, originalData, requester)
+
+      // Clear temporary changes after submission
+      setTempQuantityChanges((prev) => {
+        const updated = { ...prev }
+        delete updated[itemId]
+        return updated
+      })
+
+      alert("✅ Quantity change submitted for approval!")
     } catch (error) {
-      console.error("Failed to save quantity to database:", error)
-      setError("Update saved locally but failed to sync to database")
+      console.error("Failed to submit quantity change:", error)
+      setError("Failed to submit quantity change for approval")
     }
   }
 
-  // Delete inventory item
-  const deleteInventoryItem = async (itemId: string) => {
+  // Handle temporary quantity changes
+  const handleTempQuantityChange = (itemId: string, delta: number) => {
+    const item = inventory.find((i) => i.id === itemId)
+    if (!item) return
+
+    const currentTemp = tempQuantityChanges[itemId] || 0
+    const originalQty = item["QTY"]
+    const newTempQty = Math.max(0, originalQty + currentTemp + delta)
+    const newDelta = newTempQty - originalQty
+
+    setTempQuantityChanges((prev) => ({
+      ...prev,
+      [itemId]: newDelta,
+    }))
+  }
+
+  // Get display quantity (original + temporary change)
+  const getDisplayQuantity = (item: InventoryItem) => {
+    const tempChange = tempQuantityChanges[item.id] || 0
+    return item["QTY"] + tempChange
+  }
+
+  // Check if item has temporary changes
+  const hasTempChanges = (itemId: string) => {
+    return tempQuantityChanges[itemId] !== undefined && tempQuantityChanges[itemId] !== 0
+  }
+
+  // Confirm quantity changes - UPDATED to require requester
+  const confirmQuantityChange = (itemId: string) => {
+    const item = inventory.find((i) => i.id === itemId)
+    const tempChange = tempQuantityChanges[itemId]
+
+    if (!item || !tempChange) return
+
+    const newQuantity = item["QTY"] + tempChange
+    const changeDescription = tempChange > 0 ? `Add ${tempChange} units` : `Remove ${Math.abs(tempChange)} units`
+
+    // Prompt for requester name
+    const requester = prompt(
+      `${changeDescription} for ${item["Part number"]}?\n\n${item["QTY"]} → ${newQuantity} units\n\nPlease enter your name as the requester:`,
+    )
+
+    if (requester && requester.trim() !== "" && requester.trim().toLowerCase() !== "current user") {
+      updateItemQuantity(itemId, newQuantity, requester.trim())
+    } else if (requester !== null) {
+      // User clicked OK but provided invalid input
+      alert("❌ Please provide a valid requester name. 'Current User' is not allowed.")
+    }
+    // If user clicked Cancel (requester === null), do nothing
+  }
+
+  // Cancel temporary changes
+  const cancelTempChanges = (itemId: string) => {
+    setTempQuantityChanges((prev) => {
+      const updated = { ...prev }
+      delete updated[itemId]
+      return updated
+    })
+  }
+
+  // Handle custom quantity input
+  const handleCustomQuantityChange = (itemId: string, customAmount: string) => {
+    const amount = Number.parseInt(customAmount)
+    if (isNaN(amount)) return
+
+    const item = inventory.find((i) => i.id === itemId)
+    if (!item) return
+
+    const currentTemp = tempQuantityChanges[itemId] || 0
+    const originalQty = item["QTY"]
+    const newTempQty = Math.max(0, originalQty + currentTemp + amount)
+    const newDelta = newTempQty - originalQty
+
+    setTempQuantityChanges((prev) => ({
+      ...prev,
+      [itemId]: newDelta,
+    }))
+  }
+
+  // Delete inventory item - UPDATED to require requester
+  const deleteInventoryItem = async (itemId: string, requester: string) => {
     const itemToDelete = inventory.find((item) => item.id === itemId)
     if (!itemToDelete) return
 
     try {
-      // Transform to database format for approval
       const originalData = {
         part_number: String(itemToDelete["Part number"]).trim(),
         mfg_part_number: String(itemToDelete["MFG Part number"] || "").trim(),
@@ -655,54 +804,9 @@ export default function InventoryDashboard() {
         reorder_point: itemToDelete.reorderPoint || alertSettings.defaultReorderPoint,
       }
 
-      // Submit for approval instead of deleting directly
-      const response = await fetch("/api/inventory/pending", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          changeType: "delete",
-          originalData,
-          requestedBy: "Current User",
-        }),
-      })
+      await submitChangeForApproval("delete", null, originalData, requester)
 
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success) {
-          if (slackConfigured) {
-            alert(
-              "✅ Deletion submitted for approval! An approval request has been sent to the inventory alerts channel.",
-            )
-
-            // Send Slack approval request
-            try {
-              await fetch("/api/slack/send-approval-request", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  changeType: "delete",
-                  originalData,
-                  requestedBy: "Current User",
-                  changeId: result.data.id,
-                }),
-              })
-            } catch (slackError) {
-              console.error("Failed to send Slack notification:", slackError)
-              // Don't fail the entire operation if Slack fails
-            }
-          } else {
-            alert("✅ Deletion submitted for approval! (Slack notifications are not configured)")
-          }
-        } else {
-          throw new Error(result.error || "Failed to submit for approval")
-        }
-      } else {
-        throw new Error("Failed to submit change for approval")
-      }
+      alert("✅ Item deletion submitted for approval!")
     } catch (error) {
       console.error("❌ Error submitting deletion for approval:", error)
       setError(`Failed to submit deletion for approval: ${error instanceof Error ? error.message : "Unknown error"}`)
@@ -783,7 +887,11 @@ export default function InventoryDashboard() {
 
       // Provide specific error messages based on the error type
       if (error instanceof Error) {
-        if (error.message.includes("webhook URL is invalid") || error.message.includes("no_service")) {
+        if (error.message.includes("not configured in environment variables")) {
+          alert(`ℹ️ Slack is not configured in this environment.
+
+This is normal in preview environments. Your deployed app at v0-inv-mgt.vercel.app has Slack properly configured.`)
+        } else if (error.message.includes("webhook URL is invalid") || error.message.includes("no_service")) {
           alert(`❌ Slack webhook configuration error:
 
 ${error.message}
@@ -836,7 +944,11 @@ Please check your Slack configuration.`)
 
       // Provide specific error messages based on the error type
       if (error instanceof Error) {
-        if (error.message.includes("webhook URL is invalid") || error.message.includes("no_service")) {
+        if (error.message.includes("not configured in environment variables")) {
+          alert(`ℹ️ Slack is not configured in this environment.
+
+This is normal in preview environments. Your deployed app at v0-inv-mgt.vercel.app has Slack properly configured.`)
+        } else if (error.message.includes("webhook URL is invalid") || error.message.includes("no_service")) {
           alert(`❌ Slack webhook configuration error:
 
 ${error.message}
@@ -1143,8 +1255,6 @@ Please check your Slack configuration.`)
         </div>
       </div>
 
-      {/* Excel File Information */}
-
       {/* Error Alert */}
       {error && (
         <Alert variant="destructive">
@@ -1161,8 +1271,35 @@ Please check your Slack configuration.`)
       {/* Pending Changes Display */}
       <PendingChangesDisplay />
 
+      {/* Preview Environment Notice */}
+      {slackConfigured === false && supabaseConfigured === false && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="pt-4">
+            <div className="flex items-start gap-2">
+              <Info className="w-5 h-5 text-blue-600 mt-0.5" />
+              <div>
+                <h3 className="font-medium text-blue-800 mb-1">Preview Environment</h3>
+                <p className="text-sm text-blue-700">
+                  You're in a preview environment where external services (Slack, Supabase) are not available. Your
+                  deployed app at{" "}
+                  <a
+                    href="https://v0-inv-mgt.vercel.app"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline font-medium"
+                  >
+                    v0-inv-mgt.vercel.app
+                  </a>{" "}
+                  has full functionality with all integrations working.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Slack Configuration Warning */}
-      {slackConfigured === false && (
+      {slackConfigured === false && supabaseConfigured !== false && (
         <Card className="border-yellow-200 bg-yellow-50">
           <CardContent className="pt-4">
             <div className="flex items-start gap-2">
@@ -1180,7 +1317,7 @@ Please check your Slack configuration.`)
       )}
 
       {/* Supabase Not Configured Warning */}
-      {supabaseConfigured === false && (
+      {supabaseConfigured === false && slackConfigured !== false && (
         <Card className="border-orange-200 bg-orange-50">
           <CardContent className="pt-4">
             <div className="flex items-start gap-2">
@@ -1189,7 +1326,7 @@ Please check your Slack configuration.`)
                 <h3 className="font-medium text-orange-800 mb-1">Database Not Available</h3>
                 <p className="text-sm text-orange-700">
                   Supabase database connection failed. Your data is being stored locally in your browser only. Please
-                  check your environment variables and database setup
+                  check your environment variables and database setup.
                 </p>
               </div>
             </div>
@@ -1365,55 +1502,69 @@ Please check your Slack configuration.`)
                     <TableCell>
                       {(() => {
                         const stockStatus = getStockStatus(item)
-                        const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint
-                        const currentQty = item["QTY"]
-
-                        return (
-                          <div className="space-y-1">
-                            <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>
-                            <div className="text-xs text-muted-foreground">
-                              {currentQty} / {reorderPoint} units
-                            </div>
-                          </div>
-                        )
+                        return <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>
                       })()}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col gap-2">
+                        {/* Quantity Controls */}
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleTempQuantityChange(item.id, -1)}
+                            disabled={getDisplayQuantity(item) <= 0}
+                          >
+                            -
+                          </Button>
+                          <span
+                            className={`px-2 py-1 text-sm font-medium rounded ${
+                              hasTempChanges(item.id) ? "bg-yellow-100 text-yellow-800" : "bg-gray-100"
+                            }`}
+                          >
+                            {getDisplayQuantity(item)}
+                            {hasTempChanges(item.id) && (
+                              <span className="text-xs ml-1">
+                                ({tempQuantityChanges[item.id] > 0 ? "+" : ""}
+                                {tempQuantityChanges[item.id]})
+                              </span>
+                            )}
+                          </span>
+                          <Button size="sm" variant="outline" onClick={() => handleTempQuantityChange(item.id, 1)}>
+                            +
+                          </Button>
+                        </div>
+
+                        {/* Custom Amount Input */}
                         <Dialog>
                           <DialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              Edit
+                            <Button size="sm" variant="outline">
+                              Custom
                             </Button>
                           </DialogTrigger>
                           <DialogContent>
                             <DialogHeader>
-                              <DialogTitle>Edit Item</DialogTitle>
-                              <DialogDescription>Update {item["Part number"]} details</DialogDescription>
+                              <DialogTitle>Custom Quantity Change</DialogTitle>
+                              <DialogDescription>
+                                Enter a custom amount to add or subtract for {item["Part number"]}
+                              </DialogDescription>
                             </DialogHeader>
                             <div className="space-y-4">
                               <div>
-                                <Label>Quantity</Label>
+                                <Label>Amount (use negative numbers to subtract)</Label>
                                 <Input
                                   type="number"
-                                  defaultValue={item["QTY"]}
-                                  onChange={(e) => {
-                                    const newValue = Number.parseInt(e.target.value)
-                                    if (!isNaN(newValue)) {
-                                      updateItemQuantity(item.id, newValue)
-                                    }
-                                  }}
-                                />
-                              </div>
-                              <div>
-                                <Label>Reorder Point</Label>
-                                <Input
-                                  type="number"
-                                  defaultValue={item.reorderPoint || alertSettings.defaultReorderPoint}
-                                  onChange={(e) => {
-                                    const newValue = Number.parseInt(e.target.value)
-                                    if (!isNaN(newValue)) {
-                                      updateReorderPoint(item.id, newValue)
+                                  placeholder="e.g., 50 or -25"
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      const input = e.target as HTMLInputElement
+                                      handleCustomQuantityChange(item.id, input.value)
+                                      input.value = ""
+                                      // Close dialog
+                                      const closeButton = document.querySelector(
+                                        '[data-state="open"] button[aria-label="Close"]',
+                                      ) as HTMLButtonElement
+                                      closeButton?.click()
                                     }
                                   }}
                                 />
@@ -1421,47 +1572,171 @@ Please check your Slack configuration.`)
                             </div>
                             <DialogFooter>
                               <Button
-                                variant="destructive"
-                                onClick={() => {
-                                  if (confirm("Are you sure you want to delete this item?")) {
-                                    deleteInventoryItem(item.id)
+                                onClick={(e) => {
+                                  const input = (e.target as HTMLElement)
+                                    .closest(".space-y-4")
+                                    ?.querySelector("input") as HTMLInputElement
+                                  if (input) {
+                                    handleCustomQuantityChange(item.id, input.value)
+                                    input.value = ""
+                                    // Close dialog
+                                    const closeButton = document.querySelector(
+                                      '[data-state="open"] button[aria-label="Close"]',
+                                    ) as HTMLButtonElement
+                                    closeButton?.click()
                                   }
                                 }}
                               >
-                                Delete Item
+                                Apply
                               </Button>
                             </DialogFooter>
                           </DialogContent>
                         </Dialog>
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              <ShoppingCart className="w-4 h-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Create Purchase Request</DialogTitle>
-                              <DialogDescription>Request more stock for {item["Part number"]}</DialogDescription>
-                            </DialogHeader>
-                            <form
-                              onSubmit={(e) => {
-                                e.preventDefault()
-                                const formData = new FormData(e.currentTarget)
-                                const quantity = Number.parseInt(formData.get("quantity") as string)
-                                const urgency = formData.get("urgency") as "low" | "medium" | "high"
-                                const requester = formData.get("requester") as string
-                                createPurchaseRequest(item, quantity, urgency, requester)
-                              }}
+
+                        {/* Confirmation Controls */}
+                        {hasTempChanges(item.id) && (
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={() => confirmQuantityChange(item.id)}
+                              className="bg-green-600 hover:bg-green-700"
                             >
+                              ✓ Confirm
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => cancelTempChanges(item.id)}>
+                              ✗ Cancel
+                            </Button>
+                          </div>
+                        )}
+
+                        {/* Other Actions */}
+                        <div className="flex gap-1">
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button size="sm" variant="outline">
+                                Edit
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Edit Item</DialogTitle>
+                                <DialogDescription>Update details for {item["Part number"]}</DialogDescription>
+                              </DialogHeader>
                               <div className="space-y-4">
                                 <div>
-                                  <Label>Quantity</Label>
-                                  <Input name="quantity" type="number" required />
+                                  <Label>Requester Name *</Label>
+                                  <Input id="requester" placeholder="Enter your name" required />
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    Required for all changes that need approval
+                                  </p>
+                                </div>
+                                <div>
+                                  <Label>Reorder Point</Label>
+                                  <Input
+                                    id="reorderPoint"
+                                    type="number"
+                                    defaultValue={item.reorderPoint || alertSettings.defaultReorderPoint}
+                                  />
+                                </div>
+                                <div className="p-3 bg-gray-50 rounded text-sm">
+                                  <p className="font-medium mb-1">Current Item Details:</p>
+                                  <p>
+                                    Part: {item["Part number"]} - {item["Part description"]}
+                                  </p>
+                                  <p>Current Quantity: {item["QTY"]} units</p>
+                                  <p>Supplier: {item["Supplier"]}</p>
+                                  <p>Location: {item["Location"]}</p>
+                                </div>
+                              </div>
+                              <DialogFooter className="flex justify-between">
+                                <Button
+                                  variant="destructive"
+                                  onClick={() => {
+                                    const dialog = document.querySelector('[data-state="open"]')
+                                    const requesterInput = dialog?.querySelector("#requester") as HTMLInputElement
+                                    const requester = requesterInput?.value?.trim()
+
+                                    if (!requester || requester.toLowerCase() === "current user") {
+                                      alert("❌ Please provide a valid requester name. 'Current User' is not allowed.")
+                                      return
+                                    }
+
+                                    if (
+                                      confirm(
+                                        `Are you sure you want to delete "${item["Part number"]}"?\n\nRequested by: ${requester}\n\nThis action will be submitted for approval and cannot be undone once approved.`,
+                                      )
+                                    ) {
+                                      deleteInventoryItem(item.id, requester)
+                                      // Close dialog
+                                      const closeButton = document.querySelector(
+                                        '[data-state="open"] button[aria-label="Close"]',
+                                      ) as HTMLButtonElement
+                                      closeButton?.click()
+                                    }
+                                  }}
+                                >
+                                  Delete Item
+                                </Button>
+                                <Button
+                                  onClick={() => {
+                                    const dialog = document.querySelector('[data-state="open"]')
+                                    const requesterInput = dialog?.querySelector("#requester") as HTMLInputElement
+                                    const reorderInput = dialog?.querySelector("#reorderPoint") as HTMLInputElement
+                                    const requester = requesterInput?.value?.trim()
+                                    const newReorderPoint = Number.parseInt(reorderInput?.value || "0")
+
+                                    if (!requester || requester.toLowerCase() === "current user") {
+                                      alert("❌ Please provide a valid requester name. 'Current User' is not allowed.")
+                                      return
+                                    }
+
+                                    if (isNaN(newReorderPoint) || newReorderPoint < 0) {
+                                      alert("❌ Please provide a valid reorder point (0 or greater).")
+                                      return
+                                    }
+
+                                    updateReorderPoint(item.id, newReorderPoint, requester)
+                                    // Close dialog
+                                    const closeButton = document.querySelector(
+                                      '[data-state="open"] button[aria-label="Close"]',
+                                    ) as HTMLButtonElement
+                                    closeButton?.click()
+                                  }}
+                                >
+                                  Update Reorder Point
+                                </Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
+
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button size="sm" variant="outline">
+                                <ShoppingCart className="w-3 h-3" />
+                                Reorder
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Create Purchase Request</DialogTitle>
+                                <DialogDescription>Request to purchase more of this item</DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div>
+                                  <Label>Quantity to Order</Label>
+                                  <Input
+                                    type="number"
+                                    defaultValue={Math.max(
+                                      (item.reorderPoint || alertSettings.defaultReorderPoint) * 2 - item["QTY"],
+                                      1,
+                                    )}
+                                    min="1"
+                                  />
                                 </div>
                                 <div>
                                   <Label>Urgency</Label>
-                                  <Select name="urgency" required>
+                                  <Select defaultValue="medium">
                                     <SelectTrigger>
                                       <SelectValue />
                                     </SelectTrigger>
@@ -1472,17 +1747,37 @@ Please check your Slack configuration.`)
                                     </SelectContent>
                                   </Select>
                                 </div>
-                                <div>
-                                  <Label>Requested By</Label>
-                                  <Input name="requester" placeholder="Your name or department" />
-                                </div>
                               </div>
-                              <DialogFooter className="mt-4">
-                                <Button type="submit">Create Request</Button>
+                              <DialogFooter>
+                                <Button
+                                  onClick={(e) => {
+                                    const dialog = (e.target as HTMLElement).closest('[role="dialog"]')
+                                    const quantityInput = dialog?.querySelector(
+                                      'input[type="number"]',
+                                    ) as HTMLInputElement
+                                    const urgencySelect = dialog?.querySelector('[role="combobox"]') as HTMLElement
+                                    const urgencyValue = urgencySelect?.getAttribute("data-value") || "medium"
+
+                                    if (quantityInput) {
+                                      createPurchaseRequest(
+                                        item,
+                                        Number.parseInt(quantityInput.value),
+                                        urgencyValue as "low" | "medium" | "high",
+                                      )
+                                      // Close dialog
+                                      const closeButton = document.querySelector(
+                                        '[data-state="open"] button[aria-label="Close"]',
+                                      ) as HTMLButtonElement
+                                      closeButton?.click()
+                                    }
+                                  }}
+                                >
+                                  Create Request
+                                </Button>
                               </DialogFooter>
-                            </form>
-                          </DialogContent>
-                        </Dialog>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -1492,6 +1787,18 @@ Please check your Slack configuration.`)
           </div>
         </CardContent>
       </Card>
+
+      {/* Package Note */}
+      {packageNote && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Package Note</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">{packageNote}</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
