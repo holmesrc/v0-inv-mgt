@@ -384,12 +384,43 @@ export function createTextOnlyFullLowStockAlert(items: any[]) {
   return message
 }
 
-// Test Slack connection with better error handling
+// Test Slack connection with better error handling - UPDATED to not send actual message
 export async function testSlackConnection() {
   try {
-    const testMessage = "✅ Slack connection test successful!"
-    await sendSlackMessage(testMessage)
-    return { success: true, message: "Test message sent successfully" }
+    // Check if the webhook URL is configured without sending a message
+    const response = await fetch("/api/slack/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: "test",
+        channel: "#test",
+        dryRun: true, // Add a flag to indicate this is just a configuration test
+      }),
+    })
+
+    // If the API responds with configuration info, we can determine status
+    const responseData = await response.json().catch(() => ({ error: "Invalid JSON response" }))
+
+    if (response.status === 400 && responseData.details?.includes("environment variable")) {
+      return {
+        success: false,
+        message: "Slack webhook URL not configured (this is normal in preview environments)",
+        reason: "environment_not_configured",
+      }
+    }
+
+    if (response.status === 404 || responseData.details?.includes("no_service")) {
+      return {
+        success: false,
+        message: "Slack webhook URL is invalid or expired",
+        reason: "invalid_webhook",
+      }
+    }
+
+    // If we get here, Slack is likely configured properly
+    return { success: true, message: "Slack configuration verified" }
   } catch (error) {
     // Handle configuration errors gracefully
     if (error instanceof Error && error.message.includes("not configured in environment variables")) {

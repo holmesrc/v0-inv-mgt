@@ -2,59 +2,80 @@ import { type NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, channel } = await request.json()
+    const { message, channel = "#inventory-alerts", dryRun = false } = await request.json()
 
-    // Check if webhook URL is configured
+    // Check if this is a dry run (configuration test)
+    if (dryRun) {
+      // Just check if the webhook URL is configured without sending
+      const webhookUrl = process.env.SLACK_WEBHOOK_URL
+
+      if (!webhookUrl) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Webhook URL not configured",
+            details: "SLACK_WEBHOOK_URL environment variable is not set",
+          },
+          { status: 400 },
+        )
+      }
+
+      if (!webhookUrl.startsWith("https://hooks.slack.com/")) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Invalid webhook URL",
+            details: "SLACK_WEBHOOK_URL does not appear to be a valid Slack webhook URL",
+          },
+          { status: 400 },
+        )
+      }
+
+      // Return success for dry run without actually sending
+      return NextResponse.json({
+        success: true,
+        message: "Configuration verified (dry run)",
+        dryRun: true,
+      })
+    }
+
+    // Regular message sending logic
     const webhookUrl = process.env.SLACK_WEBHOOK_URL
+
     if (!webhookUrl) {
       return NextResponse.json(
         {
-          error: "Slack webhook URL not configured",
-          details: "SLACK_WEBHOOK_URL environment variable is missing",
-          configured: false,
+          success: false,
+          error: "Webhook URL not configured",
+          details: "SLACK_WEBHOOK_URL environment variable is not set",
         },
         { status: 400 },
       )
     }
 
-    // Validate webhook URL format
-    if (!webhookUrl.startsWith("https://hooks.slack.com/")) {
-      return NextResponse.json(
-        {
-          error: "Invalid Slack webhook URL format",
-          details: "Webhook URL must start with https://hooks.slack.com/",
-          configured: false,
-        },
-        { status: 400 },
-      )
+    const payload = {
+      text: message,
+      channel: channel,
     }
-
-    console.log("🚀 Sending Slack message:", { message: message.substring(0, 100), channel })
 
     const response = await fetch(webhookUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        text: message,
-        channel: channel,
-      }),
+      body: JSON.stringify(payload),
     })
-
-    console.log("📡 Slack response status:", response.status)
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error("❌ Slack API error:", errorText)
+      console.error("Slack webhook error:", response.status, errorText)
 
-      // Handle specific Slack errors
-      if (response.status === 404 || errorText.includes("no_service")) {
+      if (response.status === 404) {
         return NextResponse.json(
           {
-            error: "Slack webhook URL is invalid or expired",
-            details: errorText,
-            configured: false,
+            success: false,
+            error: "Webhook not found",
+            details: "The Slack webhook URL appears to be invalid or expired (404 error)",
           },
           { status: 404 },
         )
@@ -62,29 +83,25 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json(
         {
-          error: `Slack API error: ${response.status}`,
-          details: errorText,
-          configured: false,
+          success: false,
+          error: "Slack webhook failed",
+          details: `HTTP ${response.status}: ${errorText}`,
         },
         { status: response.status },
       )
     }
 
-    const result = await response.text()
-    console.log("✅ Slack message sent successfully:", result)
-
     return NextResponse.json({
       success: true,
       message: "Message sent successfully",
-      configured: true,
     })
   } catch (error) {
-    console.error("❌ Error in Slack send route:", error)
+    console.error("Error in Slack send API:", error)
     return NextResponse.json(
       {
+        success: false,
         error: "Internal server error",
         details: error instanceof Error ? error.message : "Unknown error",
-        configured: false,
       },
       { status: 500 },
     )
