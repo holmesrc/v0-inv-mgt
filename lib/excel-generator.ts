@@ -1,65 +1,99 @@
-import * as XLSX from "xlsx"
 import type { InventoryItem } from "@/types/inventory"
 
+// Simple CSV generation for preview environment
 export function generateExcelFile(inventory: InventoryItem[], packageNote = ""): ArrayBuffer {
-  // Create a new workbook
-  const workbook = XLSX.utils.book_new()
+  // Create CSV content
+  const headers = ["Part number", "MFG Part number", "QTY", "Part description", "Supplier", "Location", "Package"]
+  const csvContent = [
+    headers.join(","),
+    ...inventory.map((item) =>
+      [
+        `"${item["Part number"]}"`,
+        `"${item["MFG Part number"]}"`,
+        item["QTY"],
+        `"${item["Part description"]}"`,
+        `"${item["Supplier"]}"`,
+        `"${item["Location"]}"`,
+        `"${item["Package"]}"`,
+      ].join(","),
+    ),
+  ].join("\n")
 
-  // Prepare data for Excel (convert back to original column names)
-  const excelData = inventory.map((item) => ({
-    "Part number": item["Part number"],
-    "MFG Part number": item["MFG Part number"],
-    QTY: item["QTY"],
-    "Part description": item["Part description"],
-    Supplier: item["Supplier"],
-    Location: item["Location"],
-    Package: item["Package"],
-  }))
+  // Add package note as comment
+  const finalContent = packageNote ? `# Package Note: ${packageNote}\n${csvContent}` : csvContent
 
-  // Create worksheet from data
-  const worksheet = XLSX.utils.json_to_sheet(excelData)
-
-  // Add the package note to cell J1 if provided
-  if (packageNote) {
-    worksheet["J1"] = { v: packageNote, t: "s" }
-  }
-
-  // Set column widths for better readability
-  const columnWidths = [
-    { wch: 15 }, // Part number
-    { wch: 20 }, // MFG Part number
-    { wch: 8 }, // QTY
-    { wch: 30 }, // Part description
-    { wch: 15 }, // Supplier
-    { wch: 12 }, // Location
-    { wch: 12 }, // Package
-    { wch: 5 }, // H (empty)
-    { wch: 5 }, // I (empty)
-    { wch: 25 }, // J (package note)
-  ]
-  worksheet["!cols"] = columnWidths
-
-  // Add worksheet to workbook
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Inventory")
-
-  // Generate buffer
-  const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" })
-  return excelBuffer
+  // Convert to ArrayBuffer
+  const encoder = new TextEncoder()
+  return encoder.encode(finalContent).buffer
 }
 
-export function downloadExcelFile(inventory: InventoryItem[], packageNote = "", filename = "inventory") {
-  const excelBuffer = generateExcelFile(inventory, packageNote)
+export function downloadExcelFile(inventory: any[], packageNote: string, filename = "inventory") {
+  try {
+    // Create CSV content
+    const headers = ["Part number", "MFG Part number", "QTY", "Part description", "Supplier", "Location", "Package"]
+    const csvContent = [
+      headers.join(","),
+      ...inventory.map((item) =>
+        [
+          `"${item["Part number"] || ""}"`,
+          `"${item["MFG Part number"] || ""}"`,
+          item["QTY"] || 0,
+          `"${item["Part description"] || ""}"`,
+          `"${item["Supplier"] || ""}"`,
+          `"${item["Location"] || ""}"`,
+          `"${item["Package"] || ""}"`,
+        ].join(","),
+      ),
+    ].join("\n")
 
-  // Create blob and download
-  const blob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
-  const url = window.URL.createObjectURL(blob)
+    // Add package note as comment
+    const finalContent = packageNote ? `# Package Note: ${packageNote}\n${csvContent}` : csvContent
 
-  const link = document.createElement("a")
-  link.href = url
-  link.download = `${filename}_${new Date().toISOString().split("T")[0]}.xlsx`
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+    // Create and download CSV file
+    const blob = new Blob([finalContent], { type: "text/csv" })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `${filename}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
 
-  window.URL.revokeObjectURL(url)
+    console.log(`✅ CSV file "${filename}.csv" downloaded successfully`)
+  } catch (error) {
+    console.error("❌ Error generating CSV file:", error)
+    alert("Failed to generate CSV file. Please try again.")
+  }
+}
+
+export function generateExcelBuffer(inventory: any[], packageNote: string): ArrayBuffer {
+  try {
+    // Create CSV content
+    const headers = ["Part number", "MFG Part number", "QTY", "Part description", "Supplier", "Location", "Package"]
+    const csvContent = [
+      headers.join(","),
+      ...inventory.map((item) =>
+        [
+          `"${item["Part number"] || ""}"`,
+          `"${item["MFG Part number"] || ""}"`,
+          item["QTY"] || 0,
+          `"${item["Part description"] || ""}"`,
+          `"${item["Supplier"] || ""}"`,
+          `"${item["Location"] || ""}"`,
+          `"${item["Package"] || ""}"`,
+        ].join(","),
+      ),
+    ].join("\n")
+
+    // Add package note as comment
+    const finalContent = packageNote ? `# Package Note: ${packageNote}\n${csvContent}` : csvContent
+
+    // Convert to ArrayBuffer
+    const encoder = new TextEncoder()
+    return encoder.encode(finalContent).buffer
+  } catch (error) {
+    console.error("❌ Error generating CSV buffer:", error)
+    throw new Error("Failed to generate CSV buffer")
+  }
 }

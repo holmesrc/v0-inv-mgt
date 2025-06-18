@@ -7,12 +7,12 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Checkbox } from "@/components/ui/checkbox"
-import { CheckCircle, XCircle, Clock, AlertTriangle, RefreshCw, ArrowLeft } from "lucide-react"
+import { CheckCircle, XCircle, Clock, AlertTriangle, RefreshCw, ArrowLeft, Package } from "lucide-react"
 import Link from "next/link"
 
 interface PendingChange {
   id: string
-  change_type: "add" | "update" | "delete"
+  change_type: "add" | "update" | "delete" | "batch_add"
   item_data: any
   original_data: any
   requested_by: string
@@ -38,7 +38,13 @@ export default function ApprovalsPage() {
   const loadPendingChanges = async () => {
     try {
       setLoading(true)
+      setError(null)
       const response = await fetch("/api/inventory/pending")
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
       const result = await response.json()
 
       if (result.success) {
@@ -48,7 +54,7 @@ export default function ApprovalsPage() {
       }
     } catch (error) {
       console.error("Error loading pending changes:", error)
-      setError("Failed to load pending changes")
+      setError(error instanceof Error ? error.message : "Failed to load pending changes")
     } finally {
       setLoading(false)
     }
@@ -160,6 +166,8 @@ export default function ApprovalsPage() {
     switch (type) {
       case "add":
         return "bg-green-100 text-green-800"
+      case "batch_add":
+        return "bg-green-100 text-green-800"
       case "update":
         return "bg-blue-100 text-blue-800"
       case "delete":
@@ -184,6 +192,31 @@ export default function ApprovalsPage() {
 
   const formatChangeDetails = (change: PendingChange) => {
     const { change_type, item_data, original_data } = change
+
+    if (change_type === "batch_add") {
+      const batchItems = item_data?.batch_items || []
+      return (
+        <div className="space-y-2 text-sm">
+          <div className="flex items-center gap-2">
+            <Package className="w-4 h-4" />
+            <span className="font-medium">Batch Addition ({batchItems.length} items)</span>
+          </div>
+          <div className="bg-green-50 p-2 rounded max-h-32 overflow-y-auto">
+            {batchItems.slice(0, 5).map((item: any, index: number) => (
+              <div key={index} className="text-green-700 text-xs">
+                • {item.part_number} - {item.part_description} (Qty: {item.qty})
+              </div>
+            ))}
+            {batchItems.length > 5 && (
+              <div className="text-green-600 text-xs mt-1">+ {batchItems.length - 5} more items...</div>
+            )}
+          </div>
+          <div className="text-xs text-gray-500">
+            Total Quantity: {batchItems.reduce((sum: number, item: any) => sum + (item.qty || 0), 0)}
+          </div>
+        </div>
+      )
+    }
 
     if (change_type === "add") {
       return (
@@ -500,7 +533,7 @@ export default function ApprovalsPage() {
                       </TableCell>
                       <TableCell>
                         <Badge className={getChangeTypeColor(change.change_type)}>
-                          {change.change_type.toUpperCase()}
+                          {change.change_type === "batch_add" ? "BATCH ADD" : change.change_type.toUpperCase()}
                         </Badge>
                       </TableCell>
                       <TableCell className="max-w-md">{formatChangeDetails(change)}</TableCell>

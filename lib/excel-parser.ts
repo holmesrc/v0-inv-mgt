@@ -1,84 +1,72 @@
-import * as XLSX from "xlsx"
-
+// Simple parser for the preview environment - no external dependencies
 export function parseExcelFile(file: File): Promise<{ data: any[]; packageNote: string }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
 
     reader.onload = (e) => {
       try {
-        const arrayBuffer = new Uint8Array(e.target?.result as ArrayBuffer)
-        const workbook = XLSX.read(arrayBuffer, { type: "array" })
+        const text = e.target?.result as string
 
-        // Get the first worksheet
-        const worksheetName = workbook.SheetNames[0]
-        const worksheet = workbook.Sheets[worksheetName]
+        // Simple CSV parsing for preview environment
+        if (file.name.toLowerCase().endsWith(".csv")) {
+          const lines = text.split("\n").filter((line) => line.trim())
+          if (lines.length < 2) {
+            reject(new Error("CSV file must have at least a header row and one data row"))
+            return
+          }
 
-        // Extract the package note from J1
-        const j1Cell = worksheet["J1"]
-        const packageNote = j1Cell && j1Cell.v ? j1Cell.v.toString() : ""
+          const headers = lines[0].split(",").map((h) => h.trim().replace(/"/g, ""))
+          const expectedColumns = [
+            "Part number",
+            "MFG Part number",
+            "QTY",
+            "Part description",
+            "Supplier",
+            "Location",
+            "Package",
+          ]
 
-        // Get headers from A1-G1
-        const expectedColumns = [
-          "Part number",
-          "MFG Part number",
-          "QTY",
-          "Part description",
-          "Supplier",
-          "Location",
-          "Package",
-        ]
-
-        // Get all data starting from row 2, columns A-G
-        const range = worksheet["!ref"]
-        if (!range) {
-          reject(new Error("Excel file appears to be empty"))
-          return
-        }
-
-        const decodedRange = XLSX.utils.decode_range(range)
-        const rows: any[] = []
-
-        // Start from row 2 (index 1) and only read columns A-G (0-6)
-        for (let row = 1; row <= decodedRange.e.r; row++) {
-          const rowData: any = {}
-          let hasData = false
-
-          for (let col = 0; col < 7; col++) {
-            const cellAddress = XLSX.utils.encode_cell({ r: row, c: col })
-            const cell = worksheet[cellAddress]
-            const columnName = expectedColumns[col]
-
-            if (cell && cell.v !== undefined && cell.v !== null && cell.v !== "") {
-              // Convert QTY to number
-              if (columnName === "QTY") {
-                rowData[columnName] = Number(cell.v) || 0
-              } else {
-                rowData[columnName] = cell.v.toString()
-              }
-              hasData = true
-            } else {
-              rowData[columnName] = columnName === "QTY" ? 0 : ""
+          const data = []
+          for (let i = 1; i < lines.length; i++) {
+            const values = lines[i].split(",").map((v) => v.trim().replace(/"/g, ""))
+            if (values.length >= 7) {
+              const row: any = {}
+              expectedColumns.forEach((col, index) => {
+                if (col === "QTY") {
+                  row[col] = Number(values[index]) || 0
+                } else {
+                  row[col] = values[index] || ""
+                }
+              })
+              data.push(row)
             }
           }
 
-          // Only include rows that have at least some data
-          if (hasData) {
-            rows.push(rowData)
-          }
+          resolve({ data, packageNote: "Parsed from CSV file" })
+        } else {
+          // For Excel files in preview, show helpful message
+          reject(
+            new Error(
+              "Excel file processing requires the deployed environment. Please use CSV format or sample data for testing.",
+            ),
+          )
         }
-
-        if (rows.length === 0) {
-          reject(new Error("No data found in the Excel file"))
-          return
-        }
-
-        resolve({ data: rows, packageNote })
       } catch (error) {
-        reject(new Error("Failed to parse Excel file: " + (error as Error).message))
+        reject(new Error("Failed to parse file: " + (error as Error).message))
       }
     }
 
     reader.onerror = () => reject(new Error("Failed to read file"))
-    reader.readAsArrayBuffer(file)
+
+    // Read as text for CSV, show error for Excel
+    if (file.name.toLowerCase().endsWith(".csv")) {
+      reader.readAsText(file)
+    } else {
+      reject(
+        new Error(
+          "In preview environment, please use CSV files or sample data. Excel files work in the deployed version.",
+        ),
+      )
+    }
   })
 }

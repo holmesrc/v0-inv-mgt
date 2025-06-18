@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Insert pending change (removed description field)
+    // Insert pending change
     const { data, error } = await supabase
       .from("pending_changes")
       .insert({

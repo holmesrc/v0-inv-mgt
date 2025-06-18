@@ -25,7 +25,7 @@ interface AddInventoryItemProps {
   suppliers: string[]
   locations: string[]
   defaultReorderPoint: number
-  inventory: InventoryItem[] // Add this line
+  inventory: InventoryItem[]
 }
 
 interface BatchItem extends Omit<InventoryItem, "id" | "lastUpdated"> {
@@ -38,7 +38,7 @@ export default function AddInventoryItem({
   suppliers,
   locations,
   defaultReorderPoint,
-  inventory, // Add this line
+  inventory,
 }: AddInventoryItemProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -234,38 +234,66 @@ export default function AddInventoryItem({
     try {
       console.log(`🚀 Submitting batch of ${batchItems.length} items for requester: ${requesterName}`)
 
-      // Submit each item individually (they'll each create separate pending changes)
-      for (let i = 0; i < batchItems.length; i++) {
-        const item = batchItems[i]
-        console.log(`📤 Submitting item ${i + 1}/${batchItems.length}: ${item["Part number"]}`)
+      // Transform batch items to database format
+      const transformedBatchItems = batchItems.map((item) => ({
+        part_number: String(item["Part number"]).trim(),
+        mfg_part_number: String(item["MFG Part number"] || "").trim(),
+        qty: isNaN(Number(item.QTY)) ? 0 : Math.max(0, Number(item.QTY)),
+        part_description: String(item["Part description"] || "").trim(),
+        supplier: String(item.Supplier || "").trim(),
+        location: String(item.Location || "").trim(),
+        package: String(item.Package || "").trim(),
+        reorder_point: isNaN(Number(item.reorderPoint)) ? 10 : Math.max(0, Number(item.reorderPoint)),
+      }))
 
-        const itemForSubmission: Omit<InventoryItem, "id" | "lastUpdated"> = {
-          "Part number": item["Part number"],
-          "MFG Part number": item["MFG Part number"],
-          QTY: item.QTY,
-          "Part description": item["Part description"],
-          Supplier: item.Supplier,
-          Location: item.Location,
-          Package: item.Package,
-          reorderPoint: item.reorderPoint,
-        }
+      // Submit as a single batch
+      const response = await fetch("/api/inventory/batch-pending", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          batchItems: transformedBatchItems,
+          requestedBy: requesterName.trim(),
+        }),
+      })
 
-        await onAddItem(itemForSubmission, requesterName.trim())
-
-        // Small delay between submissions to avoid overwhelming the system
-        if (i < batchItems.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 100))
-        }
+      if (!response.ok) {
+        throw new Error("Failed to submit batch for approval")
       }
 
-      console.log("✅ All items submitted successfully")
-      setSuccess(`Successfully submitted ${batchItems.length} items for approval!`)
+      const result = await response.json()
 
-      // Reset everything after successful submission
-      setTimeout(() => {
-        resetAll()
-        setOpen(false)
-      }, 2000)
+      if (result.success) {
+        // Send Slack notification for the batch
+        try {
+          await fetch("/api/slack/send-batch-approval-request", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              batchItems: transformedBatchItems,
+              requestedBy: requesterName.trim(),
+              changeId: result.data.id,
+            }),
+          })
+        } catch (slackError) {
+          console.error("Failed to send Slack notification:", slackError)
+          // Don't fail the entire operation if Slack fails
+        }
+
+        console.log("✅ Batch submitted successfully")
+        setSuccess(`Successfully submitted batch of ${batchItems.length} items for approval!`)
+
+        // Reset everything after successful submission
+        setTimeout(() => {
+          resetAll()
+          setOpen(false)
+        }, 2000)
+      } else {
+        throw new Error(result.error || "Failed to submit batch for approval")
+      }
     } catch (error) {
       console.error("❌ Error submitting batch:", error)
       setError(error instanceof Error ? error.message : "Failed to submit batch for approval")
@@ -431,7 +459,7 @@ export default function AddInventoryItem({
         <DialogHeader>
           <DialogTitle>Add New Inventory Items</DialogTitle>
           <DialogDescription>
-            Add one or more inventory items. All items will be submitted under the same requester name.
+            Add one or more inventory items. The entire batch will be submitted as one approval request.
           </DialogDescription>
         </DialogHeader>
 
@@ -469,7 +497,7 @@ export default function AddInventoryItem({
                   disabled={loading}
                 />
                 <p className="text-xs text-muted-foreground">
-                  All items in this batch will be submitted under this name for approval tracking.
+                  The entire batch will be submitted under this name as one approval request.
                 </p>
               </div>
             </CardContent>
@@ -809,7 +837,7 @@ export default function AddInventoryItem({
             )}
           </div>
           <Button onClick={submitBatch} disabled={loading || batchItems.length === 0 || !requesterName.trim()}>
-            {loading ? "Submitting..." : `Submit ${batchItems.length} Items for Approval`}
+            {loading ? "Submitting..." : `Submit Batch of ${batchItems.length} Items for Approval`}
           </Button>
         </DialogFooter>
       </DialogContent>
