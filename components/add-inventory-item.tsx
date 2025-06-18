@@ -234,17 +234,36 @@ export default function AddInventoryItem({
     try {
       console.log(`🚀 Submitting batch of ${batchItems.length} items for requester: ${requesterName}`)
 
-      // Transform batch items to database format
-      const transformedBatchItems = batchItems.map((item) => ({
-        part_number: String(item["Part number"]).trim(),
-        mfg_part_number: String(item["MFG Part number"] || "").trim(),
-        qty: isNaN(Number(item.QTY)) ? 0 : Math.max(0, Number(item.QTY)),
-        part_description: String(item["Part description"] || "").trim(),
-        supplier: String(item.Supplier || "").trim(),
-        location: String(item.Location || "").trim(),
-        package: String(item.Package || "").trim(),
-        reorder_point: isNaN(Number(item.reorderPoint)) ? 10 : Math.max(0, Number(item.reorderPoint)),
-      }))
+      // Transform batch items to database format with validation
+      const transformedBatchItems = batchItems.map((item, index) => {
+        const transformed = {
+          part_number: String(item["Part number"] || "").trim(),
+          mfg_part_number: String(item["MFG Part number"] || "").trim(),
+          qty: isNaN(Number(item.QTY)) ? 0 : Math.max(0, Number(item.QTY)),
+          part_description: String(item["Part description"] || "").trim(),
+          supplier: String(item.Supplier || "").trim(),
+          location: String(item.Location || "").trim(),
+          package: String(item.Package || "").trim(),
+          reorder_point: isNaN(Number(item.reorderPoint)) ? 10 : Math.max(0, Number(item.reorderPoint)),
+        }
+
+        // Validate required fields
+        if (!transformed.part_number) {
+          throw new Error(`Item ${index + 1}: Part number is required`)
+        }
+        if (!transformed.part_description) {
+          throw new Error(`Item ${index + 1}: Part description is required`)
+        }
+
+        console.log(`📦 Item ${index + 1}:`, transformed)
+        return transformed
+      })
+
+      console.log("📤 Sending batch to API:", {
+        itemCount: transformedBatchItems.length,
+        requester: requesterName.trim(),
+        firstItem: transformedBatchItems[0],
+      })
 
       // Submit as a single batch
       const response = await fetch("/api/inventory/batch-pending", {
@@ -258,16 +277,26 @@ export default function AddInventoryItem({
         }),
       })
 
+      console.log("📥 API Response:", {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+      })
+
       if (!response.ok) {
-        throw new Error("Failed to submit batch for approval")
+        const errorText = await response.text()
+        console.error("❌ API Error Response:", errorText)
+        throw new Error(`API Error (${response.status}): ${errorText}`)
       }
 
       const result = await response.json()
+      console.log("📋 API Result:", result)
 
       if (result.success) {
         // Send Slack notification for the batch
         try {
-          await fetch("/api/slack/send-batch-approval-request", {
+          console.log("📨 Sending Slack notification...")
+          const slackResponse = await fetch("/api/slack/send-batch-approval-request", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -278,8 +307,14 @@ export default function AddInventoryItem({
               changeId: result.data.id,
             }),
           })
+
+          if (slackResponse.ok) {
+            console.log("✅ Slack notification sent successfully")
+          } else {
+            console.warn("⚠️ Slack notification failed, but batch was submitted successfully")
+          }
         } catch (slackError) {
-          console.error("Failed to send Slack notification:", slackError)
+          console.error("❌ Failed to send Slack notification:", slackError)
           // Don't fail the entire operation if Slack fails
         }
 
@@ -296,7 +331,8 @@ export default function AddInventoryItem({
       }
     } catch (error) {
       console.error("❌ Error submitting batch:", error)
-      setError(error instanceof Error ? error.message : "Failed to submit batch for approval")
+      const errorMessage = error instanceof Error ? error.message : "Failed to submit batch for approval"
+      setError(`Submission failed: ${errorMessage}`)
     } finally {
       setLoading(false)
     }

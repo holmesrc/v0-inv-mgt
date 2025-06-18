@@ -1852,12 +1852,23 @@ Please check your Slack configuration.`)
                               <DialogFooter className="flex justify-between">
                                 <Button
                                   variant="destructive"
-                                  onClick={() => {
-                                    const dialog = document.querySelector('[data-state="open"]')
-                                    const requesterInput = dialog?.querySelector("#requester") as HTMLInputElement
-                                    const requester = requesterInput?.value?.trim()
+                                  onClick={(e) => {
+                                    // Get the input element more reliably
+                                    const dialogElement = (e.target as HTMLElement).closest('[role="dialog"]')
+                                    const requesterInput = dialogElement?.querySelector(
+                                      'input[id="requester"]',
+                                    ) as HTMLInputElement
 
-                                    if (!requester || requester.toLowerCase() === "current user") {
+                                    if (!requesterInput) {
+                                      alert("❌ Could not find requester input field. Please try again.")
+                                      return
+                                    }
+
+                                    const requester = requesterInput.value?.trim()
+                                    console.log("Delete button clicked - Raw input value:", requesterInput.value) // Debug log
+                                    console.log("Delete button clicked - Trimmed requester:", requester) // Debug log
+
+                                    if (!requester || requester.toLowerCase() === "current user" || requester === "") {
                                       alert("❌ Please provide a valid requester name. 'Current User' is not allowed.")
                                       return
                                     }
@@ -1869,8 +1880,8 @@ Please check your Slack configuration.`)
                                     ) {
                                       deleteInventoryItem(item.id, requester)
                                       // Close dialog
-                                      const closeButton = document.querySelector(
-                                        '[data-state="open"] button[aria-label="Close"]',
+                                      const closeButton = dialogElement?.querySelector(
+                                        'button[aria-label="Close"]',
                                       ) as HTMLButtonElement
                                       closeButton?.click()
                                     }
@@ -1879,12 +1890,25 @@ Please check your Slack configuration.`)
                                   Delete Item
                                 </Button>
                                 <Button
-                                  onClick={() => {
-                                    const dialog = document.querySelector('[data-state="open"]')
-                                    const requesterInput = dialog?.querySelector("#requester") as HTMLInputElement
-                                    const reorderInput = dialog?.querySelector("#reorderPoint") as HTMLInputElement
-                                    const requester = requesterInput?.value?.trim()
+                                  onClick={(e) => {
+                                    const dialogElement = (e.target as HTMLElement).closest('[role="dialog"]')
+                                    const requesterInput = dialogElement?.querySelector(
+                                      'input[id="requester"]',
+                                    ) as HTMLInputElement
+                                    const reorderInput = dialogElement?.querySelector(
+                                      'input[id="reorderPoint"]',
+                                    ) as HTMLInputElement
+
+                                    if (!requesterInput) {
+                                      alert("❌ Could not find requester input field. Please try again.")
+                                      return
+                                    }
+
+                                    const requester = requesterInput.value?.trim()
                                     const newReorderPoint = Number.parseInt(reorderInput?.value || "0")
+
+                                    console.log("Update button clicked - Raw input value:", requesterInput.value) // Debug log
+                                    console.log("Update button clicked - Trimmed requester:", requester) // Debug log
 
                                     if (!requester || requester.toLowerCase() === "current user") {
                                       alert("❌ Please provide a valid requester name. 'Current User' is not allowed.")
@@ -1898,8 +1922,8 @@ Please check your Slack configuration.`)
 
                                     updateReorderPoint(item.id, newReorderPoint, requester)
                                     // Close dialog
-                                    const closeButton = document.querySelector(
-                                      '[data-state="open"] button[aria-label="Close"]',
+                                    const closeButton = dialogElement?.querySelector(
+                                      'button[aria-label="Close"]',
                                     ) as HTMLButtonElement
                                     closeButton?.click()
                                   }}

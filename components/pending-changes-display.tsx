@@ -85,13 +85,18 @@ export default function PendingChangesDisplay() {
   }
 
   const renderChangeDetails = (change: PendingChange) => {
-    if (change.change_type === "batch_add") {
+    // Check if this is a batch operation (new structure)
+    const isBatch = change.item_data?.is_batch === true
+
+    if (isBatch) {
       const batchItems = change.item_data?.batch_items || []
+      const itemCount = change.item_data?.item_count || batchItems.length
+
       return (
         <div>
           <div className="font-medium flex items-center gap-2">
             <Package className="w-4 h-4" />
-            Batch Addition ({batchItems.length} items)
+            Batch Addition ({itemCount} items)
           </div>
           <div className="text-sm text-gray-600 mt-1">
             {batchItems.slice(0, 3).map((item: any, index: number) => (
@@ -116,11 +121,12 @@ export default function PendingChangesDisplay() {
           {change.change_type === "update" && "Update Item"}
         </div>
         <div className="text-sm text-gray-600">
-          {change.change_type === "add" && `${change.item_data?.part_number} - ${change.item_data?.part_description}`}
+          {change.change_type === "add" &&
+            `${change.item_data?.part_number || "N/A"} - ${change.item_data?.part_description || "N/A"}`}
           {change.change_type === "delete" &&
-            `${change.original_data?.part_number} - ${change.original_data?.part_description}`}
+            `${change.original_data?.part_number || "N/A"} - ${change.original_data?.part_description || "N/A"}`}
           {change.change_type === "update" &&
-            `${change.original_data?.part_number} - ${change.original_data?.part_description}`}
+            `${change.original_data?.part_number || "N/A"} - ${change.original_data?.part_description || "N/A"}`}
         </div>
       </div>
     )

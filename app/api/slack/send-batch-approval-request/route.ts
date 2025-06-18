@@ -39,25 +39,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create item summary (show first 5 items, then indicate if there are more)
-    const maxItemsToShow = 5
-    const itemsToShow = batchItems.slice(0, maxItemsToShow)
-    const remainingCount = Math.max(0, batchItems.length - maxItemsToShow)
-
-    const itemsList = itemsToShow
-      .map((item, index) => {
-        const partNum = item.part_number || "N/A"
-        const description = item.part_description || "No description"
-        const qty = item.qty || 0
-        const supplier = item.supplier || "N/A"
-        const location = item.location || "N/A"
-
-        return `${index + 1}. *${partNum}* - ${description}\n   📦 Qty: ${qty} | 🏢 ${supplier} | 📍 ${location}`
-      })
-      .join("\n")
-
-    const remainingText = remainingCount > 0 ? `\n_...and ${remainingCount} more items_` : ""
-
     // Calculate total quantity
     const totalQty = batchItems.reduce((sum, item) => sum + (item.qty || 0), 0)
 
@@ -65,69 +46,40 @@ export async function POST(request: NextRequest) {
     const uniqueSuppliers = [...new Set(batchItems.map((item) => item.supplier).filter(Boolean))]
     const suppliersText = uniqueSuppliers.length > 0 ? uniqueSuppliers.join(", ") : "Various"
 
+    // Create item list (show all items for batch)
+    const itemsList = batchItems
+      .map((item, index) => {
+        const partNum = item.part_number || "N/A"
+        const description = item.part_description || "No description"
+        const qty = item.qty || 0
+        const supplier = item.supplier || "N/A"
+        const location = item.location || "N/A"
+
+        return `• ${partNum} - ${description}\n  Quantity: ${qty}\n  Location: ${location}\n  Supplier: ${supplier}`
+      })
+      .join("\n\n")
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://v0-inv-mgt.vercel.app"
 
-    const slackMessage = {
-      text: `🔔 New Batch Approval Request from ${requestedBy}`,
-      blocks: [
-        {
-          type: "header",
-          text: {
-            type: "plain_text",
-            text: "🔔 New Batch Approval Request",
-          },
-        },
-        {
-          type: "section",
-          fields: [
-            {
-              type: "mrkdwn",
-              text: `*Requester:*\n${requestedBy}`,
-            },
-            {
-              type: "mrkdwn",
-              text: `*Items:*\n${batchItems.length} parts`,
-            },
-            {
-              type: "mrkdwn",
-              text: `*Total Quantity:*\n${totalQty.toLocaleString()}`,
-            },
-            {
-              type: "mrkdwn",
-              text: `*Suppliers:*\n${suppliersText}`,
-            },
-          ],
-        },
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*📦 Items in Batch:*\n${itemsList}${remainingText}`,
-          },
-        },
-        {
-          type: "divider",
-        },
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `⏰ *Action Required:* Please review and approve/reject this batch\n🆔 *Change ID:* \`${changeId}\``,
-          },
-          accessory: {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "Review in App",
-            },
-            url: `${appUrl}/approvals`,
-            action_id: "review_batch",
-          },
-        },
-      ],
+    // Create simple text message (like the second screenshot)
+    let message = `🔄 *Batch Inventory Change Request*\n\n`
+    message += `*Type:* BATCH ADD\n`
+    message += `*Requested by:* ${requestedBy}\n`
+    message += `*Change ID:* ${changeId}\n\n`
+    message += `*Adding ${batchItems.length} New Items:*\n`
+    message += `Total Quantity: ${totalQty.toLocaleString()}\n`
+    message += `Suppliers: ${suppliersText}\n\n`
+    message += `${itemsList}\n\n`
+    message += `📋 Please review this batch change in the approval dashboard:\n`
+    message += `${appUrl}/approvals`
+
+    const slackPayload = {
+      text: message,
+      username: "Inventory Bot",
+      icon_emoji: ":package:",
     }
 
-    console.log("📨 Sending Slack message for batch:", {
+    console.log("📨 Sending simple text Slack message for batch:", {
       itemCount: batchItems.length,
       totalQty,
       suppliers: uniqueSuppliers.length,
@@ -138,7 +90,7 @@ export async function POST(request: NextRequest) {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(slackMessage),
+      body: JSON.stringify(slackPayload),
     })
 
     if (!response.ok) {

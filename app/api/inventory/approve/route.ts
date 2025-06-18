@@ -25,6 +25,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { changeId, action, approvedBy } = body
 
+    console.log("Approval request received:", { changeId, action, approvedBy })
+
     // Validate required fields
     if (!changeId || !action || !approvedBy) {
       return NextResponse.json(
@@ -55,6 +57,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (fetchError || !pendingChange) {
+      console.error("Error fetching pending change:", fetchError)
       return NextResponse.json(
         {
           success: false,
@@ -63,6 +66,8 @@ export async function POST(request: NextRequest) {
         { status: 404 },
       )
     }
+
+    console.log("Found pending change:", pendingChange)
 
     if (action === "reject") {
       // Just update the status to rejected
@@ -93,11 +98,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle approval - apply the change to the inventory
-    let inventoryResult = null
+    const inventoryResults = []
 
     if (pendingChange.change_type === "add") {
-      // Add new item
-      const { data, error } = await supabase.from("inventory").insert(pendingChange.item_data).select().single()
+      // Handle regular single item add
+      const inventoryItem = {
+        part_number: String(pendingChange.item_data.part_number || "").trim(),
+        mfg_part_number: String(pendingChange.item_data.mfg_part_number || "").trim(),
+        qty: Number(pendingChange.item_data.qty) || 0,
+        part_description: String(pendingChange.item_data.part_description || "").trim(),
+        supplier: String(pendingChange.item_data.supplier || "").trim(),
+        location: String(pendingChange.item_data.location || "").trim(),
+        package: String(pendingChange.item_data.package || "").trim(),
+        reorder_point: Number(pendingChange.item_data.reorder_point) || 10,
+      }
+
+      const { data, error } = await supabase.from("inventory").insert(inventoryItem).select().single()
 
       if (error) {
         console.error("Error adding inventory item:", error)
@@ -109,12 +125,81 @@ export async function POST(request: NextRequest) {
           { status: 500 },
         )
       }
-      inventoryResult = data
+      inventoryResults.push(data)
+    } else if (pendingChange.change_type === "batch_add" || pendingChange.item_data?.is_batch === true) {
+      // Handle batch add - process all items in the batch
+      const batchItems = pendingChange.item_data?.batch_items || []
+
+      if (batchItems.length === 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "No batch items found to process",
+          },
+          { status: 400 },
+        )
+      }
+
+      console.log(`Processing ${batchItems.length} batch items`)
+
+      // Process each item in the batch individually
+      for (const item of batchItems) {
+        // Transform the item data to match the database schema
+        const inventoryItem = {
+          part_number: String(item.part_number || "").trim(),
+          mfg_part_number: String(item.mfg_part_number || "").trim(),
+          qty: Number(item.qty) || 0,
+          part_description: String(item.part_description || "").trim(),
+          supplier: String(item.supplier || "").trim(),
+          location: String(item.location || "").trim(),
+          package: String(item.package || "").trim(),
+          reorder_point: Number(item.reorder_point) || 10,
+        }
+
+        console.log("Adding batch item:", inventoryItem)
+
+        try {
+          const { data, error } = await supabase.from("inventory").insert(inventoryItem).select().single()
+
+          if (error) {
+            console.error("Error adding batch item:", error, "Item data:", inventoryItem)
+            return NextResponse.json(
+              {
+                success: false,
+                error: `Failed to add item ${item.part_number}: ${error.message}`,
+              },
+              { status: 500 },
+            )
+          }
+
+          inventoryResults.push(data)
+          console.log(`Successfully added item: ${item.part_number}`)
+        } catch (itemError) {
+          console.error("Exception adding batch item:", itemError)
+          return NextResponse.json(
+            {
+              success: false,
+              error: `Failed to add item ${item.part_number}: ${itemError instanceof Error ? itemError.message : "Unknown error"}`,
+            },
+            { status: 500 },
+          )
+        }
+      }
+
+      console.log(`Successfully added ${inventoryResults.length} batch items to inventory`)
     } else if (pendingChange.change_type === "update") {
       // Update existing item
+      const updateData = {
+        qty: Number(pendingChange.item_data.qty) || 0,
+        reorder_point: Number(pendingChange.item_data.reorder_point) || 10,
+        location: String(pendingChange.item_data.location || "").trim(),
+        supplier: String(pendingChange.item_data.supplier || "").trim(),
+        package: String(pendingChange.item_data.package || "").trim(),
+      }
+
       const { data, error } = await supabase
         .from("inventory")
-        .update(pendingChange.item_data)
+        .update(updateData)
         .eq("part_number", pendingChange.original_data.part_number)
         .select()
         .single()
@@ -129,7 +214,7 @@ export async function POST(request: NextRequest) {
           { status: 500 },
         )
       }
-      inventoryResult = data
+      inventoryResults.push(data)
     } else if (pendingChange.change_type === "delete") {
       // Delete item
       const { error } = await supabase
@@ -172,8 +257,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: "Change approved and applied successfully",
-      inventoryResult,
+      message: `Change approved and applied successfully. ${inventoryResults.length} item(s) processed.`,
+      inventoryResults,
+      itemsProcessed: inventoryResults.length,
     })
   } catch (error) {
     console.error("Error in POST /api/inventory/approve:", error)
