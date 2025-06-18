@@ -1294,6 +1294,7 @@ Please check your Slack configuration.`)
             suppliers={suppliers}
             locations={uniqueLocations} // Updated here
             defaultReorderPoint={alertSettings.defaultReorderPoint}
+            inventory={inventory} // Add this line
           />
           <Button onClick={handleDownloadExcel} variant="outline">
             <Download className="w-4 h-4 mr-2" />

@@ -25,6 +25,7 @@ interface AddInventoryItemProps {
   suppliers: string[]
   locations: string[]
   defaultReorderPoint: number
+  inventory: InventoryItem[] // Add this line
 }
 
 interface BatchItem extends Omit<InventoryItem, "id" | "lastUpdated"> {
@@ -37,6 +38,7 @@ export default function AddInventoryItem({
   suppliers,
   locations,
   defaultReorderPoint,
+  inventory, // Add this line
 }: AddInventoryItemProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -167,6 +169,17 @@ export default function AddInventoryItem({
     const isDuplicate = batchItems.some((item) => item["Part number"] === currentItem.partNumber.trim())
     if (isDuplicate) {
       setError("This part number is already in the batch")
+      return
+    }
+
+    // NEW: Check for duplicate part numbers in existing inventory
+    const existsInInventory = inventory?.some(
+      (item) => item["Part number"].toLowerCase() === currentItem.partNumber.trim().toLowerCase(),
+    )
+    if (existsInInventory) {
+      setError(
+        `Part number "${currentItem.partNumber.trim()}" already exists in inventory. Use the Edit function to modify existing items.`,
+      )
       return
     }
 
