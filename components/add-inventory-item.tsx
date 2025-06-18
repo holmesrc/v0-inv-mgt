@@ -177,12 +177,12 @@ export default function AddInventoryItem({
     }
 
     // NEW: Check for duplicate part numbers in existing inventory
-    const existsInInventory = inventory?.some(
+    const duplicateItem = inventory?.find(
       (item) => item["Part number"].toLowerCase() === currentItem.partNumber.trim().toLowerCase(),
     )
-    if (existsInInventory) {
+    if (duplicateItem) {
       setError(
-        `Part number "${currentItem.partNumber.trim()}" already exists in inventory. Use the Edit function to modify existing items.`,
+        `Part number "${currentItem.partNumber.trim()}" already exists in inventory at location: ${duplicateItem.Location || "Unknown"}. Quantity: ${duplicateItem.QTY}, Package: ${duplicateItem.Package || "Unknown"}. Use the Edit function to modify existing items.`,
       )
       return
     }
@@ -331,12 +331,12 @@ export default function AddInventoryItem({
     }
 
     // Check for duplicate part numbers in existing inventory
-    const existsInInventory = inventory?.some(
+    const duplicateItem = inventory?.find(
       (item) => item["Part number"].toLowerCase() === editingItem["Part number"].trim().toLowerCase(),
     )
-    if (existsInInventory) {
+    if (duplicateItem) {
       setError(
-        `Part number "${editingItem["Part number"].trim()}" already exists in inventory. Use the Edit function to modify existing items.`,
+        `Part number "${editingItem["Part number"].trim()}" already exists in inventory at location: ${duplicateItem.Location || "Unknown"}. Quantity: ${duplicateItem.QTY}, Package: ${duplicateItem.Package || "Unknown"}. Use the Edit function to modify existing items.`,
       )
       return
     }
