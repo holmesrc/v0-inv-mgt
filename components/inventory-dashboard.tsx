@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Dialog,
   DialogContent,
@@ -52,6 +51,8 @@ export default function InventoryDashboard() {
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [stockFilter, setStockFilter] = useState("all")
+  const [sortColumn, setSortColumn] = useState<keyof InventoryItem | "">("")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([])
   const [alertSettings, setAlertSettings] = useState<AlertSettings>({
     enabled: true,
@@ -490,16 +491,15 @@ export default function InventoryDashboard() {
     }
   }
 
-  // Filter and search logic - FIXED to include Location field
   const filteredInventory = useMemo(() => {
-    return inventory.filter((item) => {
+    const filtered = inventory.filter((item) => {
       const matchesSearch =
         item["Part number"].toLowerCase().includes(searchTerm.toLowerCase()) ||
         item["MFG Part number"].toLowerCase().includes(searchTerm.toLowerCase()) ||
         item["Part description"].toLowerCase().includes(searchTerm.toLowerCase()) ||
         item["Supplier"].toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item["Location"].toLowerCase().includes(searchTerm.toLowerCase()) || // ADDED THIS LINE
-        item["Package"].toLowerCase().includes(searchTerm.toLowerCase()) // ADDED THIS LINE TOO
+        item["Location"].toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item["Package"].toLowerCase().includes(searchTerm.toLowerCase())
 
       const matchesCategory = categoryFilter === "all" || item["Package"] === categoryFilter
 
@@ -514,7 +514,151 @@ export default function InventoryDashboard() {
 
       return matchesSearch && matchesCategory && matchesStock
     })
-  }, [inventory, searchTerm, categoryFilter, stockFilter, alertSettings.defaultReorderPoint])
+
+    // Apply sorting
+    if (sortColumn) {
+      filtered.sort((a, b) => {
+        let aValue: any = a[sortColumn]
+        let bValue: any = b[sortColumn]
+
+        // Handle special cases
+        if (sortColumn === "QTY" || sortColumn === "reorderPoint") {
+          aValue = Number(aValue) || 0
+          bValue = Number(bValue) || 0
+          return sortDirection === "asc" ? aValue - bValue : bValue - aValue
+        }
+
+        // Handle Location with natural sorting
+        if (sortColumn === "Location") {
+          const naturalSort = (str1: string, str2: string) => {
+            const aParts = str1.split(/[-_\s]+/)
+            const bParts = str2.split(/[-_\s]+/)
+
+            for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+              const aPart = aParts[i] || ""
+              const bPart = bParts[i] || ""
+
+              const aMatch = aPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
+              const bMatch = bPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
+
+              if (aMatch && bMatch) {
+                const [, aPrefix, aNumber, aSuffix] = aMatch
+                const [, bPrefix, bNumber, bSuffix] = bMatch
+
+                if (aPrefix !== bPrefix) {
+                  return aPrefix.localeCompare(bPrefix)
+                }
+
+                if (aNumber && bNumber) {
+                  const aNum = Number.parseInt(aNumber, 10)
+                  const bNum = Number.parseInt(bNumber, 10)
+                  if (aNum !== bNum) {
+                    return aNum - bNum
+                  }
+                } else if (aNumber && !bNumber) {
+                  return 1
+                } else if (!aNumber && bNumber) {
+                  return -1
+                }
+
+                if (aSuffix !== bSuffix) {
+                  return aSuffix.localeCompare(bSuffix)
+                }
+              } else {
+                const comparison = aPart.toLowerCase().localeCompare(bPart.toLowerCase())
+                if (comparison !== 0) {
+                  return comparison
+                }
+              }
+            }
+            return 0
+          }
+
+          const result = naturalSort(String(aValue), String(bValue))
+          return sortDirection === "asc" ? result : -result
+        }
+
+        // Handle Part number with natural sorting for numbers
+        if (sortColumn === "Part number" || sortColumn === "MFG Part number") {
+          const aStr = String(aValue).toLowerCase()
+          const bStr = String(bValue).toLowerCase()
+
+          // Extract numbers for proper numeric sorting
+          const aMatch = aStr.match(/(\d+)/)
+          const bMatch = bStr.match(/(\d+)/)
+
+          if (aMatch && bMatch) {
+            const aNum = Number.parseInt(aMatch[1], 10)
+            const bNum = Number.parseInt(bMatch[1], 10)
+            if (aNum !== bNum) {
+              return sortDirection === "asc" ? aNum - bNum : bNum - aNum
+            }
+          }
+
+          // Fallback to string comparison
+          const result = aStr.localeCompare(bStr)
+          return sortDirection === "asc" ? result : -result
+        }
+
+        // Default string sorting
+        const aStr = String(aValue).toLowerCase()
+        const bStr = String(bValue).toLowerCase()
+        const result = aStr.localeCompare(bStr)
+        return sortDirection === "asc" ? result : -result
+      })
+    } else {
+      // Default sort by Location (natural sorting)
+      filtered.sort((a, b) => {
+        const naturalSort = (str1: string, str2: string) => {
+          const aParts = str1.split(/[-_\s]+/)
+          const bParts = str2.split(/[-_\s]+/)
+
+          for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+            const aPart = aParts[i] || ""
+            const bPart = bParts[i] || ""
+
+            const aMatch = aPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
+            const bMatch = bPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
+
+            if (aMatch && bMatch) {
+              const [, aPrefix, aNumber, aSuffix] = aMatch
+              const [, bPrefix, bNumber, bSuffix] = bMatch
+
+              if (aPrefix !== bPrefix) {
+                return aPrefix.localeCompare(bPrefix)
+              }
+
+              if (aNumber && bNumber) {
+                const aNum = Number.parseInt(aNumber, 10)
+                const bNum = Number.parseInt(bNumber, 10)
+                if (aNum !== bNum) {
+                  return aNum - bNum
+                }
+              } else if (aNumber && !bNumber) {
+                return 1
+              } else if (!aNumber && bNumber) {
+                return -1
+              }
+
+              if (aSuffix !== bSuffix) {
+                return aSuffix.localeCompare(bSuffix)
+              }
+            } else {
+              const comparison = aPart.toLowerCase().localeCompare(bPart.toLowerCase())
+              if (comparison !== 0) {
+                return comparison
+              }
+            }
+          }
+          return 0
+        }
+
+        return naturalSort(a["Location"], b["Location"])
+      })
+    }
+
+    return filtered
+  }, [inventory, searchTerm, categoryFilter, stockFilter, alertSettings.defaultReorderPoint, sortColumn, sortDirection])
 
   // Get unique values for dropdowns - with proper deduplication
   const packageTypes = useMemo(() => {
@@ -1334,8 +1478,8 @@ Please check your Slack configuration.`)
         </Card>
       )}
 
-      {/* Stats Cards with Definitions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Stats Cards - Compact Version */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Items</CardTitle>
@@ -1346,6 +1490,7 @@ Please check your Slack configuration.`)
             <p className="text-xs text-muted-foreground mt-1">All inventory items</p>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Low Stock Items</CardTitle>
@@ -1353,60 +1498,50 @@ Please check your Slack configuration.`)
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-500">{lowStockItems.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">≤ {alertSettings.defaultReorderPoint} units</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Approaching Low</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-yellow-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-yellow-500">{approachingLowStockItems.length}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              ≤ {alertSettings.defaultReorderPoint} units (at or below reorder point)
+              {alertSettings.defaultReorderPoint + 1} - {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
             </p>
           </CardContent>
         </Card>
+
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Info className="w-5 h-5 text-blue-600" />
-              Stock Status Definitions
-            </CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Stock Levels</CardTitle>
+            <Info className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="flex items-start gap-3">
-                <Badge variant="destructive" className="mt-1">
-                  Low Stock
+            <div className="space-y-1 text-xs">
+              <div className="flex items-center gap-2">
+                <Badge variant="destructive" className="text-xs px-1 py-0">
+                  Low
                 </Badge>
-                <div>
-                  <p className="font-medium text-sm">≤ {alertSettings.defaultReorderPoint} units</p>
-                  <p className="text-xs text-muted-foreground">
-                    At or below the reorder point. Immediate action required.
-                  </p>
-                </div>
+                <span>≤ {alertSettings.defaultReorderPoint}</span>
               </div>
-              <div className="flex items-start gap-3">
-                <Badge variant="secondary" className="mt-1">
-                  Approaching Low
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-xs px-1 py-0">
+                  Approaching
                 </Badge>
-                <div>
-                  <p className="font-medium text-sm">
-                    {alertSettings.defaultReorderPoint + 1} - {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
-                  </p>
-                  <p className="text-xs text-muted-foreground">Within 50% above reorder point. Monitor closely.</p>
-                </div>
+                <span>
+                  {alertSettings.defaultReorderPoint + 1}-{Math.ceil(alertSettings.defaultReorderPoint * 1.5)}
+                </span>
               </div>
-              <div className="flex items-start gap-3">
-                <Badge variant="outline" className="mt-1">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs px-1 py-0">
                   Normal
                 </Badge>
-                <div>
-                  <p className="font-medium text-sm">
-                    {">"} {Math.ceil(alertSettings.defaultReorderPoint * 1.5)} units
-                  </p>
-                  <p className="text-xs text-muted-foreground">More than 50% above reorder point. Adequate stock.</p>
-                </div>
+                <span>&gt; {Math.ceil(alertSettings.defaultReorderPoint * 1.5)}</span>
               </div>
-            </div>
-            <div className="mt-4 p-3 bg-white rounded border border-blue-200">
-              <p className="text-sm text-blue-800">
-                <strong>Note:</strong> These calculations are based on your default reorder point of{" "}
-                {alertSettings.defaultReorderPoint} units. Individual items may have custom reorder points that override
-                this default.
-              </p>
             </div>
           </CardContent>
         </Card>
@@ -1458,6 +1593,52 @@ Please check your Slack configuration.`)
               </SelectContent>
             </Select>
           </div>
+
+          {/* New Sorting Controls */}
+          <div className="flex flex-col md:flex-row gap-4 pt-4 border-t">
+            <div className="flex items-center gap-2">
+              <Label className="text-sm font-medium">Sort by:</Label>
+              <Select
+                value={sortColumn || "default"}
+                onValueChange={(value) => setSortColumn(value === "default" ? "" : (value as keyof InventoryItem))}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Default (Location)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default (Location)</SelectItem>
+                  <SelectItem value="Part number">Part Number</SelectItem>
+                  <SelectItem value="MFG Part number">MFG Part Number</SelectItem>
+                  <SelectItem value="QTY">Quantity</SelectItem>
+                  <SelectItem value="Part description">Description</SelectItem>
+                  <SelectItem value="Supplier">Supplier</SelectItem>
+                  <SelectItem value="Package">Package</SelectItem>
+                  <SelectItem value="reorderPoint">Reorder Point</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sortDirection} onValueChange={(value) => setSortDirection(value as "asc" | "desc")}>
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder={sortDirection === "asc" ? "Ascending" : "Descending"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="asc">Ascending</SelectItem>
+                  <SelectItem value="desc">Descending</SelectItem>
+                </SelectContent>
+              </Select>
+              {sortColumn && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSortColumn("")
+                    setSortDirection("asc")
+                  }}
+                >
+                  Clear Sort
+                </Button>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -1469,43 +1650,61 @@ Please check your Slack configuration.`)
             Showing {filteredInventory.length} of {inventory.length} items
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="max-h-96 overflow-y-auto border rounded-md">
-            <Table>
-              <TableHeader className="sticky top-0 bg-white z-10">
-                <TableRow>
-                  <TableHead>Part Number</TableHead>
-                  <TableHead>MFG Part Number</TableHead>
-                  <TableHead>QTY</TableHead>
-                  <TableHead>Part Description</TableHead>
-                  <TableHead>Supplier</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Package</TableHead>
-                  <TableHead>Reorder Point</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+        <CardContent className="p-0">
+          <div className="relative">
+            {/* Fixed Header */}
+            <div className="sticky top-0 z-50 bg-white border-b-2 border-gray-300 shadow-md">
+              <div className="grid grid-cols-10 gap-0 min-w-[1200px]">
+                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">
+                  Part Number
+                </div>
+                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">
+                  MFG Part Number
+                </div>
+                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">QTY</div>
+                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">
+                  Part Description
+                </div>
+                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">
+                  Supplier
+                </div>
+                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">
+                  Location
+                </div>
+                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">Package</div>
+                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">
+                  Reorder Point
+                </div>
+                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">Status</div>
+                <div className="px-4 py-3 font-semibold text-gray-900 bg-gray-50">Actions</div>
+              </div>
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="max-h-96 overflow-auto">
+              <div className="min-w-[1200px]">
                 {filteredInventory.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item["Part number"]}</TableCell>
-                    <TableCell>{item["MFG Part number"]}</TableCell>
-                    <TableCell>{item["QTY"]}</TableCell>
-                    <TableCell>{item["Part description"]}</TableCell>
-                    <TableCell>{item["Supplier"]}</TableCell>
-                    <TableCell>{item["Location"]}</TableCell>
-                    <TableCell>
+                  <div key={item.id} className="grid grid-cols-10 gap-0 border-b border-gray-100 hover:bg-gray-50">
+                    <div className="px-4 py-3 font-medium border-r border-gray-100">{item["Part number"]}</div>
+                    <div className="px-4 py-3 border-r border-gray-100">{item["MFG Part number"]}</div>
+                    <div className="px-4 py-3 border-r border-gray-100">{item["QTY"]}</div>
+                    <div className="px-4 py-3 border-r border-gray-100">{item["Part description"]}</div>
+                    <div className="px-4 py-3 border-r border-gray-100">{item["Supplier"]}</div>
+                    <div className="px-4 py-3 border-r border-gray-100">{item["Location"]}</div>
+                    <div className="px-4 py-3 border-r border-gray-100">
                       <Badge variant="outline">{item["Package"]}</Badge>
-                    </TableCell>
-                    <TableCell>{item.reorderPoint || alertSettings.defaultReorderPoint}</TableCell>
-                    <TableCell>
+                    </div>
+                    <div className="px-4 py-3 border-r border-gray-100">
+                      {item.reorderPoint || alertSettings.defaultReorderPoint}
+                    </div>
+                    <div className="px-4 py-3 border-r border-gray-100">
                       {(() => {
                         const stockStatus = getStockStatus(item)
                         return <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>
                       })()}
-                    </TableCell>
-                    <TableCell>
+                    </div>
+                    <div className="px-4 py-3">
+                      {/* All the existing action content remains exactly the same */}
                       <div className="flex flex-col gap-2">
                         {/* Quantity Controls */}
                         <div className="flex items-center gap-1">
@@ -1779,11 +1978,11 @@ Please check your Slack configuration.`)
                           </Dialog>
                         </div>
                       </div>
-                    </TableCell>
-                  </TableRow>
+                    </div>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
