@@ -16,7 +16,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, AlertTriangle, X, Package, User } from "lucide-react"
+import { Plus, AlertTriangle, X, Package, User, Edit } from "lucide-react"
 import type { InventoryItem } from "@/types/inventory"
 
 interface AddInventoryItemProps {
@@ -56,6 +56,10 @@ export default function AddInventoryItem({
     package: "",
     reorderPoint: defaultReorderPoint,
   })
+
+  // Track which item is being edited
+  const [editingBatchId, setEditingBatchId] = useState<string | null>(null)
+  const [editingItem, setEditingItem] = useState<BatchItem | null>(null)
 
   // Track if we're using custom input values
   const [useCustomSupplier, setUseCustomSupplier] = useState(false)
@@ -270,11 +274,121 @@ export default function AddInventoryItem({
     }
   }
 
+  const startEditingBatchItem = (item: BatchItem) => {
+    setEditingBatchId(item.batchId)
+    setEditingItem({ ...item })
+  }
+
+  const cancelEditingBatchItem = () => {
+    setEditingBatchId(null)
+    setEditingItem(null)
+  }
+
+  const saveEditingBatchItem = () => {
+    if (!editingItem) return
+
+    // Validate the edited item
+    if (!editingItem["Part number"].trim()) {
+      setError("Part number is required")
+      return
+    }
+
+    // Check for duplicate part numbers in batch (excluding the item being edited)
+    const isDuplicate = batchItems.some(
+      (item) => item.batchId !== editingItem.batchId && item["Part number"] === editingItem["Part number"].trim(),
+    )
+    if (isDuplicate) {
+      setError("This part number is already in the batch")
+      return
+    }
+
+    // Check for duplicate part numbers in existing inventory
+    const existsInInventory = inventory?.some(
+      (item) => item["Part number"].toLowerCase() === editingItem["Part number"].trim().toLowerCase(),
+    )
+    if (existsInInventory) {
+      setError(
+        `Part number "${editingItem["Part number"].trim()}" already exists in inventory. Use the Edit function to modify existing items.`,
+      )
+      return
+    }
+
+    // Update the batch item
+    setBatchItems((prev) =>
+      prev.map((item) =>
+        item.batchId === editingItem.batchId
+          ? { ...editingItem, "Part number": editingItem["Part number"].trim() }
+          : item,
+      ),
+    )
+
+    setEditingBatchId(null)
+    setEditingItem(null)
+    setError(null)
+    setSuccess("Item updated successfully")
+    setTimeout(() => setSuccess(null), 2000)
+  }
+
+  const handleEditingItemChange = (field: string, value: string | number) => {
+    if (!editingItem) return
+
+    setEditingItem((prev) => {
+      if (!prev) return null
+
+      const updated = {
+        ...prev,
+        [field]: value,
+      }
+
+      // Auto-select package type based on quantity
+      if (field === "QTY" && typeof value === "number") {
+        let autoPackage = ""
+        if (value >= 1 && value <= 100) {
+          autoPackage = "EXACT"
+        } else if (value >= 101 && value <= 500) {
+          autoPackage = "ESTIMATED"
+        } else if (value > 500) {
+          autoPackage = "REEL"
+        }
+
+        // Only auto-set if current package is empty or matches one of the auto types
+        const currentPkg = prev.Package.toUpperCase()
+        if (!currentPkg || currentPkg === "EXACT" || currentPkg === "ESTIMATED" || currentPkg === "REEL") {
+          updated.Package = autoPackage
+        }
+      }
+
+      return updated
+    })
+  }
+
   const handleInputChange = (field: string, value: string | number) => {
-    setCurrentItem((prev) => ({
-      ...prev,
-      [field]: value,
-    }))
+    setCurrentItem((prev) => {
+      const updated = {
+        ...prev,
+        [field]: value,
+      }
+
+      // Auto-select package type based on quantity
+      if (field === "qty" && typeof value === "number") {
+        let autoPackage = ""
+        if (value >= 1 && value <= 100) {
+          autoPackage = "EXACT"
+        } else if (value >= 101 && value <= 500) {
+          autoPackage = "ESTIMATED"
+        } else if (value > 500) {
+          autoPackage = "REEL"
+        }
+
+        // Only auto-set if current package is empty or matches one of the auto types
+        const currentPkg = prev.package.toUpperCase()
+        if (!currentPkg || currentPkg === "EXACT" || currentPkg === "ESTIMATED" || currentPkg === "REEL") {
+          updated.package = autoPackage
+        }
+      }
+
+      return updated
+    })
   }
 
   const handleSelectChange = (field: string, value: string) => {
@@ -401,6 +515,9 @@ export default function AddInventoryItem({
                     onChange={(e) => handleInputChange("qty", Number.parseInt(e.target.value) || 0)}
                     disabled={loading}
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Auto-selects: Exact (1-100), Estimated (101-500), Reel (500+)
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="reorderPoint">Reorder Point</Label>
@@ -468,12 +585,12 @@ export default function AddInventoryItem({
                         <SelectValue placeholder="Select location" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="custom">📍 Enter custom location...</SelectItem>
                         {uniqueLocations.map((location, index) => (
                           <SelectItem key={`location-${index}-${location}`} value={location}>
                             {location}
                           </SelectItem>
                         ))}
-                        <SelectItem value="custom">Enter custom location...</SelectItem>
                       </SelectContent>
                     </Select>
                   ) : (
@@ -501,12 +618,17 @@ export default function AddInventoryItem({
                         <SelectValue placeholder="Select package type" />
                       </SelectTrigger>
                       <SelectContent>
-                        {uniquePackageTypes.map((packageType, index) => (
-                          <SelectItem key={`package-${index}-${packageType}`} value={packageType}>
-                            {packageType}
-                          </SelectItem>
-                        ))}
-                        <SelectItem value="custom">Enter custom package...</SelectItem>
+                        <SelectItem value="EXACT">📦 EXACT (1-100 qty)</SelectItem>
+                        <SelectItem value="ESTIMATED">📊 ESTIMATED (101-500 qty)</SelectItem>
+                        <SelectItem value="REEL">🎯 REEL (500+ qty)</SelectItem>
+                        {uniquePackageTypes
+                          .filter((pkg) => !["EXACT", "ESTIMATED", "REEL"].includes(pkg))
+                          .map((packageType, index) => (
+                            <SelectItem key={`package-${index}-${packageType}`} value={packageType}>
+                              {packageType}
+                            </SelectItem>
+                          ))}
+                        <SelectItem value="custom">✏️ Enter custom package...</SelectItem>
                       </SelectContent>
                     </Select>
                   ) : (
@@ -521,6 +643,9 @@ export default function AddInventoryItem({
                       disabled={loading}
                     />
                   )}
+                  <p className="text-xs text-muted-foreground">
+                    Package auto-selected based on quantity. You can override for kits or custom packages.
+                  </p>
                 </div>
               </div>
               <div className="mt-4 flex gap-2">
@@ -547,21 +672,123 @@ export default function AddInventoryItem({
               <CardContent>
                 <div className="space-y-2 max-h-60 overflow-y-auto">
                   {batchItems.map((item, index) => (
-                    <div key={item.batchId} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex-1">
-                        <div className="font-medium">{item["Part number"]}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {item["Part description"]} • Qty: {item.QTY} • {item.Supplier} • {item.Location}
+                    <div key={item.batchId} className="p-3 border rounded-lg">
+                      {editingBatchId === item.batchId && editingItem ? (
+                        // Edit Mode
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <Label className="text-xs">Part Number</Label>
+                              <Input
+                                value={editingItem["Part number"]}
+                                onChange={(e) => handleEditingItemChange("Part number", e.target.value)}
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">MFG Part Number</Label>
+                              <Input
+                                value={editingItem["MFG Part number"]}
+                                onChange={(e) => handleEditingItemChange("MFG Part number", e.target.value)}
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Quantity</Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                value={editingItem.QTY}
+                                onChange={(e) => handleEditingItemChange("QTY", Number.parseInt(e.target.value) || 0)}
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Reorder Point</Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                value={editingItem.reorderPoint}
+                                onChange={(e) =>
+                                  handleEditingItemChange("reorderPoint", Number.parseInt(e.target.value) || 0)
+                                }
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <Label className="text-xs">Description</Label>
+                              <Input
+                                value={editingItem["Part description"]}
+                                onChange={(e) => handleEditingItemChange("Part description", e.target.value)}
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Supplier</Label>
+                              <Input
+                                value={editingItem.Supplier}
+                                onChange={(e) => handleEditingItemChange("Supplier", e.target.value)}
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Location</Label>
+                              <Input
+                                value={editingItem.Location}
+                                onChange={(e) => handleEditingItemChange("Location", e.target.value)}
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <Label className="text-xs">Package</Label>
+                              <Input
+                                value={editingItem.Package}
+                                onChange={(e) => handleEditingItemChange("Package", e.target.value)}
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex gap-2 justify-end">
+                            <Button size="sm" variant="outline" onClick={cancelEditingBatchItem}>
+                              Cancel
+                            </Button>
+                            <Button size="sm" onClick={saveEditingBatchItem}>
+                              Save Changes
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => removeFromBatch(item.batchId)}
-                        disabled={loading}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
+                      ) : (
+                        // Display Mode
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="font-medium">{item["Part number"]}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {item["Part description"]} • Qty: {item.QTY} • {item.Supplier} • {item.Location} •{" "}
+                              {item.Package}
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => startEditingBatchItem(item)}
+                              disabled={loading}
+                              title="Edit item"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => removeFromBatch(item.batchId)}
+                              disabled={loading}
+                              title="Remove item"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
