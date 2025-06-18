@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Checkbox } from "@/components/ui/checkbox"
 import { CheckCircle, XCircle, Clock, AlertTriangle, RefreshCw, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 
@@ -27,6 +28,8 @@ export default function ApprovalsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkProcessing, setBulkProcessing] = useState(false)
 
   useEffect(() => {
     loadPendingChanges()
@@ -85,6 +88,74 @@ export default function ApprovalsPage() {
     }
   }
 
+  const handleBulkApproval = async (action: "approve" | "reject") => {
+    if (selectedIds.size === 0) {
+      alert("Please select at least one item to process")
+      return
+    }
+
+    const confirmMessage = `Are you sure you want to ${action} ${selectedIds.size} selected item${selectedIds.size > 1 ? "s" : ""}?`
+    if (!confirm(confirmMessage)) {
+      return
+    }
+
+    try {
+      setBulkProcessing(true)
+      setError(null)
+
+      const promises = Array.from(selectedIds).map(async (changeId) => {
+        const response = await fetch("/api/inventory/approve", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            changeId,
+            action,
+            approvedBy: "Admin User",
+          }),
+        })
+        return response.json()
+      })
+
+      const results = await Promise.all(promises)
+      const failures = results.filter((result) => !result.success)
+
+      if (failures.length === 0) {
+        alert(`✅ Successfully ${action}d ${selectedIds.size} item${selectedIds.size > 1 ? "s" : ""}!`)
+        setSelectedIds(new Set())
+        await loadPendingChanges()
+      } else {
+        setError(`${failures.length} item${failures.length > 1 ? "s" : ""} failed to ${action}. Please try again.`)
+        await loadPendingChanges()
+      }
+    } catch (error) {
+      console.error(`Error bulk ${action}ing:`, error)
+      setError(`Failed to ${action} selected items`)
+    } finally {
+      setBulkProcessing(false)
+    }
+  }
+
+  const handleSelectAll = () => {
+    const pendingItems = pendingChanges.filter((change) => change.status === "pending")
+    if (selectedIds.size === pendingItems.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(pendingItems.map((change) => change.id)))
+    }
+  }
+
+  const handleSelectItem = (changeId: string) => {
+    const newSelected = new Set(selectedIds)
+    if (newSelected.has(changeId)) {
+      newSelected.delete(changeId)
+    } else {
+      newSelected.add(changeId)
+    }
+    setSelectedIds(newSelected)
+  }
+
   const getChangeTypeColor = (type: string) => {
     switch (type) {
       case "add":
@@ -116,55 +187,114 @@ export default function ApprovalsPage() {
 
     if (change_type === "add") {
       return (
-        <div className="space-y-1">
-          <p>
-            <strong>Part Number:</strong> {item_data?.part_number}
-          </p>
+        <div className="space-y-2 text-sm">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p>
+                <strong>Part Number:</strong> {item_data?.part_number}
+              </p>
+              <p>
+                <strong>MFG Part:</strong> {item_data?.mfg_part_number || "N/A"}
+              </p>
+              <p>
+                <strong>Supplier:</strong> {item_data?.supplier || "N/A"}
+              </p>
+            </div>
+            <div>
+              <p>
+                <strong>Quantity:</strong> {item_data?.qty}
+              </p>
+              <p>
+                <strong>Package:</strong> {item_data?.package || "N/A"}
+              </p>
+              <p>
+                <strong>Location:</strong> {item_data?.location}
+              </p>
+            </div>
+          </div>
           <p>
             <strong>Description:</strong> {item_data?.part_description}
           </p>
           <p>
-            <strong>Quantity:</strong> {item_data?.qty}
-          </p>
-          <p>
-            <strong>Location:</strong> {item_data?.location}
+            <strong>Reorder Point:</strong> {item_data?.reorder_point || "Not set"}
           </p>
         </div>
       )
     }
 
     if (change_type === "update") {
-      return (
-        <div className="space-y-1">
-          <p>
-            <strong>Part Number:</strong> {original_data?.part_number}
-          </p>
-          {original_data?.qty !== item_data?.qty && (
-            <p>
-              <strong>Quantity:</strong> {original_data?.qty} → {item_data?.qty}
-            </p>
-          )}
-          {original_data?.reorder_point !== item_data?.reorder_point && (
-            <p>
-              <strong>Reorder Point:</strong> {original_data?.reorder_point} → {item_data?.reorder_point}
-            </p>
-          )}
-        </div>
-      )
-    }
+      const changes = []
+      if (original_data?.qty !== item_data?.qty) {
+        changes.push(`Quantity: ${original_data?.qty} → ${item_data?.qty}`)
+      }
+      if (original_data?.reorder_point !== item_data?.reorder_point) {
+        changes.push(
+          `Reorder Point: ${original_data?.reorder_point || "Not set"} → ${item_data?.reorder_point || "Not set"}`,
+        )
+      }
+      if (original_data?.location !== item_data?.location) {
+        changes.push(`Location: ${original_data?.location} → ${item_data?.location}`)
+      }
+      if (original_data?.supplier !== item_data?.supplier) {
+        changes.push(`Supplier: ${original_data?.supplier || "N/A"} → ${item_data?.supplier || "N/A"}`)
+      }
+      if (original_data?.package !== item_data?.package) {
+        changes.push(`Package: ${original_data?.package || "N/A"} → ${item_data?.package || "N/A"}`)
+      }
 
-    if (change_type === "delete") {
       return (
-        <div className="space-y-1">
+        <div className="space-y-2 text-sm">
           <p>
             <strong>Part Number:</strong> {original_data?.part_number}
           </p>
           <p>
             <strong>Description:</strong> {original_data?.part_description}
           </p>
+          <div className="bg-blue-50 p-2 rounded">
+            <p className="font-medium text-blue-800 mb-1">Changes:</p>
+            {changes.map((change, index) => (
+              <p key={index} className="text-blue-700">
+                • {change}
+              </p>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
+    if (change_type === "delete") {
+      return (
+        <div className="space-y-2 text-sm">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p>
+                <strong>Part Number:</strong> {original_data?.part_number}
+              </p>
+              <p>
+                <strong>MFG Part:</strong> {original_data?.mfg_part_number || "N/A"}
+              </p>
+              <p>
+                <strong>Supplier:</strong> {original_data?.supplier || "N/A"}
+              </p>
+            </div>
+            <div>
+              <p>
+                <strong>Current Quantity:</strong> {original_data?.qty}
+              </p>
+              <p>
+                <strong>Package:</strong> {original_data?.package || "N/A"}
+              </p>
+              <p>
+                <strong>Location:</strong> {original_data?.location}
+              </p>
+            </div>
+          </div>
           <p>
-            <strong>Current Quantity:</strong> {original_data?.qty}
+            <strong>Description:</strong> {original_data?.part_description}
           </p>
+          <div className="bg-red-50 p-2 rounded">
+            <p className="text-red-800 font-medium">⚠️ This item will be permanently deleted</p>
+          </div>
         </div>
       )
     }
@@ -186,6 +316,7 @@ export default function ApprovalsPage() {
   const pendingCount = pendingChanges.filter((c) => c.status === "pending").length
   const approvedCount = pendingChanges.filter((c) => c.status === "approved").length
   const rejectedCount = pendingChanges.filter((c) => c.status === "rejected").length
+  const pendingItems = pendingChanges.filter((c) => c.status === "pending")
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -262,25 +393,78 @@ export default function ApprovalsPage() {
         </Card>
       </div>
 
+      {/* Bulk Actions */}
+      {pendingCount > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Checkbox
+                    checked={selectedIds.size === pendingItems.length && pendingItems.length > 0}
+                    onCheckedChange={handleSelectAll}
+                  />
+                  Bulk Actions
+                </CardTitle>
+                <CardDescription>
+                  {selectedIds.size} of {pendingCount} pending items selected
+                </CardDescription>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => handleBulkApproval("approve")}
+                  disabled={selectedIds.size === 0 || bulkProcessing}
+                  variant="default"
+                >
+                  {bulkProcessing ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                  )}
+                  Approve Selected ({selectedIds.size})
+                </Button>
+                <Button
+                  onClick={() => handleBulkApproval("reject")}
+                  disabled={selectedIds.size === 0 || bulkProcessing}
+                  variant="destructive"
+                >
+                  {bulkProcessing ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <XCircle className="w-4 h-4 mr-2" />
+                  )}
+                  Reject Selected ({selectedIds.size})
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+        </Card>
+      )}
+
       {/* Pending Changes Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Pending Changes</CardTitle>
-          <CardDescription>Review and approve or deny inventory changes</CardDescription>
+          <CardTitle>All Changes</CardTitle>
+          <CardDescription>Review and manage inventory changes</CardDescription>
         </CardHeader>
         <CardContent>
           {pendingChanges.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-muted-foreground">No pending changes found.</p>
+              <p className="text-muted-foreground">No changes found.</p>
             </div>
           ) : (
-            <div className="max-h-96 overflow-y-auto border rounded-md">
+            <div className="max-h-[600px] overflow-y-auto border rounded-md">
               <Table>
                 <TableHeader className="sticky top-0 bg-white z-10">
                   <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectedIds.size === pendingItems.length && pendingItems.length > 0}
+                        onCheckedChange={handleSelectAll}
+                      />
+                    </TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead>Description</TableHead>
                     <TableHead>Details</TableHead>
                     <TableHead>Requested By</TableHead>
                     <TableHead>Date</TableHead>
@@ -289,7 +473,15 @@ export default function ApprovalsPage() {
                 </TableHeader>
                 <TableBody>
                   {pendingChanges.map((change) => (
-                    <TableRow key={change.id}>
+                    <TableRow key={change.id} className={change.status === "pending" ? "bg-yellow-50" : ""}>
+                      <TableCell>
+                        {change.status === "pending" && (
+                          <Checkbox
+                            checked={selectedIds.has(change.id)}
+                            onCheckedChange={() => handleSelectItem(change.id)}
+                          />
+                        )}
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           {getStatusIcon(change.status)}
@@ -311,14 +503,7 @@ export default function ApprovalsPage() {
                           {change.change_type.toUpperCase()}
                         </Badge>
                       </TableCell>
-                      <TableCell className="max-w-xs">
-                        <div className="truncate" title={change.description}>
-                          {change.description}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">{formatChangeDetails(change)}</div>
-                      </TableCell>
+                      <TableCell className="max-w-md">{formatChangeDetails(change)}</TableCell>
                       <TableCell>{change.requested_by}</TableCell>
                       <TableCell>
                         <div className="text-sm">
