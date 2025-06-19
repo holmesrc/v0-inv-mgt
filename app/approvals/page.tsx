@@ -33,12 +33,6 @@ interface PendingChange {
   approved_at?: string
 }
 
-interface BatchItemStatus {
-  [batchId: string]: {
-    [itemIndex: number]: "pending" | "approved" | "rejected"
-  }
-}
-
 export default function ApprovalsPage() {
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([])
   const [loading, setLoading] = useState(true)
@@ -47,7 +41,6 @@ export default function ApprovalsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkProcessing, setBulkProcessing] = useState(false)
   const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set())
-  const [batchItemStatuses, setBatchItemStatuses] = useState<BatchItemStatus>({})
 
   useEffect(() => {
     loadPendingChanges()
@@ -67,19 +60,6 @@ export default function ApprovalsPage() {
 
       if (result.success) {
         setPendingChanges(result.data)
-
-        // Initialize batch item statuses
-        const newBatchStatuses: BatchItemStatus = {}
-        result.data.forEach((change: PendingChange) => {
-          if (change.item_data?.is_batch === true) {
-            const batchItems = change.item_data?.batch_items || []
-            newBatchStatuses[change.id] = {}
-            batchItems.forEach((_: any, index: number) => {
-              newBatchStatuses[change.id][index] = "pending"
-            })
-          }
-        })
-        setBatchItemStatuses(newBatchStatuses)
       } else {
         setError(result.error || "Failed to load pending changes")
       }
@@ -91,12 +71,12 @@ export default function ApprovalsPage() {
     }
   }
 
-  const handleBatchItemApproval = async (batchId: string, itemIndex: number, action: "approve" | "reject") => {
+  const handleBatchItemStatusChange = async (batchId: string, itemIndex: number, status: "approved" | "rejected") => {
     try {
       setProcessingId(`${batchId}-${itemIndex}`)
       setError(null)
 
-      const response = await fetch("/api/inventory/batch-item-approve", {
+      const response = await fetch("/api/inventory/batch-item-status", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -104,7 +84,7 @@ export default function ApprovalsPage() {
         body: JSON.stringify({
           batchId,
           itemIndex,
-          action,
+          status,
           approvedBy: "Admin User",
         }),
       })
@@ -112,22 +92,15 @@ export default function ApprovalsPage() {
       const result = await response.json()
 
       if (result.success) {
-        // Update local state immediately for better UX
-        setBatchItemStatuses((prev) => ({
-          ...prev,
-          [batchId]: {
-            ...prev[batchId],
-            [itemIndex]: action === "approve" ? "approved" : "rejected",
-          },
-        }))
-
-        alert(`✅ Item ${action}d successfully!`)
+        // Reload the data to reflect changes
+        await loadPendingChanges()
+        alert(`✅ Item ${status} successfully!`)
       } else {
-        setError(result.error || `Failed to ${action} item`)
+        setError(result.error || `Failed to ${status} item`)
       }
     } catch (error) {
-      console.error(`Error ${action}ing item:`, error)
-      setError(`Failed to ${action} item`)
+      console.error(`Error ${status}ing item:`, error)
+      setError(`Failed to ${status} item`)
     } finally {
       setProcessingId(null)
     }
@@ -272,9 +245,20 @@ export default function ApprovalsPage() {
     }
   }
 
+  const getItemStatus = (change: PendingChange, itemIndex: number) => {
+    return change.item_data?.item_statuses?.[itemIndex] || "pending"
+  }
+
   const renderBatchItems = (change: PendingChange) => {
     const batchItems = change.item_data?.batch_items || []
     const isExpanded = expandedBatches.has(change.id)
+
+    // Count statuses
+    const statusCounts = { pending: 0, approved: 0, rejected: 0 }
+    batchItems.forEach((_: any, index: number) => {
+      const status = getItemStatus(change, index)
+      statusCounts[status as keyof typeof statusCounts]++
+    })
 
     return (
       <>
@@ -309,7 +293,12 @@ export default function ApprovalsPage() {
               <span className="font-medium">Batch Addition ({batchItems.length} items)</span>
             </div>
             <div className="text-xs text-gray-500 mt-1">
-              Total Quantity: {batchItems.reduce((sum: number, item: any) => sum + (item.qty || 0), 0)}
+              <div>Total Quantity: {batchItems.reduce((sum: number, item: any) => sum + (item.qty || 0), 0)}</div>
+              <div className="flex gap-4 mt-1">
+                <span className="text-yellow-600">Pending: {statusCounts.pending}</span>
+                <span className="text-green-600">Approved: {statusCounts.approved}</span>
+                <span className="text-red-600">Rejected: {statusCounts.rejected}</span>
+              </div>
             </div>
           </TableCell>
           <TableCell>{change.requested_by}</TableCell>
@@ -322,33 +311,42 @@ export default function ApprovalsPage() {
           </TableCell>
           <TableCell>
             {change.status === "pending" ? (
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => handleApproval(change.id, "approve")}
-                  disabled={processingId === change.id}
-                >
-                  {processingId === change.id ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <CheckCircle className="w-4 h-4" />
-                  )}
-                  Approve All
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => handleApproval(change.id, "reject")}
-                  disabled={processingId === change.id}
-                >
-                  {processingId === change.id ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <XCircle className="w-4 h-4" />
-                  )}
-                  Reject All
-                </Button>
+              <div className="flex flex-col gap-2">
+                <div className="text-xs text-gray-600 mb-2">
+                  <strong>Batch Actions:</strong>
+                  <br />
+                  Approve = Approve all pending items
+                  <br />
+                  Reject = Reject entire batch
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={() => handleApproval(change.id, "approve")}
+                    disabled={processingId === change.id}
+                  >
+                    {processingId === change.id ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle className="w-4 h-4" />
+                    )}
+                    Approve Batch
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => handleApproval(change.id, "reject")}
+                    disabled={processingId === change.id}
+                  >
+                    {processingId === change.id ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <XCircle className="w-4 h-4" />
+                    )}
+                    Reject Batch
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="text-sm text-muted-foreground">
@@ -367,7 +365,7 @@ export default function ApprovalsPage() {
         {/* Individual Batch Items */}
         {isExpanded &&
           batchItems.map((item: any, index: number) => {
-            const itemStatus = batchItemStatuses[change.id]?.[index] || "pending"
+            const itemStatus = getItemStatus(change, index)
             const itemProcessingId = `${change.id}-${index}`
 
             return (
@@ -407,12 +405,12 @@ export default function ApprovalsPage() {
                 <TableCell className="text-sm text-gray-500">—</TableCell>
                 <TableCell className="text-sm text-gray-500">—</TableCell>
                 <TableCell>
-                  {itemStatus === "pending" ? (
+                  {change.status === "pending" && itemStatus === "pending" ? (
                     <div className="flex gap-1">
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleBatchItemApproval(change.id, index, "approve")}
+                        onClick={() => handleBatchItemStatusChange(change.id, index, "approved")}
                         disabled={processingId === itemProcessingId}
                         className="h-7 px-2 text-xs"
                       >
@@ -426,7 +424,7 @@ export default function ApprovalsPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleBatchItemApproval(change.id, index, "reject")}
+                        onClick={() => handleBatchItemStatusChange(change.id, index, "rejected")}
                         disabled={processingId === itemProcessingId}
                         className="h-7 px-2 text-xs text-red-600 hover:text-red-700"
                       >
@@ -440,7 +438,12 @@ export default function ApprovalsPage() {
                     </div>
                   ) : (
                     <div className="text-xs text-muted-foreground">
-                      {itemStatus === "approved" ? "✅ Approved" : "❌ Rejected"}
+                      {itemStatus === "approved"
+                        ? "✅ Approved"
+                        : itemStatus === "rejected"
+                          ? "❌ Rejected"
+                          : "⏳ Pending"}
+                      {itemStatus === "approved" && <div className="text-green-600">Added to inventory</div>}
                     </div>
                   )}
                 </TableCell>
@@ -545,6 +548,40 @@ export default function ApprovalsPage() {
           </AlertDescription>
         </Alert>
       )}
+
+      {/* Batch Approval Instructions */}
+      <Card className="border-blue-200 bg-blue-50">
+        <CardHeader>
+          <CardTitle className="text-blue-800">Batch Approval Instructions</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-blue-700">
+          <div className="space-y-2">
+            <p>
+              <strong>Batch Actions:</strong>
+            </p>
+            <ul className="list-disc list-inside space-y-1 ml-4">
+              <li>
+                <strong>Approve Batch:</strong> Approves all pending items in the batch and adds them to inventory
+              </li>
+              <li>
+                <strong>Reject Batch:</strong> Rejects the entire batch (no items are added)
+              </li>
+            </ul>
+            <p>
+              <strong>Individual Item Actions:</strong>
+            </p>
+            <ul className="list-disc list-inside space-y-1 ml-4">
+              <li>
+                <strong>Approve Item:</strong> Immediately adds that specific item to inventory
+              </li>
+              <li>
+                <strong>Reject Item:</strong> Marks that item as rejected (won't be added)
+              </li>
+              <li>Use individual actions when you want to approve some items but not others</li>
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
