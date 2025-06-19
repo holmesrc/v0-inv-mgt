@@ -1,5 +1,5 @@
 "use client"
-import { useState, useRef, useMemo, useEffect } from "react"
+import { useState, useRef, useMemo, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -74,10 +74,15 @@ export default function AddInventoryItem({
   const locationInputRef = useRef<HTMLInputElement>(null)
   const packageInputRef = useRef<HTMLInputElement>(null)
 
-  // Debug logging for locations
-  useEffect(() => {
-    console.log("AddInventoryItem received locations:", locations)
-  }, [locations])
+  const [partNumberCheck, setPartNumberCheck] = useState<{
+    isChecking: boolean
+    isDuplicate: boolean
+    existingItem: InventoryItem | null
+  }>({
+    isChecking: false,
+    isDuplicate: false,
+    existingItem: null,
+  })
 
   // Aggressive deduplication with debugging
   const uniquePackageTypes = useMemo(() => {
@@ -139,6 +144,54 @@ export default function AddInventoryItem({
     })
 
     return sortedLocations
+  }, [locations])
+
+  // Debounced duplicate checking
+  const checkPartNumberDuplicate = useCallback(
+    debounce((partNumber: string) => {
+      if (!partNumber.trim()) {
+        setPartNumberCheck({ isChecking: false, isDuplicate: false, existingItem: null })
+        return
+      }
+
+      setPartNumberCheck((prev) => ({ ...prev, isChecking: true }))
+
+      // Check against existing inventory
+      const duplicateItem = inventory?.find(
+        (item) => item["Part number"].toLowerCase() === partNumber.trim().toLowerCase(),
+      )
+
+      // Check against current batch items
+      const batchDuplicate = batchItems.some(
+        (item) => item["Part number"].toLowerCase() === partNumber.trim().toLowerCase(),
+      )
+
+      setPartNumberCheck({
+        isChecking: false,
+        isDuplicate: !!duplicateItem || batchDuplicate,
+        existingItem: duplicateItem || null,
+      })
+    }, 300),
+    [inventory, batchItems],
+  )
+
+  // Helper debounce function
+  function debounce<T extends (...args: any[]) => void>(func: T, wait: number): T {
+    let timeout: NodeJS.Timeout
+    return ((...args: any[]) => {
+      clearTimeout(timeout)
+      timeout = setTimeout(() => func(...args), wait)
+    }) as T
+  }
+
+  // Real-time duplicate checking
+  useEffect(() => {
+    checkPartNumberDuplicate(currentItem.partNumber)
+  }, [currentItem.partNumber, checkPartNumberDuplicate])
+
+  // Debug logging for locations
+  useEffect(() => {
+    console.log("AddInventoryItem received locations:", locations)
   }, [locations])
 
   const resetCurrentItem = () => {
@@ -586,13 +639,52 @@ export default function AddInventoryItem({
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="partNumber">Part Number *</Label>
-                  <Input
-                    id="partNumber"
-                    value={currentItem.partNumber}
-                    onChange={(e) => handleInputChange("partNumber", e.target.value)}
-                    placeholder="e.g., 490-12158-ND"
-                    disabled={loading}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="partNumber"
+                      value={currentItem.partNumber}
+                      onChange={(e) => handleInputChange("partNumber", e.target.value)}
+                      placeholder="e.g., 490-12158-ND"
+                      disabled={loading}
+                      className={`${
+                        partNumberCheck.isDuplicate
+                          ? "border-amber-500 focus:border-amber-500 focus:ring-amber-500"
+                          : ""
+                      }`}
+                    />
+                    {partNumberCheck.isChecking && (
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      </div>
+                    )}
+                  </div>
+
+                  {partNumberCheck.isDuplicate && partNumberCheck.existingItem && (
+                    <Alert className="bg-amber-50 border-amber-200">
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-amber-800">
+                        <div className="font-medium">⚠️ Part already exists in inventory!</div>
+                        <div className="text-sm mt-1">
+                          <strong>Location:</strong> {partNumberCheck.existingItem.Location || "Unknown"} •
+                          <strong>Qty:</strong> {partNumberCheck.existingItem.QTY} •<strong>Package:</strong>{" "}
+                          {partNumberCheck.existingItem.Package || "Unknown"}
+                        </div>
+                        <div className="text-xs mt-1 text-amber-700">
+                          Use the Edit function in the main inventory table to modify existing items.
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {partNumberCheck.isDuplicate && !partNumberCheck.existingItem && (
+                    <Alert className="bg-amber-50 border-amber-200">
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-amber-800">
+                        <div className="font-medium">⚠️ Part already added to current batch!</div>
+                        <div className="text-xs mt-1">This part number is already in your current batch above.</div>
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="mfgPartNumber">MFG Part Number *</Label>
@@ -748,7 +840,11 @@ export default function AddInventoryItem({
                 </div>
               </div>
               <div className="mt-4 flex gap-2">
-                <Button type="button" onClick={addToBatch} disabled={loading || !currentItem.partNumber.trim()}>
+                <Button
+                  type="button"
+                  onClick={addToBatch}
+                  disabled={loading || !currentItem.partNumber.trim() || partNumberCheck.isDuplicate}
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   Add to Batch
                 </Button>
