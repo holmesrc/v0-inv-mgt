@@ -231,13 +231,39 @@ async function handleBatchApproval(pendingChange: any, action: string, approvedB
 
   console.log(`Batch processing complete: ${processedItems.length} successful, ${failedItems.length} failed`)
 
-  // Update the pending change status
+  // Update the item statuses to reflect what was actually processed
+  const updatedItemStatuses = pendingChange.item_data?.item_statuses || {}
+  for (let i = 0; i < batchItems.length; i++) {
+    const itemStatus = updatedItemStatuses[i] || "pending"
+
+    // If item was pending and we successfully processed it, mark as approved
+    if (itemStatus === "pending") {
+      const wasProcessed = processedItems.some(
+        (item) => item.part_number === String(batchItems[i].part_number || "").trim(),
+      )
+      const wasFailed = failedItems.some((item) => item.index === i)
+
+      if (wasProcessed) {
+        updatedItemStatuses[i] = "approved"
+      } else if (wasFailed) {
+        updatedItemStatuses[i] = "rejected"
+      }
+    }
+  }
+
+  const updatedItemData = {
+    ...pendingChange.item_data,
+    item_statuses: updatedItemStatuses,
+  }
+
+  // Update the pending change status and item statuses
   const { error: updateError } = await supabase
     .from("pending_changes")
     .update({
       status: "approved",
       approved_by: approvedBy,
       approved_at: new Date().toISOString(),
+      item_data: updatedItemData,
     })
     .eq("id", pendingChange.id)
 

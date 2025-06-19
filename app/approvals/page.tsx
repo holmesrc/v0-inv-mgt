@@ -126,8 +126,11 @@ export default function ApprovalsPage() {
       const result = await response.json()
 
       if (result.success) {
-        await loadPendingChanges()
-        alert(`✅ Change ${action}d successfully!`)
+        // Add a small delay to ensure database update is complete
+        setTimeout(async () => {
+          await loadPendingChanges()
+          alert(`✅ Change ${action}d successfully!`)
+        }, 500)
       } else {
         setError(result.error || `Failed to ${action} change`)
       }
