@@ -1653,111 +1653,140 @@ Please check your Slack configuration.`)
         </CardHeader>
         <CardContent className="p-0">
           <div className="relative">
-            {/* Fixed Header */}
-            <div className="sticky top-0 z-50 bg-white border-b-2 border-gray-300 shadow-md">
-              <div className="grid grid-cols-10 gap-0 min-w-[1200px]">
-                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">
-                  Part Number
-                </div>
-                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">
-                  MFG Part Number
-                </div>
-                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">QTY</div>
-                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">
-                  Part Description
-                </div>
-                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">
-                  Supplier
-                </div>
-                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">
-                  Location
-                </div>
-                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">Package</div>
-                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">
-                  Reorder Point
-                </div>
-                <div className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 bg-gray-50">Status</div>
-                <div className="px-4 py-3 font-semibold text-gray-900 bg-gray-50">Actions</div>
-              </div>
-            </div>
+            <div className="overflow-auto max-h-[1000px]">
+              <table className="w-full border-collapse">
+                {/* Fixed Header */}
+                <thead className="sticky top-0 z-10 bg-white border-b-2 border-gray-300 shadow-md">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-900 border-r border-gray-200 bg-gray-50 min-w-[120px]">
+                      Part Number
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-900 border-r border-gray-200 bg-gray-50 min-w-[140px]">
+                      MFG Part Number
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-900 border-r border-gray-200 bg-gray-50 min-w-[80px]">
+                      QTY
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-900 border-r border-gray-200 bg-gray-50 min-w-[200px]">
+                      Part Description
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-900 border-r border-gray-200 bg-gray-50 min-w-[120px]">
+                      Supplier
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-900 border-r border-gray-200 bg-gray-50 min-w-[100px]">
+                      Location
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-900 border-r border-gray-200 bg-gray-50 min-w-[100px]">
+                      Package
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-900 border-r border-gray-200 bg-gray-50 min-w-[100px]">
+                      Reorder Point
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-900 border-r border-gray-200 bg-gray-50 min-w-[100px]">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-900 bg-gray-50 min-w-[200px]">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
 
-            {/* Scrollable Content */}
-            <div className="max-h-[1000px] overflow-auto">
-              <div className="min-w-[1200px]">
-                {filteredInventory.map((item) => (
-                  <div key={item.id} className="grid grid-cols-10 gap-0 border-b border-gray-100 hover:bg-gray-50">
-                    <div className="px-4 py-3 font-medium border-r border-gray-100">{item["Part number"]}</div>
-                    <div className="px-4 py-3 border-r border-gray-100">{item["MFG Part number"]}</div>
-                    <div className="px-4 py-3 border-r border-gray-100">{item["QTY"]}</div>
-                    <div className="px-4 py-3 border-r border-gray-100">{item["Part description"]}</div>
-                    <div className="px-4 py-3 border-r border-gray-100">{item["Supplier"]}</div>
-                    <div className="px-4 py-3 border-r border-gray-100">{item["Location"]}</div>
-                    <div className="px-4 py-3 border-r border-gray-100">
-                      <Badge variant="outline">{item["Package"]}</Badge>
-                    </div>
-                    <div className="px-4 py-3 border-r border-gray-100">
-                      {item.reorderPoint || alertSettings.defaultReorderPoint}
-                    </div>
-                    <div className="px-4 py-3 border-r border-gray-100">
-                      {(() => {
-                        const stockStatus = getStockStatus(item)
-                        return <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>
-                      })()}
-                    </div>
-                    <div className="px-4 py-3">
-                      {/* All the existing action content remains exactly the same */}
-                      <div className="flex flex-col gap-2">
-                        {/* Quantity Controls */}
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleTempQuantityChange(item.id, -1)}
-                            disabled={getDisplayQuantity(item) <= 0}
-                          >
-                            -
-                          </Button>
-                          <span
-                            className={`px-2 py-1 text-sm font-medium rounded ${
-                              hasTempChanges(item.id) ? "bg-yellow-100 text-yellow-800" : "bg-gray-100"
-                            }`}
-                          >
-                            {getDisplayQuantity(item)}
-                            {hasTempChanges(item.id) && (
-                              <span className="text-xs ml-1">
-                                ({tempQuantityChanges[item.id] > 0 ? "+" : ""}
-                                {tempQuantityChanges[item.id]})
-                              </span>
-                            )}
-                          </span>
-                          <Button size="sm" variant="outline" onClick={() => handleTempQuantityChange(item.id, 1)}>
-                            +
-                          </Button>
-                        </div>
-
-                        {/* Custom Amount Input */}
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button size="sm" variant="outline">
-                              Custom
+                {/* Scrollable Body */}
+                <tbody>
+                  {filteredInventory.map((item) => (
+                    <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium border-r border-gray-100 align-top">
+                        {item["Part number"]}
+                      </td>
+                      <td className="px-4 py-3 border-r border-gray-100 align-top">{item["MFG Part number"]}</td>
+                      <td className="px-4 py-3 border-r border-gray-100 align-top">{item["QTY"]}</td>
+                      <td className="px-4 py-3 border-r border-gray-100 align-top">{item["Part description"]}</td>
+                      <td className="px-4 py-3 border-r border-gray-100 align-top">{item["Supplier"]}</td>
+                      <td className="px-4 py-3 border-r border-gray-100 align-top">{item["Location"]}</td>
+                      <td className="px-4 py-3 border-r border-gray-100 align-top">
+                        <Badge variant="outline">{item["Package"]}</Badge>
+                      </td>
+                      <td className="px-4 py-3 border-r border-gray-100 align-top">
+                        {item.reorderPoint || alertSettings.defaultReorderPoint}
+                      </td>
+                      <td className="px-4 py-3 border-r border-gray-100 align-top">
+                        {(() => {
+                          const stockStatus = getStockStatus(item)
+                          return <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>
+                        })()}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <div className="flex flex-col gap-2">
+                          {/* Quantity Controls */}
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleTempQuantityChange(item.id, -1)}
+                              disabled={getDisplayQuantity(item) <= 0}
+                            >
+                              -
                             </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Custom Quantity Change</DialogTitle>
-                              <DialogDescription>
-                                Enter a custom amount to add or subtract for {item["Part number"]}
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <div>
-                                <Label>Amount (use negative numbers to subtract)</Label>
-                                <Input
-                                  type="number"
-                                  placeholder="e.g., 50 or -25"
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      const input = e.target as HTMLInputElement
+                            <span
+                              className={`px-2 py-1 text-sm font-medium rounded ${
+                                hasTempChanges(item.id) ? "bg-yellow-100 text-yellow-800" : "bg-gray-100"
+                              }`}
+                            >
+                              {getDisplayQuantity(item)}
+                              {hasTempChanges(item.id) && (
+                                <span className="text-xs ml-1">
+                                  ({tempQuantityChanges[item.id] > 0 ? "+" : ""}
+                                  {tempQuantityChanges[item.id]})
+                                </span>
+                              )}
+                            </span>
+                            <Button size="sm" variant="outline" onClick={() => handleTempQuantityChange(item.id, 1)}>
+                              +
+                            </Button>
+                          </div>
+
+                          {/* Custom Amount Input */}
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button size="sm" variant="outline">
+                                Custom
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Custom Quantity Change</DialogTitle>
+                                <DialogDescription>
+                                  Enter a custom amount to add or subtract for {item["Part number"]}
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div>
+                                  <Label>Amount (use negative numbers to subtract)</Label>
+                                  <Input
+                                    type="number"
+                                    placeholder="e.g., 50 or -25"
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        const input = e.target as HTMLInputElement
+                                        handleCustomQuantityChange(item.id, input.value)
+                                        input.value = ""
+                                        // Close dialog
+                                        const closeButton = document.querySelector(
+                                          '[data-state="open"] button[aria-label="Close"]',
+                                        ) as HTMLButtonElement
+                                        closeButton?.click()
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                              <DialogFooter>
+                                <Button
+                                  onClick={(e) => {
+                                    const input = (e.target as HTMLElement)
+                                      .closest(".space-y-4")
+                                      ?.querySelector("input") as HTMLInputElement
+                                    if (input) {
                                       handleCustomQuantityChange(item.id, input.value)
                                       input.value = ""
                                       // Close dialog
@@ -1767,246 +1796,231 @@ Please check your Slack configuration.`)
                                       closeButton?.click()
                                     }
                                   }}
-                                />
-                              </div>
-                            </div>
-                            <DialogFooter>
+                                >
+                                  Apply
+                                </Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
+
+                          {/* Confirmation Controls */}
+                          {hasTempChanges(item.id) && (
+                            <div className="flex gap-1">
                               <Button
-                                onClick={(e) => {
-                                  const input = (e.target as HTMLElement)
-                                    .closest(".space-y-4")
-                                    ?.querySelector("input") as HTMLInputElement
-                                  if (input) {
-                                    handleCustomQuantityChange(item.id, input.value)
-                                    input.value = ""
-                                    // Close dialog
-                                    const closeButton = document.querySelector(
-                                      '[data-state="open"] button[aria-label="Close"]',
-                                    ) as HTMLButtonElement
-                                    closeButton?.click()
-                                  }
-                                }}
+                                size="sm"
+                                variant="default"
+                                onClick={() => confirmQuantityChange(item.id)}
+                                className="bg-green-600 hover:bg-green-700"
                               >
-                                Apply
+                                ✓ Confirm
                               </Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-
-                        {/* Confirmation Controls */}
-                        {hasTempChanges(item.id) && (
-                          <div className="flex gap-1">
-                            <Button
-                              size="sm"
-                              variant="default"
-                              onClick={() => confirmQuantityChange(item.id)}
-                              className="bg-green-600 hover:bg-green-700"
-                            >
-                              ✓ Confirm
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => cancelTempChanges(item.id)}>
-                              ✗ Cancel
-                            </Button>
-                          </div>
-                        )}
-
-                        {/* Other Actions */}
-                        <div className="flex gap-1">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button size="sm" variant="outline">
-                                Edit
+                              <Button size="sm" variant="outline" onClick={() => cancelTempChanges(item.id)}>
+                                ✗ Cancel
                               </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Edit Item</DialogTitle>
-                                <DialogDescription>Update details for {item["Part number"]}</DialogDescription>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                                <div>
-                                  <Label>Requester Name *</Label>
-                                  <Input id="requester" placeholder="Enter your name" required />
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    Required for all changes that need approval
-                                  </p>
+                            </div>
+                          )}
+
+                          {/* Other Actions */}
+                          <div className="flex gap-1 flex-wrap">
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button size="sm" variant="outline">
+                                  Edit
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Edit Item</DialogTitle>
+                                  <DialogDescription>Update details for {item["Part number"]}</DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <div>
+                                    <Label>Requester Name *</Label>
+                                    <Input id="requester" placeholder="Enter your name" required />
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Required for all changes that need approval
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <Label>Reorder Point</Label>
+                                    <Input
+                                      id="reorderPoint"
+                                      type="number"
+                                      defaultValue={item.reorderPoint || alertSettings.defaultReorderPoint}
+                                    />
+                                  </div>
+                                  <div className="p-3 bg-gray-50 rounded text-sm">
+                                    <p className="font-medium mb-1">Current Item Details:</p>
+                                    <p>
+                                      Part: {item["Part number"]} - {item["Part description"]}
+                                    </p>
+                                    <p>Current Quantity: {item["QTY"]} units</p>
+                                    <p>Supplier: {item["Supplier"]}</p>
+                                    <p>Location: {item["Location"]}</p>
+                                  </div>
                                 </div>
-                                <div>
-                                  <Label>Reorder Point</Label>
-                                  <Input
-                                    id="reorderPoint"
-                                    type="number"
-                                    defaultValue={item.reorderPoint || alertSettings.defaultReorderPoint}
-                                  />
-                                </div>
-                                <div className="p-3 bg-gray-50 rounded text-sm">
-                                  <p className="font-medium mb-1">Current Item Details:</p>
-                                  <p>
-                                    Part: {item["Part number"]} - {item["Part description"]}
-                                  </p>
-                                  <p>Current Quantity: {item["QTY"]} units</p>
-                                  <p>Supplier: {item["Supplier"]}</p>
-                                  <p>Location: {item["Location"]}</p>
-                                </div>
-                              </div>
-                              <DialogFooter className="flex justify-between">
-                                <Button
-                                  variant="destructive"
-                                  onClick={(e) => {
-                                    // Get the input element more reliably
-                                    const dialogElement = (e.target as HTMLElement).closest('[role="dialog"]')
-                                    const requesterInput = dialogElement?.querySelector(
-                                      'input[id="requester"]',
-                                    ) as HTMLInputElement
+                                <DialogFooter className="flex justify-between">
+                                  <Button
+                                    variant="destructive"
+                                    onClick={(e) => {
+                                      // Get the input element more reliably
+                                      const dialogElement = (e.target as HTMLElement).closest('[role="dialog"]')
+                                      const requesterInput = dialogElement?.querySelector(
+                                        'input[id="requester"]',
+                                      ) as HTMLInputElement
 
-                                    if (!requesterInput) {
-                                      alert("❌ Could not find requester input field. Please try again.")
-                                      return
-                                    }
+                                      if (!requesterInput) {
+                                        alert("❌ Could not find requester input field. Please try again.")
+                                        return
+                                      }
 
-                                    const requester = requesterInput.value?.trim()
-                                    console.log("Delete button clicked - Raw input value:", requesterInput.value) // Debug log
-                                    console.log("Delete button clicked - Trimmed requester:", requester) // Debug log
+                                      const requester = requesterInput.value?.trim()
 
-                                    if (!requester || requester.toLowerCase() === "current user" || requester === "") {
-                                      alert("❌ Please provide a valid requester name. 'Current User' is not allowed.")
-                                      return
-                                    }
+                                      if (
+                                        !requester ||
+                                        requester.toLowerCase() === "current user" ||
+                                        requester === ""
+                                      ) {
+                                        alert(
+                                          "❌ Please provide a valid requester name. 'Current User' is not allowed.",
+                                        )
+                                        return
+                                      }
 
-                                    if (
-                                      confirm(
-                                        `Are you sure you want to delete "${item["Part number"]}"?\n\nRequested by: ${requester}\n\nThis action will be submitted for approval and cannot be undone once approved.`,
-                                      )
-                                    ) {
-                                      deleteInventoryItem(item.id, requester)
+                                      if (
+                                        confirm(
+                                          `Are you sure you want to delete "${item["Part number"]}"?\n\nRequested by: ${requester}\n\nThis action will be submitted for approval and cannot be undone once approved.`,
+                                        )
+                                      ) {
+                                        deleteInventoryItem(item.id, requester)
+                                        // Close dialog
+                                        const closeButton = dialogElement?.querySelector(
+                                          'button[aria-label="Close"]',
+                                        ) as HTMLButtonElement
+                                        closeButton?.click()
+                                      }
+                                    }}
+                                  >
+                                    Delete Item
+                                  </Button>
+                                  <Button
+                                    onClick={(e) => {
+                                      const dialogElement = (e.target as HTMLElement).closest('[role="dialog"]')
+                                      const requesterInput = dialogElement?.querySelector(
+                                        'input[id="requester"]',
+                                      ) as HTMLInputElement
+                                      const reorderInput = dialogElement?.querySelector(
+                                        'input[id="reorderPoint"]',
+                                      ) as HTMLInputElement
+
+                                      if (!requesterInput) {
+                                        alert("❌ Could not find requester input field. Please try again.")
+                                        return
+                                      }
+
+                                      const requester = requesterInput.value?.trim()
+                                      const newReorderPoint = Number.parseInt(reorderInput?.value || "0")
+
+                                      if (!requester || requester.toLowerCase() === "current user") {
+                                        alert(
+                                          "❌ Please provide a valid requester name. 'Current User' is not allowed.",
+                                        )
+                                        return
+                                      }
+
+                                      if (isNaN(newReorderPoint) || newReorderPoint < 0) {
+                                        alert("❌ Please provide a valid reorder point (0 or greater).")
+                                        return
+                                      }
+
+                                      updateReorderPoint(item.id, newReorderPoint, requester)
                                       // Close dialog
                                       const closeButton = dialogElement?.querySelector(
                                         'button[aria-label="Close"]',
                                       ) as HTMLButtonElement
                                       closeButton?.click()
-                                    }
-                                  }}
-                                >
-                                  Delete Item
+                                    }}
+                                  >
+                                    Update Reorder Point
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button size="sm" variant="outline">
+                                  <ShoppingCart className="w-3 h-3" />
+                                  Reorder
                                 </Button>
-                                <Button
-                                  onClick={(e) => {
-                                    const dialogElement = (e.target as HTMLElement).closest('[role="dialog"]')
-                                    const requesterInput = dialogElement?.querySelector(
-                                      'input[id="requester"]',
-                                    ) as HTMLInputElement
-                                    const reorderInput = dialogElement?.querySelector(
-                                      'input[id="reorderPoint"]',
-                                    ) as HTMLInputElement
-
-                                    if (!requesterInput) {
-                                      alert("❌ Could not find requester input field. Please try again.")
-                                      return
-                                    }
-
-                                    const requester = requesterInput.value?.trim()
-                                    const newReorderPoint = Number.parseInt(reorderInput?.value || "0")
-
-                                    console.log("Update button clicked - Raw input value:", requesterInput.value) // Debug log
-                                    console.log("Update button clicked - Trimmed requester:", requester) // Debug log
-
-                                    if (!requester || requester.toLowerCase() === "current user") {
-                                      alert("❌ Please provide a valid requester name. 'Current User' is not allowed.")
-                                      return
-                                    }
-
-                                    if (isNaN(newReorderPoint) || newReorderPoint < 0) {
-                                      alert("❌ Please provide a valid reorder point (0 or greater).")
-                                      return
-                                    }
-
-                                    updateReorderPoint(item.id, newReorderPoint, requester)
-                                    // Close dialog
-                                    const closeButton = dialogElement?.querySelector(
-                                      'button[aria-label="Close"]',
-                                    ) as HTMLButtonElement
-                                    closeButton?.click()
-                                  }}
-                                >
-                                  Update Reorder Point
-                                </Button>
-                              </DialogFooter>
-                            </DialogContent>
-                          </Dialog>
-
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button size="sm" variant="outline">
-                                <ShoppingCart className="w-3 h-3" />
-                                Reorder
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Create Purchase Request</DialogTitle>
-                                <DialogDescription>Request to purchase more of this item</DialogDescription>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                                <div>
-                                  <Label>Quantity to Order</Label>
-                                  <Input
-                                    type="number"
-                                    defaultValue={Math.max(
-                                      (item.reorderPoint || alertSettings.defaultReorderPoint) * 2 - item["QTY"],
-                                      1,
-                                    )}
-                                    min="1"
-                                  />
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Create Purchase Request</DialogTitle>
+                                  <DialogDescription>Request to purchase more of this item</DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <div>
+                                    <Label>Quantity to Order</Label>
+                                    <Input
+                                      type="number"
+                                      defaultValue={Math.max(
+                                        (item.reorderPoint || alertSettings.defaultReorderPoint) * 2 - item["QTY"],
+                                        1,
+                                      )}
+                                      min="1"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>Urgency</Label>
+                                    <Select defaultValue="medium">
+                                      <SelectTrigger>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="low">Low</SelectItem>
+                                        <SelectItem value="medium">Medium</SelectItem>
+                                        <SelectItem value="high">High</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
                                 </div>
-                                <div>
-                                  <Label>Urgency</Label>
-                                  <Select defaultValue="medium">
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="low">Low</SelectItem>
-                                      <SelectItem value="medium">Medium</SelectItem>
-                                      <SelectItem value="high">High</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                              <DialogFooter>
-                                <Button
-                                  onClick={(e) => {
-                                    const dialog = (e.target as HTMLElement).closest('[role="dialog"]')
-                                    const quantityInput = dialog?.querySelector(
-                                      'input[type="number"]',
-                                    ) as HTMLInputElement
-                                    const urgencySelect = dialog?.querySelector('[role="combobox"]') as HTMLElement
-                                    const urgencyValue = urgencySelect?.getAttribute("data-value") || "medium"
+                                <DialogFooter>
+                                  <Button
+                                    onClick={(e) => {
+                                      const dialog = (e.target as HTMLElement).closest('[role="dialog"]')
+                                      const quantityInput = dialog?.querySelector(
+                                        'input[type="number"]',
+                                      ) as HTMLInputElement
+                                      const urgencySelect = dialog?.querySelector('[role="combobox"]') as HTMLElement
+                                      const urgencyValue = urgencySelect?.getAttribute("data-value") || "medium"
 
-                                    if (quantityInput) {
-                                      createPurchaseRequest(
-                                        item,
-                                        Number.parseInt(quantityInput.value),
-                                        urgencyValue as "low" | "medium" | "high",
-                                      )
-                                      // Close dialog
-                                      const closeButton = document.querySelector(
-                                        '[data-state="open"] button[aria-label="Close"]',
-                                      ) as HTMLButtonElement
-                                      closeButton?.click()
-                                    }
-                                  }}
-                                >
-                                  Create Request
-                                </Button>
-                              </DialogFooter>
-                            </DialogContent>
-                          </Dialog>
+                                      if (quantityInput) {
+                                        createPurchaseRequest(
+                                          item,
+                                          Number.parseInt(quantityInput.value),
+                                          urgencyValue as "low" | "medium" | "high",
+                                        )
+                                        // Close dialog
+                                        const closeButton = document.querySelector(
+                                          '[data-state="open"] button[aria-label="Close"]',
+                                        ) as HTMLButtonElement
+                                        closeButton?.click()
+                                      }
+                                    }}
+                                  >
+                                    Create Request
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </CardContent>
