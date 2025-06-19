@@ -1,5 +1,7 @@
 "use client"
 import { useState, useRef, useMemo, useEffect, useCallback } from "react"
+import type React from "react"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -32,6 +34,196 @@ interface BatchItem extends Omit<InventoryItem, "id" | "lastUpdated"> {
   batchId: string
 }
 
+interface LocationInputProps {
+  value: string
+  onChange: (value: string) => void
+  existingLocations: string[]
+  pendingLocations: string[]
+  disabled?: boolean
+  placeholder?: string
+}
+
+function LocationInput({
+  value,
+  onChange,
+  existingLocations,
+  pendingLocations,
+  disabled,
+  placeholder,
+}: LocationInputProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [filteredLocations, setFilteredLocations] = useState<string[]>([])
+  const [suggestedNext, setSuggestedNext] = useState<string>("")
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const predictNextLocation = useCallback((existingLocs: string[], pendingLocs: string[]) => {
+    console.log("🎯 === LOCATION PREDICTION START ===")
+    console.log("📦 Existing locations (last 10):", existingLocs.slice(-10))
+    console.log("⏳ Pending locations:", pendingLocs)
+    console.log("🔢 Existing count:", existingLocs.length, "Pending count:", pendingLocs.length)
+
+    const allLocations = [...existingLocs, ...pendingLocs]
+    console.log("🔗 Combined locations (last 15):", allLocations.slice(-15))
+    console.log("🔢 Total combined count:", allLocations.length)
+
+    if (allLocations.length === 0) {
+      console.log("❌ No locations found, returning empty")
+      return ""
+    }
+
+    // Parse locations to find the highest numerical sequence
+    const locationData = allLocations
+      .map((loc) => {
+        const match = loc.match(/^([A-Za-z]+)(\d+)-(\d+)$/)
+        if (match) {
+          const [, prefix, shelf, position] = match
+          const parsed = {
+            original: loc,
+            prefix: prefix.toUpperCase(),
+            shelf: Number.parseInt(shelf, 10),
+            position: Number.parseInt(position, 10),
+            sortKey: `${prefix.toUpperCase()}-${shelf.padStart(3, "0")}-${position.toString().padStart(3, "0")}`,
+          }
+          console.log(`  📍 Parsed ${loc} ->`, parsed)
+          return parsed
+        } else {
+          console.log(`  ❌ Could not parse location: ${loc}`)
+          return null
+        }
+      })
+      .filter(Boolean)
+
+    console.log("📊 Parsed location data:", locationData)
+
+    if (locationData.length === 0) {
+      console.log("❌ No parseable locations found, returning empty")
+      return ""
+    }
+
+    // Sort by prefix, then shelf, then position
+    locationData.sort((a, b) => {
+      if (a.prefix !== b.prefix) return a.prefix.localeCompare(b.prefix)
+      if (a.shelf !== b.shelf) return a.shelf - b.shelf
+      return a.position - b.position
+    })
+
+    console.log("📈 Sorted location data:", locationData)
+
+    // Find the highest location
+    const highest = locationData[locationData.length - 1]
+    console.log("🏆 Highest location found:", highest)
+
+    // Suggest next position
+    const suggestion = `${highest.prefix}${highest.shelf}-${highest.position + 1}`
+    console.log("💡 Suggested next location:", suggestion)
+    console.log("🎯 === LOCATION PREDICTION END ===")
+
+    return suggestion
+  }, [])
+
+  // Update filtered locations and suggestion when value or locations change
+  useEffect(() => {
+    const allLocations = [...existingLocations, ...pendingLocations]
+
+    if (!value.trim()) {
+      setFilteredLocations(existingLocations.slice(0, 10)) // Show first 10 existing when empty
+      setSuggestedNext(predictNextLocation(existingLocations, pendingLocations))
+    } else {
+      const filtered = allLocations.filter((loc) => loc.toLowerCase().includes(value.toLowerCase())).slice(0, 8)
+      setFilteredLocations(filtered)
+
+      // Only show suggestion if current value doesn't exactly match existing
+      const exactMatch = allLocations.some((loc) => loc.toLowerCase() === value.toLowerCase())
+      if (!exactMatch) {
+        setSuggestedNext(predictNextLocation(existingLocations, pendingLocations))
+      } else {
+        setSuggestedNext("")
+      }
+    }
+  }, [value, existingLocations, pendingLocations, predictNextLocation])
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value
+    onChange(newValue)
+    setIsOpen(true)
+  }
+
+  const handleSelectLocation = (location: string) => {
+    onChange(location)
+    setIsOpen(false)
+    inputRef.current?.blur()
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      setIsOpen(false)
+    } else if (e.key === "Enter" && suggestedNext && !isOpen) {
+      e.preventDefault()
+      onChange(suggestedNext)
+    }
+  }
+
+  const showSuggestions = isOpen && (filteredLocations.length > 0 || suggestedNext)
+
+  return (
+    <div className="relative">
+      <Input
+        ref={inputRef}
+        value={value}
+        onChange={handleInputChange}
+        onFocus={() => setIsOpen(true)}
+        onBlur={() => setTimeout(() => setIsOpen(false), 200)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        disabled={disabled}
+        className="pr-10"
+      />
+
+      {/* Suggestion indicator */}
+      {suggestedNext && !value && (
+        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-muted-foreground">
+          Next: {suggestedNext}
+        </div>
+      )}
+
+      {/* Dropdown */}
+      {showSuggestions && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+          {/* Smart suggestion */}
+          {suggestedNext && !existingLocations.includes(suggestedNext) && (
+            <div
+              className="px-3 py-2 cursor-pointer hover:bg-blue-50 border-b border-gray-100 bg-blue-25"
+              onClick={() => handleSelectLocation(suggestedNext)}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-blue-600 font-medium">🎯 {suggestedNext}</span>
+                <span className="text-xs text-blue-500">(Suggested Next)</span>
+              </div>
+            </div>
+          )}
+
+          {/* Existing locations */}
+          {filteredLocations.map((location, index) => (
+            <div
+              key={`${location}-${index}`}
+              className="px-3 py-2 cursor-pointer hover:bg-gray-50 flex items-center justify-between"
+              onClick={() => handleSelectLocation(location)}
+            >
+              <span>{location}</span>
+              <span className="text-xs text-muted-foreground">Existing</span>
+            </div>
+          ))}
+
+          {/* No matches */}
+          {filteredLocations.length === 0 && !suggestedNext && (
+            <div className="px-3 py-2 text-sm text-muted-foreground">No matching locations found</div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AddInventoryItem({
   onAddItem,
   packageTypes,
@@ -49,7 +241,7 @@ export default function AddInventoryItem({
   const [currentItem, setCurrentItem] = useState({
     partNumber: "",
     mfgPartNumber: "",
-    qty: 0,
+    qty: "",
     description: "",
     supplier: "",
     location: "",
@@ -59,6 +251,7 @@ export default function AddInventoryItem({
 
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [showBatchConfirm, setShowBatchConfirm] = useState(false)
+  const [pendingLocations, setPendingLocations] = useState<string[]>([])
 
   // Track which item is being edited
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null)
@@ -194,11 +387,83 @@ export default function AddInventoryItem({
     console.log("AddInventoryItem received locations:", locations)
   }, [locations])
 
+  // Fetch pending locations to include in location prediction
+  useEffect(() => {
+    const fetchPendingLocations = async () => {
+      try {
+        console.log("🔍 Fetching pending locations...")
+        const response = await fetch("/api/inventory/pending")
+        if (response.ok) {
+          const data = await response.json()
+          console.log("📋 Raw pending data received:", data)
+
+          // Extract locations from pending changes - handle both individual items and batch items
+          const locations = []
+          const debugInfo = {
+            totalChanges: data.data?.length || 0,
+            processedChanges: [],
+            extractedLocations: [],
+          }
+
+          if (data.data) {
+            for (const change of data.data) {
+              const changeInfo = {
+                id: change.id,
+                changeType: change.change_type,
+                status: change.status,
+                hasItemData: !!change.item_data,
+                hasBatchItems: !!(change.item_data && change.item_data.batch_items),
+                hasDirectLocation: !!(change.item_data && change.item_data.location),
+                extractedFromThis: [],
+              }
+
+              // Handle batch changes (batch_items array in item_data)
+              if (change.item_data && change.item_data.batch_items && Array.isArray(change.item_data.batch_items)) {
+                console.log(`📦 Processing batch change ${change.id} with ${change.item_data.batch_items.length} items`)
+                for (const item of change.item_data.batch_items) {
+                  if (item.location && item.location.trim()) {
+                    const loc = item.location.trim()
+                    locations.push(loc)
+                    changeInfo.extractedFromThis.push(loc)
+                    console.log(`  ✅ Found batch location: ${loc}`)
+                  }
+                }
+              }
+              // Handle individual changes (direct location field in item_data)
+              else if (change.item_data && change.item_data.location && change.item_data.location.trim()) {
+                const loc = change.item_data.location.trim()
+                locations.push(loc)
+                changeInfo.extractedFromThis.push(loc)
+                console.log(`  ✅ Found individual location: ${loc}`)
+              }
+
+              debugInfo.processedChanges.push(changeInfo)
+            }
+          }
+
+          debugInfo.extractedLocations = locations
+          console.log("📍 Final extracted pending locations:", locations)
+          console.log("🔍 Debug info:", debugInfo)
+
+          setPendingLocations(locations)
+        } else {
+          console.warn("⚠️ Failed to fetch pending changes:", response.status)
+        }
+      } catch (error) {
+        console.error("❌ Failed to fetch pending locations:", error)
+      }
+    }
+
+    if (open) {
+      fetchPendingLocations()
+    }
+  }, [open])
+
   const resetCurrentItem = () => {
     setCurrentItem({
       partNumber: "",
       mfgPartNumber: "",
-      qty: 0,
+      qty: "",
       description: "",
       supplier: "",
       location: "",
@@ -295,7 +560,7 @@ export default function AddInventoryItem({
         const transformed = {
           part_number: String(item["Part number"] || "").trim(),
           mfg_part_number: String(item["MFG Part number"] || "").trim(),
-          qty: isNaN(Number(item.QTY)) ? 0 : Math.max(0, Number(item.QTY)),
+          qty: item.QTY === "" || isNaN(Number(item.QTY)) ? 0 : Math.max(0, Number(item.QTY)),
           part_description: String(item["Part description"] || "").trim(),
           supplier: String(item.Supplier || "").trim(),
           location: String(item.Location || "").trim(),
@@ -490,7 +755,7 @@ export default function AddInventoryItem({
       }
 
       // Auto-select package type based on quantity
-      if (field === "qty" && typeof value === "number") {
+      if (field === "qty" && typeof value === "number" && value > 0) {
         let autoPackage = ""
         if (value >= 1 && value <= 100) {
           autoPackage = "EXACT"
@@ -539,7 +804,7 @@ export default function AddInventoryItem({
       currentItem.supplier.trim() ||
       currentItem.location.trim() ||
       currentItem.package.trim() ||
-      currentItem.qty > 0
+      (currentItem.qty !== "" && currentItem.qty > 0)
 
     return hasCurrentItemData || batchItems.length > 0
   }
@@ -644,7 +909,7 @@ export default function AddInventoryItem({
                       id="partNumber"
                       value={currentItem.partNumber}
                       onChange={(e) => handleInputChange("partNumber", e.target.value)}
-                      placeholder="e.g., 490-12158-ND"
+                      placeholder=""
                       disabled={loading}
                       className={`${
                         partNumberCheck.isDuplicate
@@ -692,7 +957,7 @@ export default function AddInventoryItem({
                     id="mfgPartNumber"
                     value={currentItem.mfgPartNumber}
                     onChange={(e) => handleInputChange("mfgPartNumber", e.target.value)}
-                    placeholder="e.g., CAP KIT CER 5.1PF-47PF"
+                    placeholder=""
                     disabled={loading}
                   />
                 </div>
@@ -703,8 +968,11 @@ export default function AddInventoryItem({
                     type="number"
                     min="0"
                     value={currentItem.qty}
-                    onChange={(e) => handleInputChange("qty", Number.parseInt(e.target.value) || 0)}
+                    onChange={(e) =>
+                      handleInputChange("qty", e.target.value === "" ? "" : Number.parseInt(e.target.value) || "")
+                    }
                     disabled={loading}
+                    placeholder=""
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                     Auto-selects: Exact (1-100), Estimated (101-500), Reel (500+)
@@ -727,7 +995,7 @@ export default function AddInventoryItem({
                     id="description"
                     value={currentItem.description}
                     onChange={(e) => handleInputChange("description", e.target.value)}
-                    placeholder="e.g., CAP KIT CERAMIC 0.1PF-5PF 1000PC"
+                    placeholder=""
                     disabled={loading}
                   />
                 </div>
@@ -766,36 +1034,14 @@ export default function AddInventoryItem({
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="location">Location</Label>
-                  {!useCustomLocation ? (
-                    <Select
-                      value={currentItem.location}
-                      onValueChange={(value) => handleSelectChange("location", value)}
-                      disabled={loading}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select location" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="custom">📍 Enter custom location...</SelectItem>
-                        {uniqueLocations.map((location, index) => (
-                          <SelectItem key={`location-${index}-${location}`} value={location}>
-                            {location}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
-                      ref={locationInputRef}
-                      placeholder="Enter location"
-                      value={currentItem.location}
-                      onChange={(e) => handleInputChange("location", e.target.value)}
-                      onBlur={() => {
-                        if (!currentItem.location) setUseCustomLocation(false)
-                      }}
-                      disabled={loading}
-                    />
-                  )}
+                  <LocationInput
+                    value={currentItem.location}
+                    onChange={(value) => handleInputChange("location", value)}
+                    existingLocations={uniqueLocations}
+                    pendingLocations={pendingLocations}
+                    disabled={loading}
+                    placeholder="Type location or select existing"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="package">Package Type</Label>
@@ -928,10 +1174,13 @@ export default function AddInventoryItem({
                             </div>
                             <div>
                               <Label className="text-xs">Location</Label>
-                              <Input
+                              <LocationInput
                                 value={editingItem.Location}
-                                onChange={(e) => handleEditingItemChange("Location", e.target.value)}
-                                className="h-8 text-sm"
+                                onChange={(value) => handleEditingItemChange("Location", value)}
+                                existingLocations={uniqueLocations}
+                                pendingLocations={pendingLocations}
+                                disabled={false}
+                                placeholder="Enter location"
                               />
                             </div>
                             <div className="col-span-2">
