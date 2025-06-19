@@ -57,6 +57,9 @@ export default function AddInventoryItem({
     reorderPoint: defaultReorderPoint,
   })
 
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [showBatchConfirm, setShowBatchConfirm] = useState(false)
+
   // Track which item is being edited
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<BatchItem | null>(null)
@@ -475,16 +478,48 @@ export default function AddInventoryItem({
     }
   }
 
+  const hasUnsavedWork = () => {
+    const hasCurrentItemData =
+      currentItem.partNumber.trim() ||
+      currentItem.mfgPartNumber.trim() ||
+      currentItem.description.trim() ||
+      currentItem.supplier.trim() ||
+      currentItem.location.trim() ||
+      currentItem.package.trim() ||
+      currentItem.qty > 0
+
+    return hasCurrentItemData || batchItems.length > 0
+  }
+
+  const handleDialogClose = (newOpen: boolean) => {
+    if (!newOpen && hasUnsavedWork()) {
+      if (batchItems.length > 0) {
+        setShowBatchConfirm(true)
+      } else {
+        setShowCancelConfirm(true)
+      }
+    } else {
+      setOpen(newOpen)
+      if (!newOpen) {
+        resetAll()
+      }
+    }
+  }
+
+  const confirmCancel = () => {
+    setShowCancelConfirm(false)
+    setShowBatchConfirm(false)
+    resetAll()
+    setOpen(false)
+  }
+
+  const cancelClose = () => {
+    setShowCancelConfirm(false)
+    setShowBatchConfirm(false)
+  }
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(newOpen) => {
-        setOpen(newOpen)
-        if (!newOpen) {
-          resetAll()
-        }
-      }}
-    >
+    <Dialog open={open} onOpenChange={handleDialogClose}>
       <DialogTrigger asChild>
         <Button>
           <Plus className="w-4 h-4 mr-2" />
@@ -877,6 +912,49 @@ export default function AddInventoryItem({
           </Button>
         </DialogFooter>
       </DialogContent>
+      {/* Cancel Current Entry Confirmation */}
+      <Dialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel Entry?</DialogTitle>
+            <DialogDescription>
+              You have unsaved changes in the current item. Are you sure you want to cancel and lose this information?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={cancelClose}>
+              Keep Editing
+            </Button>
+            <Button variant="destructive" onClick={confirmCancel}>
+              Yes, Cancel Entry
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Batch Confirmation Dialog */}
+      <Dialog open={showBatchConfirm} onOpenChange={setShowBatchConfirm}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Unsaved Batch Items</DialogTitle>
+            <DialogDescription>
+              You have {batchItems.length} item{batchItems.length !== 1 ? "s" : ""} in your batch that haven't been
+              submitted yet. What would you like to do?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={cancelClose}>
+              Keep Editing
+            </Button>
+            <Button variant="destructive" onClick={confirmCancel}>
+              Discard Batch
+            </Button>
+            <Button onClick={submitBatch} disabled={loading || !requesterName.trim()}>
+              Submit Batch Now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   )
 }
