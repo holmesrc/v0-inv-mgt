@@ -1682,7 +1682,7 @@ Please check your Slack configuration.`)
             </div>
 
             {/* Scrollable Content */}
-            <div className="max-h-96 overflow-auto">
+            <div className="max-h-[1000px] overflow-auto">
               <div className="min-w-[1200px]">
                 {filteredInventory.map((item) => (
                   <div key={item.id} className="grid grid-cols-10 gap-0 border-b border-gray-100 hover:bg-gray-50">
