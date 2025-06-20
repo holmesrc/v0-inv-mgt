@@ -497,7 +497,95 @@ export default function ApprovalsPage() {
       )
     }
 
-    // Handle other change types (update, delete) as before
+    if (change_type === "update") {
+      const changes = []
+      const fields = [
+        { key: "part_number", label: "Part Number" },
+        { key: "mfg_part_number", label: "MFG Part" },
+        { key: "part_description", label: "Description" },
+        { key: "supplier", label: "Supplier" },
+        { key: "qty", label: "Quantity" },
+        { key: "package", label: "Package" },
+        { key: "location", label: "Location" },
+        { key: "reorder_point", label: "Reorder Point" },
+        { key: "requester", label: "Requester" },
+      ]
+
+      fields.forEach((field) => {
+        const oldValue = original_data?.[field.key]
+        const newValue = item_data?.[field.key]
+
+        if (oldValue !== newValue) {
+          changes.push({
+            field: field.label,
+            old: oldValue || "N/A",
+            new: newValue || "N/A",
+          })
+        }
+      })
+
+      if (changes.length === 0) {
+        return (
+          <div className="text-sm text-gray-500">
+            <p>No changes detected</p>
+          </div>
+        )
+      }
+
+      return (
+        <div className="space-y-2 text-sm">
+          <div className="font-medium text-blue-800 mb-2">
+            Changes for: {original_data?.part_number || item_data?.part_number || "Unknown Part"}
+          </div>
+          {changes.map((change, index) => (
+            <div key={index} className="border-l-2 border-blue-200 pl-3 py-1">
+              <div className="font-medium text-gray-700">{change.field}:</div>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="bg-red-100 text-red-800 px-2 py-1 rounded">From: {change.old}</span>
+                <span className="text-gray-400">→</span>
+                <span className="bg-green-100 text-green-800 px-2 py-1 rounded">To: {change.new}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )
+    }
+
+    if (change_type === "delete") {
+      return (
+        <div className="space-y-2 text-sm">
+          <div className="font-medium text-red-800 mb-2">Deleting: {original_data?.part_number || "Unknown Part"}</div>
+          <div className="grid grid-cols-2 gap-4 text-gray-600">
+            <div>
+              <p>
+                <strong>Part Number:</strong> {original_data?.part_number || "N/A"}
+              </p>
+              <p>
+                <strong>MFG Part:</strong> {original_data?.mfg_part_number || "N/A"}
+              </p>
+              <p>
+                <strong>Supplier:</strong> {original_data?.supplier || "N/A"}
+              </p>
+            </div>
+            <div>
+              <p>
+                <strong>Quantity:</strong> {original_data?.qty || "N/A"}
+              </p>
+              <p>
+                <strong>Package:</strong> {original_data?.package || "N/A"}
+              </p>
+              <p>
+                <strong>Location:</strong> {original_data?.location || "N/A"}
+              </p>
+            </div>
+          </div>
+          <p>
+            <strong>Description:</strong> {original_data?.part_description || "N/A"}
+          </p>
+        </div>
+      )
+    }
+
     return null
   }
 
