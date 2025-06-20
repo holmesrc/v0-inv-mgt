@@ -579,17 +579,25 @@ export default function AddInventoryItem({
         `📊 Current: ${existingItem.QTY}, Adding: ${quickUpdateQty}, New total: ${existingItem.QTY + quickUpdateQty}`,
       )
 
-      // Create the updated item data
+      // Create the updated item data with automatic package type correction
+      const newQty = existingItem.QTY + quickUpdateQty
+      const correctPackageType =
+        newQty >= 1 && newQty <= 100 ? "EXACT" : newQty >= 101 && newQty <= 500 ? "ESTIMATED" : "REEL"
+
       const updatedItem = {
         part_number: existingItem["Part number"],
         mfg_part_number: existingItem["MFG Part number"],
-        qty: existingItem.QTY + quickUpdateQty,
+        qty: newQty,
         part_description: existingItem["Part description"],
         supplier: existingItem.Supplier,
         location: existingItem.Location,
-        package: existingItem.Package,
+        package: correctPackageType, // Auto-correct package type based on new quantity
         reorder_point: existingItem.reorderPoint || 10,
       }
+
+      console.log(
+        `📦 Quick update: ${existingItem.QTY} → ${newQty} qty, package: ${existingItem.Package} → ${correctPackageType}`,
+      )
 
       console.log("📤 Sending quantity update to API:", updatedItem)
 
@@ -606,7 +614,7 @@ export default function AddInventoryItem({
             part_number: existingItem["Part number"],
             mfg_part_number: existingItem["MFG Part number"],
             qty: existingItem.QTY,
-            part_description: existingItem.Supplier,
+            part_description: existingItem["Part description"],
             supplier: existingItem.Supplier,
             location: existingItem.Location,
             package: existingItem.Package,

@@ -10,10 +10,10 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -491,6 +491,31 @@ export default function InventoryDashboard() {
     }
   }
 
+  // Helper function to determine correct package type based on quantity
+  const getCorrectPackageType = (qty: number): string => {
+    if (qty >= 1 && qty <= 100) {
+      return "EXACT"
+    } else if (qty >= 101 && qty <= 500) {
+      return "ESTIMATED"
+    } else if (qty > 500) {
+      return "REEL"
+    }
+    return "EXACT" // Default fallback
+  }
+
+  // Helper function to check if package type matches quantity
+  const isPackageTypeMismatched = (item: InventoryItem): boolean => {
+    const currentPackage = item.Package.toUpperCase()
+
+    // Exclude KIT/KITS and CUSTOM packages from validation
+    if (currentPackage === "KIT" || currentPackage === "KITS" || currentPackage.includes("CUSTOM")) {
+      return false
+    }
+
+    const correctPackage = getCorrectPackageType(item.QTY)
+    return currentPackage !== correctPackage
+  }
+
   const filteredInventory = useMemo(() => {
     const filtered = inventory.filter((item) => {
       const matchesSearch =
@@ -662,8 +687,17 @@ export default function InventoryDashboard() {
 
   // Get unique values for dropdowns - with proper deduplication
   const packageTypes = useMemo(() => {
-    const uniquePackages = Array.from(new Set(inventory.map((item) => item["Package"]).filter(Boolean)))
-    return uniquePackages.sort() // Sort alphabetically for consistency
+    // Get all package types from inventory
+    const allPackageTypes = inventory
+      .map((item) => item["Package"])
+      .filter((pkg) => pkg && typeof pkg === "string" && pkg.trim().length > 0)
+      .map((pkg) => pkg.trim().toUpperCase()) // Normalize to uppercase
+
+    // Create a Set to remove duplicates, then convert back to array
+    const uniquePackageTypes = Array.from(new Set(allPackageTypes))
+
+    // Sort alphabetically for consistency
+    return uniquePackageTypes.sort()
   }, [inventory])
 
   const suppliers = useMemo(() => {
@@ -783,8 +817,20 @@ export default function InventoryDashboard() {
     }
   }
 
-  // Update reorder point - UPDATED to require requester
-  const updateReorderPoint = async (itemId: string, newReorderPoint: number, requester: string) => {
+  // Update inventory item - UPDATED to handle all fields
+  const updateInventoryItem = async (
+    itemId: string,
+    updatedFields: {
+      qty?: number
+      mfgPartNumber?: string
+      description?: string
+      supplier?: string
+      location?: string
+      package?: string
+      reorderPoint?: number
+    },
+    requester: string,
+  ) => {
     const item = inventory.find((i) => i.id === itemId)
     if (!item) return
 
@@ -802,54 +848,41 @@ export default function InventoryDashboard() {
 
       const itemData = {
         ...originalData,
-        reorder_point: newReorderPoint,
+        ...(updatedFields.qty !== undefined && { qty: updatedFields.qty }),
+        ...(updatedFields.mfgPartNumber !== undefined && { mfg_part_number: updatedFields.mfgPartNumber.trim() }),
+        ...(updatedFields.description !== undefined && { part_description: updatedFields.description.trim() }),
+        ...(updatedFields.supplier !== undefined && { supplier: updatedFields.supplier.trim() }),
+        ...(updatedFields.location !== undefined && { location: updatedFields.location.trim() }),
+        ...(updatedFields.package !== undefined && { package: updatedFields.package.trim() }),
+        ...(updatedFields.reorderPoint !== undefined && { reorder_point: updatedFields.reorderPoint }),
       }
 
       await submitChangeForApproval("update", itemData, originalData, requester)
 
-      alert("✅ Reorder point change submitted for approval!")
+      // Clear temporary changes after submission if quantity was updated
+      if (updatedFields.qty !== undefined) {
+        setTempQuantityChanges((prev) => {
+          const updated = { ...prev }
+          delete updated[itemId]
+          return updated
+        })
+      }
+
+      alert("✅ Item update submitted for approval!")
     } catch (error) {
-      console.error("Failed to submit reorder point change:", error)
-      setError("Failed to submit reorder point change for approval")
+      console.error("Failed to submit item update:", error)
+      setError("Failed to submit item update for approval")
     }
   }
 
-  // Update inventory item quantity - UPDATED to require requester
+  // Update reorder point - UPDATED to use new updateInventoryItem function
+  const updateReorderPoint = async (itemId: string, newReorderPoint: number, requester: string) => {
+    await updateInventoryItem(itemId, { reorderPoint: newReorderPoint }, requester)
+  }
+
+  // Update inventory item quantity - UPDATED to use new updateInventoryItem function
   const updateItemQuantity = async (itemId: string, newQuantity: number, requester: string) => {
-    const item = inventory.find((i) => i.id === itemId)
-    if (!item) return
-
-    try {
-      const originalData = {
-        part_number: String(item["Part number"]).trim(),
-        mfg_part_number: String(item["MFG Part number"] || "").trim(),
-        qty: item["QTY"],
-        part_description: String(item["Part description"] || "").trim(),
-        supplier: String(item.Supplier || "").trim(),
-        location: String(item.Location || "").trim(),
-        package: String(item.Package || "").trim(),
-        reorder_point: item.reorderPoint || alertSettings.defaultReorderPoint,
-      }
-
-      const itemData = {
-        ...originalData,
-        qty: newQuantity,
-      }
-
-      await submitChangeForApproval("update", itemData, originalData, requester)
-
-      // Clear temporary changes after submission
-      setTempQuantityChanges((prev) => {
-        const updated = { ...prev }
-        delete updated[itemId]
-        return updated
-      })
-
-      alert("✅ Quantity change submitted for approval!")
-    } catch (error) {
-      console.error("Failed to submit quantity change:", error)
-      setError("Failed to submit quantity change for approval")
-    }
+    await updateInventoryItem(itemId, { qty: newQuantity }, requester)
   }
 
   // Handle temporary quantity changes
@@ -1704,7 +1737,22 @@ Please check your Slack configuration.`)
                       <td className="px-4 py-3 border-r border-gray-100 align-top">{item["Supplier"]}</td>
                       <td className="px-4 py-3 border-r border-gray-100 align-top">{item["Location"]}</td>
                       <td className="px-4 py-3 border-r border-gray-100 align-top">
-                        <Badge variant="outline">{item["Package"]}</Badge>
+                        <div className="flex items-center gap-1">
+                          <Badge
+                            variant={isPackageTypeMismatched(item) ? "destructive" : "outline"}
+                            className={isPackageTypeMismatched(item) ? "animate-pulse" : ""}
+                          >
+                            {item.Package}
+                          </Badge>
+                          {isPackageTypeMismatched(item) && (
+                            <span
+                              className="text-xs text-red-600"
+                              title={`Should be ${getCorrectPackageType(item.QTY)} for ${item.QTY} qty`}
+                            >
+                              ⚠️
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 border-r border-gray-100 align-top">
                         {item.reorderPoint || alertSettings.defaultReorderPoint}
@@ -1828,7 +1876,7 @@ Please check your Slack configuration.`)
                                   Edit
                                 </Button>
                               </DialogTrigger>
-                              <DialogContent>
+                              <DialogContent className="max-w-2xl">
                                 <DialogHeader>
                                   <DialogTitle>Edit Item</DialogTitle>
                                   <DialogDescription>Update details for {item["Part number"]}</DialogDescription>
@@ -1841,14 +1889,168 @@ Please check your Slack configuration.`)
                                       Required for all changes that need approval
                                     </p>
                                   </div>
+
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <Label>MFG Part Number</Label>
+                                      <Input
+                                        id="mfgPartNumber"
+                                        defaultValue={item["MFG Part number"]}
+                                        placeholder="Enter MFG part number"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label>Quantity</Label>
+                                      <Input
+                                        id="quantity"
+                                        type="number"
+                                        min="0"
+                                        defaultValue={item["QTY"]}
+                                        placeholder="Enter quantity"
+                                        onChange={(e) => {
+                                          // Update package suggestion when quantity changes
+                                          const qty = Number(e.target.value) || 0
+                                          const suggestedPackage = getCorrectPackageType(qty)
+                                          const dialogElement = e.target.closest('[role="dialog"]')
+                                          const packageWarning = dialogElement?.querySelector("#package-warning")
+                                          const packageSelect = dialogElement?.querySelector("#package-select")
+
+                                          if (packageWarning && packageSelect) {
+                                            const currentPackage =
+                                              packageSelect.getAttribute("data-value") || item["Package"]
+                                            if (
+                                              currentPackage.toUpperCase() !== suggestedPackage &&
+                                              !["KIT", "KITS", "CUSTOM"].some((excluded) =>
+                                                currentPackage.toUpperCase().includes(excluded),
+                                              )
+                                            ) {
+                                              packageWarning.textContent = `⚠️ Suggested: ${suggestedPackage} for ${qty} qty`
+                                              packageWarning.style.display = "block"
+                                            } else {
+                                              packageWarning.style.display = "none"
+                                            }
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <Label>Part Description</Label>
+                                    <Input
+                                      id="description"
+                                      defaultValue={item["Part description"]}
+                                      placeholder="Enter part description"
+                                    />
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <Label>Supplier</Label>
+                                      <Select defaultValue={item["Supplier"]}>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Select supplier" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {suppliers.map((supplier) => (
+                                            <SelectItem key={supplier} value={supplier}>
+                                              {supplier}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div>
+                                      <Label>Location</Label>
+                                      <Select defaultValue={item["Location"]}>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Select location" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {uniqueLocations.map((location) => (
+                                            <SelectItem key={location} value={location}>
+                                              {location}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <Label>Package Type</Label>
+                                    <Select
+                                      defaultValue={item["Package"]}
+                                      onValueChange={(value) => {
+                                        // Update warning when package type changes
+                                        const dialogElement = document.querySelector('[role="dialog"]')
+                                        const quantityInput = dialogElement?.querySelector(
+                                          "#quantity",
+                                        ) as HTMLInputElement
+                                        const packageWarning = dialogElement?.querySelector("#package-warning")
+
+                                        if (quantityInput && packageWarning) {
+                                          const qty = Number(quantityInput.value) || item["QTY"]
+                                          const suggestedPackage = getCorrectPackageType(qty)
+
+                                          if (
+                                            value.toUpperCase() !== suggestedPackage &&
+                                            !["KIT", "KITS", "CUSTOM"].some((excluded) =>
+                                              value.toUpperCase().includes(excluded),
+                                            )
+                                          ) {
+                                            packageWarning.textContent = `⚠️ Suggested: ${suggestedPackage} for ${qty} qty`
+                                            packageWarning.style.display = "block"
+                                          } else {
+                                            packageWarning.style.display = "none"
+                                          }
+                                        }
+                                      }}
+                                    >
+                                      <SelectTrigger id="package-select">
+                                        <SelectValue placeholder="Select package type" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {/* Standard package types first */}
+                                        <SelectItem value="EXACT">EXACT</SelectItem>
+                                        <SelectItem value="ESTIMATED">ESTIMATED</SelectItem>
+                                        <SelectItem value="REEL">REEL</SelectItem>
+                                        <SelectItem value="KIT">KIT</SelectItem>
+                                        <SelectItem value="CUSTOM">CUSTOM</SelectItem>
+
+                                        {/* Then any additional unique package types from inventory */}
+                                        {packageTypes
+                                          .filter(
+                                            (pkg) => !["EXACT", "ESTIMATED", "REEL", "KIT", "CUSTOM"].includes(pkg),
+                                          )
+                                          .map((packageType) => (
+                                            <SelectItem key={packageType} value={packageType}>
+                                              {packageType}
+                                            </SelectItem>
+                                          ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <p
+                                      id="package-warning"
+                                      className="text-xs text-orange-600 mt-1"
+                                      style={{
+                                        display: isPackageTypeMismatched(item) ? "block" : "none",
+                                      }}
+                                    >
+                                      ⚠️ Suggested: {getCorrectPackageType(item.QTY)} for {item.QTY} qty
+                                    </p>
+                                  </div>
+
                                   <div>
                                     <Label>Reorder Point</Label>
                                     <Input
                                       id="reorderPoint"
                                       type="number"
+                                      min="0"
                                       defaultValue={item.reorderPoint || alertSettings.defaultReorderPoint}
                                     />
                                   </div>
+
                                   <div className="p-3 bg-gray-50 rounded text-sm">
                                     <p className="font-medium mb-1">Current Item Details:</p>
                                     <p>
@@ -1857,13 +2059,13 @@ Please check your Slack configuration.`)
                                     <p>Current Quantity: {item["QTY"]} units</p>
                                     <p>Supplier: {item["Supplier"]}</p>
                                     <p>Location: {item["Location"]}</p>
+                                    <p>Package: {item["Package"]}</p>
                                   </div>
                                 </div>
                                 <DialogFooter className="flex justify-between">
                                   <Button
                                     variant="destructive"
                                     onClick={(e) => {
-                                      // Get the input element more reliably
                                       const dialogElement = (e.target as HTMLElement).closest('[role="dialog"]')
                                       const requesterInput = dialogElement?.querySelector(
                                         'input[id="requester"]',
@@ -1909,9 +2111,6 @@ Please check your Slack configuration.`)
                                       const requesterInput = dialogElement?.querySelector(
                                         'input[id="requester"]',
                                       ) as HTMLInputElement
-                                      const reorderInput = dialogElement?.querySelector(
-                                        'input[id="reorderPoint"]',
-                                      ) as HTMLInputElement
 
                                       if (!requesterInput) {
                                         alert("❌ Could not find requester input field. Please try again.")
@@ -1919,7 +2118,6 @@ Please check your Slack configuration.`)
                                       }
 
                                       const requester = requesterInput.value?.trim()
-                                      const newReorderPoint = Number.parseInt(reorderInput?.value || "0")
 
                                       if (!requester || requester.toLowerCase() === "current user") {
                                         alert(
@@ -1928,12 +2126,90 @@ Please check your Slack configuration.`)
                                         return
                                       }
 
-                                      if (isNaN(newReorderPoint) || newReorderPoint < 0) {
-                                        alert("❌ Please provide a valid reorder point (0 or greater).")
+                                      // Get all form values
+                                      const quantityInput = dialogElement?.querySelector(
+                                        'input[id="quantity"]',
+                                      ) as HTMLInputElement
+                                      const packageSelect = dialogElement?.querySelector(
+                                        "#package-select",
+                                      ) as HTMLElement
+                                      const selectedPackage =
+                                        packageSelect?.getAttribute("data-value") || item["Package"]
+                                      const qty = Number(quantityInput?.value) || item["QTY"]
+
+                                      // Validate package type before saving
+                                      const suggestedPackage = getCorrectPackageType(qty)
+                                      const isExcludedPackage = ["KIT", "KITS", "CUSTOM"].some((excluded) =>
+                                        selectedPackage.toUpperCase().includes(excluded),
+                                      )
+
+                                      if (!isExcludedPackage && selectedPackage.toUpperCase() !== suggestedPackage) {
+                                        alert(
+                                          `❌ Package type validation failed!\n\nFor ${qty} units, the package type must be "${suggestedPackage}".\n\nPlease select the correct package type before updating.`,
+                                        )
                                         return
                                       }
 
-                                      updateReorderPoint(item.id, newReorderPoint, requester)
+                                      // Collect all the updated values
+                                      const mfgPartNumberInput = dialogElement?.querySelector(
+                                        'input[id="mfgPartNumber"]',
+                                      ) as HTMLInputElement
+                                      const descriptionInput = dialogElement?.querySelector(
+                                        'input[id="description"]',
+                                      ) as HTMLInputElement
+                                      const reorderInput = dialogElement?.querySelector(
+                                        'input[id="reorderPoint"]',
+                                      ) as HTMLInputElement
+
+                                      // Get select values (more complex due to shadcn Select component)
+                                      const supplierSelect = dialogElement?.querySelector(
+                                        '[role="combobox"]',
+                                      ) as HTMLElement
+                                      const locationSelect = dialogElement?.querySelectorAll(
+                                        '[role="combobox"]',
+                                      )[1] as HTMLElement
+
+                                      const updatedFields: any = {}
+
+                                      // Only include fields that have changed
+                                      if (mfgPartNumberInput?.value !== item["MFG Part number"]) {
+                                        updatedFields.mfgPartNumber = mfgPartNumberInput.value
+                                      }
+                                      if (Number(quantityInput?.value) !== item["QTY"]) {
+                                        updatedFields.qty = Number(quantityInput.value)
+                                      }
+                                      if (descriptionInput?.value !== item["Part description"]) {
+                                        updatedFields.description = descriptionInput.value
+                                      }
+                                      if (
+                                        Number(reorderInput?.value) !==
+                                        (item.reorderPoint || alertSettings.defaultReorderPoint)
+                                      ) {
+                                        updatedFields.reorderPoint = Number(reorderInput.value)
+                                      }
+
+                                      // For selects, we'll need to get the selected values differently
+                                      const supplierValue =
+                                        supplierSelect?.getAttribute("data-value") || item["Supplier"]
+                                      const locationValue =
+                                        locationSelect?.getAttribute("data-value") || item["Location"]
+
+                                      if (supplierValue !== item["Supplier"]) {
+                                        updatedFields.supplier = supplierValue
+                                      }
+                                      if (locationValue !== item["Location"]) {
+                                        updatedFields.location = locationValue
+                                      }
+                                      if (selectedPackage !== item["Package"]) {
+                                        updatedFields.package = selectedPackage
+                                      }
+
+                                      if (Object.keys(updatedFields).length === 0) {
+                                        alert("❌ No changes detected. Please modify at least one field.")
+                                        return
+                                      }
+
+                                      updateInventoryItem(item.id, updatedFields, requester)
                                       // Close dialog
                                       const closeButton = dialogElement?.querySelector(
                                         'button[aria-label="Close"]',
@@ -1941,7 +2217,7 @@ Please check your Slack configuration.`)
                                       closeButton?.click()
                                     }}
                                   >
-                                    Update Reorder Point
+                                    Update Item
                                   </Button>
                                 </DialogFooter>
                               </DialogContent>

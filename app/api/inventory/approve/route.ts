@@ -10,6 +10,18 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null
 
+// Helper function to determine correct package type based on quantity
+function getCorrectPackageType(qty: number): string {
+  if (qty >= 1 && qty <= 100) {
+    return "EXACT"
+  } else if (qty >= 101 && qty <= 500) {
+    return "ESTIMATED"
+  } else if (qty > 500) {
+    return "REEL"
+  }
+  return "EXACT" // Default fallback
+}
+
 export async function POST(request: NextRequest) {
   try {
     if (!supabase) {
@@ -155,16 +167,21 @@ async function handleBatchApproval(pendingChange: any, action: string, approvedB
     // For batch approval, approve all pending items
     if (itemStatus === "pending" || itemStatus === "approved") {
       try {
+        const newQty = Number(item.qty) || 0
+        const correctPackageType = getCorrectPackageType(newQty)
+
         const inventoryItem = {
           part_number: String(item.part_number || "").trim(),
           mfg_part_number: String(item.mfg_part_number || "").trim(),
-          qty: Number(item.qty) || 0,
+          qty: newQty,
           part_description: String(item.part_description || "").trim(),
           supplier: String(item.supplier || "").trim(),
           location: String(item.location || "").trim(),
-          package: String(item.package || "").trim(),
+          package: correctPackageType, // Auto-correct package type based on quantity
           reorder_point: Number(item.reorder_point) || 10,
         }
+
+        console.log(`📦 Batch item ${i + 1}: ${newQty} qty → ${correctPackageType} package`)
 
         console.log(`Adding batch item ${i + 1}/${batchItems.length}:`, inventoryItem)
 
@@ -362,14 +379,19 @@ async function handleSingleItemApproval(pendingChange: any, action: string, appr
     }
     inventoryResults.push(data)
   } else if (pendingChange.change_type === "update") {
-    // Update existing item
+    // Update existing item with smart package type adjustment
+    const newQty = Number(pendingChange.item_data.qty) || 0
+    const correctPackageType = getCorrectPackageType(newQty)
+
     const updateData = {
-      qty: Number(pendingChange.item_data.qty) || 0,
+      qty: newQty,
       reorder_point: Number(pendingChange.item_data.reorder_point) || 10,
       location: String(pendingChange.item_data.location || "").trim(),
       supplier: String(pendingChange.item_data.supplier || "").trim(),
-      package: String(pendingChange.item_data.package || "").trim(),
+      package: correctPackageType, // Auto-update package based on new quantity
     }
+
+    console.log(`📦 Auto-updating package type: ${newQty} qty → ${correctPackageType} package`)
 
     const { data, error } = await supabase
       .from("inventory")
