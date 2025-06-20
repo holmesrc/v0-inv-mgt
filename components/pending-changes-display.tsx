@@ -31,7 +31,9 @@ export default function PendingChangesDisplay() {
   const loadPendingChanges = async () => {
     try {
       setError(null)
-      const response = await fetch("/api/inventory/pending")
+      const base =
+        (typeof window !== "undefined" ? window.location.origin : "") || process.env.NEXT_PUBLIC_APP_URL || ""
+      const response = await fetch(`${base}/api/inventory/pending`)
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)

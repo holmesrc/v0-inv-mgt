@@ -39,6 +39,7 @@ interface LocationInputProps {
   onChange: (value: string) => void
   existingLocations: string[]
   pendingLocations: string[]
+  currentBatchLocations: string[] // Add this new prop
   disabled?: boolean
   placeholder?: string
 }
@@ -48,6 +49,7 @@ function LocationInput({
   onChange,
   existingLocations,
   pendingLocations,
+  currentBatchLocations, // Add this
   disabled,
   placeholder,
 }: LocationInputProps) {
@@ -56,13 +58,21 @@ function LocationInput({
   const [suggestedNext, setSuggestedNext] = useState<string>("")
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const predictNextLocation = useCallback((existingLocs: string[], pendingLocs: string[]) => {
+  const predictNextLocation = useCallback((existingLocs: string[], pendingLocs: string[], batchLocs: string[]) => {
     console.log("🎯 === LOCATION PREDICTION START ===")
     console.log("📦 Existing locations (last 10):", existingLocs.slice(-10))
     console.log("⏳ Pending locations:", pendingLocs)
-    console.log("🔢 Existing count:", existingLocs.length, "Pending count:", pendingLocs.length)
+    console.log("🔄 Current batch locations:", batchLocs)
+    console.log(
+      "🔢 Existing count:",
+      existingLocs.length,
+      "Pending count:",
+      pendingLocs.length,
+      "Batch count:",
+      batchLocs.length,
+    )
 
-    const allLocations = [...existingLocs, ...pendingLocs]
+    const allLocations = [...existingLocs, ...pendingLocs, ...batchLocs]
     console.log("🔗 Combined locations (last 15):", allLocations.slice(-15))
     console.log("🔢 Total combined count:", allLocations.length)
 
@@ -123,11 +133,11 @@ function LocationInput({
 
   // Update filtered locations and suggestion when value or locations change
   useEffect(() => {
-    const allLocations = [...existingLocations, ...pendingLocations]
+    const allLocations = [...existingLocations, ...pendingLocations, ...currentBatchLocations]
 
     if (!value.trim()) {
       setFilteredLocations(existingLocations.slice(0, 10)) // Show first 10 existing when empty
-      setSuggestedNext(predictNextLocation(existingLocations, pendingLocations))
+      setSuggestedNext(predictNextLocation(existingLocations, pendingLocations, currentBatchLocations))
     } else {
       const filtered = allLocations.filter((loc) => loc.toLowerCase().includes(value.toLowerCase())).slice(0, 8)
       setFilteredLocations(filtered)
@@ -135,12 +145,12 @@ function LocationInput({
       // Only show suggestion if current value doesn't exactly match existing
       const exactMatch = allLocations.some((loc) => loc.toLowerCase() === value.toLowerCase())
       if (!exactMatch) {
-        setSuggestedNext(predictNextLocation(existingLocations, pendingLocations))
+        setSuggestedNext(predictNextLocation(existingLocations, pendingLocations, currentBatchLocations))
       } else {
         setSuggestedNext("")
       }
     }
-  }, [value, existingLocations, pendingLocations, predictNextLocation])
+  }, [value, existingLocations, pendingLocations, currentBatchLocations, predictNextLocation])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value
@@ -392,7 +402,9 @@ export default function AddInventoryItem({
     const fetchPendingLocations = async () => {
       try {
         console.log("🔍 Fetching pending locations...")
-        const response = await fetch("/api/inventory/pending")
+        const base =
+          (typeof window !== "undefined" ? window.location.origin : "") || process.env.NEXT_PUBLIC_APP_URL || ""
+        const response = await fetch(`${base}/api/inventory/pending`)
         if (response.ok) {
           const data = await response.json()
           console.log("📋 Raw pending data received:", data)
@@ -458,6 +470,14 @@ export default function AddInventoryItem({
       fetchPendingLocations()
     }
   }, [open])
+
+  // Extract locations from current batch items
+  const currentBatchLocations = useMemo(() => {
+    return batchItems
+      .map((item) => item.Location)
+      .filter((location) => location && location.trim())
+      .map((location) => location.trim())
+  }, [batchItems])
 
   const resetCurrentItem = () => {
     setCurrentItem({
@@ -1039,6 +1059,7 @@ export default function AddInventoryItem({
                     onChange={(value) => handleInputChange("location", value)}
                     existingLocations={uniqueLocations}
                     pendingLocations={pendingLocations}
+                    currentBatchLocations={currentBatchLocations}
                     disabled={loading}
                     placeholder="Type location or select existing"
                   />
@@ -1179,6 +1200,7 @@ export default function AddInventoryItem({
                                 onChange={(value) => handleEditingItemChange("Location", value)}
                                 existingLocations={uniqueLocations}
                                 pendingLocations={pendingLocations}
+                                currentBatchLocations={currentBatchLocations}
                                 disabled={false}
                                 placeholder="Enter location"
                               />
