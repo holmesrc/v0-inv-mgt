@@ -287,6 +287,10 @@ export default function AddInventoryItem({
     existingItem: null,
   })
 
+  // Add these new state variables at the top of the component (around line 200):
+  const [quickUpdateQty, setQuickUpdateQty] = useState(0)
+  const [quickUpdateLoading, setQuickUpdateLoading] = useState(false)
+
   // Aggressive deduplication with debugging
   const uniquePackageTypes = useMemo(() => {
     const cleaned = packageTypes
@@ -490,6 +494,7 @@ export default function AddInventoryItem({
       package: "",
       reorderPoint: defaultReorderPoint,
     })
+    setQuickUpdateQty(0)
     setUseCustomSupplier(false)
     setUseCustomLocation(false)
     setUseCustomPackage(false)
@@ -551,6 +556,137 @@ export default function AddInventoryItem({
 
   const removeFromBatch = (batchId: string) => {
     setBatchItems((prev) => prev.filter((item) => item.batchId !== batchId))
+  }
+
+  // Add this new function to handle the quick quantity update (around line 400):
+  const handleQuickQuantityUpdate = async (existingItem: InventoryItem) => {
+    if (!requesterName.trim()) {
+      setError("Requester name is required")
+      return
+    }
+
+    if (quickUpdateQty <= 0) {
+      setError("Please enter a valid quantity to add")
+      return
+    }
+
+    setQuickUpdateLoading(true)
+    setError(null)
+
+    try {
+      console.log(`🔄 Quick updating quantity for ${existingItem["Part number"]}`)
+      console.log(
+        `📊 Current: ${existingItem.QTY}, Adding: ${quickUpdateQty}, New total: ${existingItem.QTY + quickUpdateQty}`,
+      )
+
+      // Create the updated item data
+      const updatedItem = {
+        part_number: existingItem["Part number"],
+        mfg_part_number: existingItem["MFG Part number"],
+        qty: existingItem.QTY + quickUpdateQty,
+        part_description: existingItem["Part description"],
+        supplier: existingItem.Supplier,
+        location: existingItem.Location,
+        package: existingItem.Package,
+        reorder_point: existingItem.reorderPoint || 10,
+      }
+
+      console.log("📤 Sending quantity update to API:", updatedItem)
+
+      // Submit the quantity update as a pending change
+      const response = await fetch("/api/inventory/pending", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          changeType: "update",
+          itemData: updatedItem,
+          originalData: {
+            part_number: existingItem["Part number"],
+            mfg_part_number: existingItem["MFG Part number"],
+            qty: existingItem.QTY,
+            part_description: existingItem.Supplier,
+            supplier: existingItem.Supplier,
+            location: existingItem.Location,
+            package: existingItem.Package,
+            reorder_point: existingItem.reorderPoint || 10,
+          },
+          requestedBy: requesterName.trim(),
+        }),
+      })
+
+      console.log("📥 API Response:", {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("❌ API Error Response:", errorText)
+        throw new Error(`API Error (${response.status}): ${errorText}`)
+      }
+
+      const result = await response.json()
+      console.log("📋 API Result:", result)
+
+      if (result.success) {
+        // Send Slack notification for the quantity update
+        try {
+          const slackResponse = await fetch("/api/slack/send-approval-request", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              changeType: "update",
+              itemData: updatedItem, // <-- correct key
+              originalData: {
+                // <-- correct key
+                part_number: existingItem["Part number"],
+                mfg_part_number: existingItem["MFG Part number"],
+                qty: existingItem.QTY,
+                part_description: existingItem["Part description"],
+                supplier: existingItem.Supplier,
+                location: existingItem.Location,
+                package: existingItem.Package,
+                reorder_point: existingItem.reorderPoint || 10,
+              },
+              requestedBy: requesterName.trim(),
+              changeId: result.data.id,
+            }),
+          })
+
+          if (slackResponse.ok) {
+            console.log("✅ Slack notification sent successfully")
+          } else {
+            console.warn("⚠️ Slack notification failed, but update was submitted successfully")
+          }
+        } catch (slackError) {
+          console.error("❌ Failed to send Slack notification:", slackError)
+          // Don't fail the entire operation if Slack fails
+        }
+
+        console.log("✅ Quantity update submitted successfully")
+        setSuccess(
+          `Successfully submitted quantity update for ${existingItem["Part number"]}! Added ${quickUpdateQty} (${existingItem.QTY} → ${existingItem.QTY + quickUpdateQty})`,
+        )
+
+        // Reset the quick update form
+        setQuickUpdateQty(0)
+        setCurrentItem((prev) => ({ ...prev, partNumber: "" }))
+
+        // Clear success message after 3 seconds
+        setTimeout(() => setSuccess(null), 3000)
+      } else {
+        throw new Error(result.error || "Failed to submit quantity update")
+      }
+    } catch (error) {
+      console.error("❌ Error updating quantity:", error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to submit quantity update"
+      setError(`Quantity update failed: ${errorMessage}`)
+    } finally {
+      setQuickUpdateLoading(false)
+    }
   }
 
   const submitBatch = async () => {
@@ -929,13 +1065,10 @@ export default function AddInventoryItem({
                       id="partNumber"
                       value={currentItem.partNumber}
                       onChange={(e) => handleInputChange("partNumber", e.target.value)}
-                      placeholder=""
+                      placeholder="Enter part number"
+                      required
                       disabled={loading}
-                      className={`${
-                        partNumberCheck.isDuplicate
-                          ? "border-amber-500 focus:border-amber-500 focus:ring-amber-500"
-                          : ""
-                      }`}
+                      className={partNumberCheck.isDuplicate ? "border-orange-300 bg-orange-50" : ""}
                     />
                     {partNumberCheck.isChecking && (
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -944,60 +1077,95 @@ export default function AddInventoryItem({
                     )}
                   </div>
 
+                  {/* Enhanced duplicate warning with quick update option */}
                   {partNumberCheck.isDuplicate && partNumberCheck.existingItem && (
-                    <Alert className="bg-amber-50 border-amber-200">
-                      <AlertTriangle className="h-4 w-4 text-amber-600" />
-                      <AlertDescription className="text-amber-800">
-                        <div className="font-medium">⚠️ Part already exists in inventory!</div>
-                        <div className="text-sm mt-1">
-                          <strong>Location:</strong> {partNumberCheck.existingItem.Location || "Unknown"} •
-                          <strong>Qty:</strong> {partNumberCheck.existingItem.QTY} •<strong>Package:</strong>{" "}
-                          {partNumberCheck.existingItem.Package || "Unknown"}
-                        </div>
-                        <div className="text-xs mt-1 text-amber-700">
-                          Use the Edit function in the main inventory table to modify existing items.
-                        </div>
-                      </AlertDescription>
-                    </Alert>
-                  )}
+                    <Alert className="bg-orange-50 border-orange-200">
+                      <AlertTriangle className="h-4 w-4 text-orange-600" />
+                      <AlertDescription className="text-orange-800">
+                        <div className="space-y-3">
+                          <div>
+                            <strong>⚠️ Part already exists in inventory!</strong>
+                            <br />
+                            <strong>Location:</strong> {partNumberCheck.existingItem.Location} • <strong>Qty:</strong>{" "}
+                            {partNumberCheck.existingItem.QTY} • <strong>Package:</strong>{" "}
+                            {partNumberCheck.existingItem.Package}
+                          </div>
 
-                  {partNumberCheck.isDuplicate && !partNumberCheck.existingItem && (
-                    <Alert className="bg-amber-50 border-amber-200">
-                      <AlertTriangle className="h-4 w-4 text-amber-600" />
-                      <AlertDescription className="text-amber-800">
-                        <div className="font-medium">⚠️ Part already added to current batch!</div>
-                        <div className="text-xs mt-1">This part number is already in your current batch above.</div>
+                          <div className="bg-white p-3 rounded border border-orange-200">
+                            <div className="text-sm font-medium text-orange-900 mb-2">💡 Quick Quantity Update</div>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                min="1"
+                                value={quickUpdateQty || ""}
+                                onChange={(e) => setQuickUpdateQty(Number(e.target.value) || 0)}
+                                placeholder="Qty to add"
+                                className="w-24 h-8 text-sm"
+                                disabled={quickUpdateLoading}
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => handleQuickQuantityUpdate(partNumberCheck.existingItem!)}
+                                disabled={quickUpdateLoading || quickUpdateQty <= 0 || !requesterName.trim()}
+                                className="h-8 text-xs"
+                              >
+                                {quickUpdateLoading ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
+                                    Updating...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Edit className="w-3 h-3 mr-1" />
+                                    Add {quickUpdateQty > 0 ? quickUpdateQty : "?"} qty
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                            <div className="text-xs text-orange-700 mt-1">
+                              Current: {partNumberCheck.existingItem.QTY} → New:{" "}
+                              {partNumberCheck.existingItem.QTY + (quickUpdateQty || 0)}
+                            </div>
+                          </div>
+
+                          <div className="text-sm text-orange-700">
+                            Use the Edit function in the main inventory table to modify existing items.
+                          </div>
+                        </div>
                       </AlertDescription>
                     </Alert>
                   )}
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="mfgPartNumber">MFG Part Number *</Label>
                   <Input
                     id="mfgPartNumber"
                     value={currentItem.mfgPartNumber}
                     onChange={(e) => handleInputChange("mfgPartNumber", e.target.value)}
-                    placeholder=""
+                    placeholder="Enter manufacturer part number"
+                    required
                     disabled={loading}
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="qty">Quantity *</Label>
                   <Input
                     id="qty"
                     type="number"
-                    min="0"
+                    min="1"
                     value={currentItem.qty}
-                    onChange={(e) =>
-                      handleInputChange("qty", e.target.value === "" ? "" : Number.parseInt(e.target.value) || "")
-                    }
+                    onChange={(e) => handleInputChange("qty", Number(e.target.value) || "")}
+                    placeholder="Enter quantity"
+                    required
                     disabled={loading}
-                    placeholder=""
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-muted-foreground">
                     Auto-selects: Exact (1-100), Estimated (101-500), Reel (500+)
                   </p>
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="reorderPoint">Reorder Point</Label>
                   <Input
@@ -1005,23 +1173,40 @@ export default function AddInventoryItem({
                     type="number"
                     min="0"
                     value={currentItem.reorderPoint}
-                    onChange={(e) => handleInputChange("reorderPoint", Number.parseInt(e.target.value) || 0)}
+                    onChange={(e) => handleInputChange("reorderPoint", Number(e.target.value) || 0)}
+                    placeholder="Enter reorder point"
                     disabled={loading}
                   />
                 </div>
-                <div className="space-y-2 col-span-2">
+
+                <div className="col-span-2 space-y-2">
                   <Label htmlFor="description">Part Description *</Label>
                   <Input
                     id="description"
                     value={currentItem.description}
                     onChange={(e) => handleInputChange("description", e.target.value)}
-                    placeholder=""
+                    placeholder="Enter part description"
+                    required
                     disabled={loading}
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="supplier">Supplier</Label>
-                  {!useCustomSupplier ? (
+                  {useCustomSupplier ? (
+                    <Input
+                      ref={supplierInputRef}
+                      value={currentItem.supplier}
+                      onChange={(e) => handleInputChange("supplier", e.target.value)}
+                      placeholder="Enter custom supplier"
+                      disabled={loading}
+                      onBlur={() => {
+                        if (!currentItem.supplier.trim()) {
+                          setUseCustomSupplier(false)
+                        }
+                      }}
+                    />
+                  ) : (
                     <Select
                       value={currentItem.supplier}
                       onValueChange={(value) => handleSelectChange("supplier", value)}
@@ -1031,42 +1216,61 @@ export default function AddInventoryItem({
                         <SelectValue placeholder="Select supplier" />
                       </SelectTrigger>
                       <SelectContent>
-                        {uniqueSuppliers.map((supplier, index) => (
-                          <SelectItem key={`supplier-${index}-${supplier}`} value={supplier}>
+                        {uniqueSuppliers.map((supplier) => (
+                          <SelectItem key={supplier} value={supplier}>
                             {supplier}
                           </SelectItem>
                         ))}
-                        <SelectItem value="custom">Enter custom supplier...</SelectItem>
+                        <SelectItem value="custom">+ Add Custom Supplier</SelectItem>
                       </SelectContent>
                     </Select>
-                  ) : (
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="location">Location</Label>
+                  {useCustomLocation ? (
                     <Input
-                      ref={supplierInputRef}
-                      placeholder="Enter supplier name"
-                      value={currentItem.supplier}
-                      onChange={(e) => handleInputChange("supplier", e.target.value)}
-                      onBlur={() => {
-                        if (!currentItem.supplier) setUseCustomSupplier(false)
-                      }}
+                      ref={locationInputRef}
+                      value={currentItem.location}
+                      onChange={(e) => handleInputChange("location", e.target.value)}
+                      placeholder="Enter custom location"
                       disabled={loading}
+                      onBlur={() => {
+                        if (!currentItem.location.trim()) {
+                          setUseCustomLocation(false)
+                        }
+                      }}
+                    />
+                  ) : (
+                    <LocationInput
+                      value={currentItem.location}
+                      onChange={(value) => handleInputChange("location", value)}
+                      existingLocations={uniqueLocations}
+                      pendingLocations={pendingLocations}
+                      currentBatchLocations={currentBatchLocations}
+                      disabled={loading}
+                      placeholder="Type location or select existing"
                     />
                   )}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="location">Location</Label>
-                  <LocationInput
-                    value={currentItem.location}
-                    onChange={(value) => handleInputChange("location", value)}
-                    existingLocations={uniqueLocations}
-                    pendingLocations={pendingLocations}
-                    currentBatchLocations={currentBatchLocations}
-                    disabled={loading}
-                    placeholder="Type location or select existing"
-                  />
-                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="package">Package Type</Label>
-                  {!useCustomPackage ? (
+                  {useCustomPackage ? (
+                    <Input
+                      ref={packageInputRef}
+                      value={currentItem.package}
+                      onChange={(e) => handleInputChange("package", e.target.value)}
+                      placeholder="Enter custom package type"
+                      disabled={loading}
+                      onBlur={() => {
+                        if (!currentItem.package.trim()) {
+                          setUseCustomPackage(false)
+                        }
+                      }}
+                    />
+                  ) : (
                     <Select
                       value={currentItem.package}
                       onValueChange={(value) => handleSelectChange("package", value)}
@@ -1076,42 +1280,23 @@ export default function AddInventoryItem({
                         <SelectValue placeholder="Select package type" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="EXACT">📦 EXACT (1-100 qty)</SelectItem>
-                        <SelectItem value="ESTIMATED">📊 ESTIMATED (101-500 qty)</SelectItem>
-                        <SelectItem value="REEL">🎯 REEL (500+ qty)</SelectItem>
-                        {uniquePackageTypes
-                          .filter((pkg) => !["EXACT", "ESTIMATED", "REEL"].includes(pkg))
-                          .map((packageType, index) => (
-                            <SelectItem key={`package-${index}-${packageType}`} value={packageType}>
-                              {packageType}
-                            </SelectItem>
-                          ))}
-                        <SelectItem value="custom">✏️ Enter custom package...</SelectItem>
+                        {uniquePackageTypes.map((packageType) => (
+                          <SelectItem key={packageType} value={packageType}>
+                            {packageType}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="custom">+ Add Custom Package</SelectItem>
                       </SelectContent>
                     </Select>
-                  ) : (
-                    <Input
-                      ref={packageInputRef}
-                      placeholder="Enter package type"
-                      value={currentItem.package}
-                      onChange={(e) => handleInputChange("package", e.target.value)}
-                      onBlur={() => {
-                        if (!currentItem.package) setUseCustomPackage(false)
-                      }}
-                      disabled={loading}
-                    />
                   )}
                   <p className="text-xs text-muted-foreground">
                     Package auto-selected based on quantity. You can override for kits or custom packages.
                   </p>
                 </div>
               </div>
-              <div className="mt-4 flex gap-2">
-                <Button
-                  type="button"
-                  onClick={addToBatch}
-                  disabled={loading || !currentItem.partNumber.trim() || partNumberCheck.isDuplicate}
-                >
+
+              <div className="flex gap-2 mt-4">
+                <Button onClick={addToBatch} disabled={loading || partNumberCheck.isDuplicate} className="flex-1">
                   <Plus className="w-4 h-4 mr-2" />
                   Add to Batch
                 </Button>
@@ -1122,7 +1307,7 @@ export default function AddInventoryItem({
             </CardContent>
           </Card>
 
-          {/* Batch Items List */}
+          {/* Batch Items Display */}
           {batchItems.length > 0 && (
             <Card>
               <CardHeader>
@@ -1132,129 +1317,80 @@ export default function AddInventoryItem({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {batchItems.map((item, index) => (
-                    <div key={item.batchId} className="p-3 border rounded-lg">
-                      {editingBatchId === item.batchId && editingItem ? (
-                        // Edit Mode
-                        <div className="space-y-3">
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <Label className="text-xs">Part Number</Label>
-                              <Input
-                                value={editingItem["Part number"]}
-                                onChange={(e) => handleEditingItemChange("Part number", e.target.value)}
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">MFG Part Number</Label>
-                              <Input
-                                value={editingItem["MFG Part number"]}
-                                onChange={(e) => handleEditingItemChange("MFG Part number", e.target.value)}
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">Quantity</Label>
-                              <Input
-                                type="number"
-                                min="0"
-                                value={editingItem.QTY}
-                                onChange={(e) => handleEditingItemChange("QTY", Number.parseInt(e.target.value) || 0)}
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">Reorder Point</Label>
-                              <Input
-                                type="number"
-                                min="0"
-                                value={editingItem.reorderPoint}
-                                onChange={(e) =>
-                                  handleEditingItemChange("reorderPoint", Number.parseInt(e.target.value) || 0)
-                                }
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div className="col-span-2">
-                              <Label className="text-xs">Description</Label>
-                              <Input
-                                value={editingItem["Part description"]}
-                                onChange={(e) => handleEditingItemChange("Part description", e.target.value)}
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">Supplier</Label>
-                              <Input
-                                value={editingItem.Supplier}
-                                onChange={(e) => handleEditingItemChange("Supplier", e.target.value)}
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">Location</Label>
-                              <LocationInput
-                                value={editingItem.Location}
-                                onChange={(value) => handleEditingItemChange("Location", value)}
-                                existingLocations={uniqueLocations}
-                                pendingLocations={pendingLocations}
-                                currentBatchLocations={currentBatchLocations}
-                                disabled={false}
-                                placeholder="Enter location"
-                              />
-                            </div>
-                            <div className="col-span-2">
-                              <Label className="text-xs">Package</Label>
-                              <Input
-                                value={editingItem.Package}
-                                onChange={(e) => handleEditingItemChange("Package", e.target.value)}
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                          </div>
-                          <div className="flex gap-2 justify-end">
-                            <Button size="sm" variant="outline" onClick={cancelEditingBatchItem}>
-                              Cancel
-                            </Button>
-                            <Button size="sm" onClick={saveEditingBatchItem}>
-                              Save Changes
-                            </Button>
-                          </div>
+                <div className="space-y-2">
+                  {batchItems.map((item) => (
+                    <div key={item.batchId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      {editingBatchId === item.batchId ? (
+                        <div className="flex-1 grid grid-cols-6 gap-2 mr-4">
+                          <Input
+                            value={editingItem?.["Part number"] || ""}
+                            onChange={(e) => handleEditingItemChange("Part number", e.target.value)}
+                            placeholder="Part Number"
+                            className="text-sm"
+                          />
+                          <Input
+                            value={editingItem?.["Part description"] || ""}
+                            onChange={(e) => handleEditingItemChange("Part description", e.target.value)}
+                            placeholder="Description"
+                            className="text-sm"
+                          />
+                          <Input
+                            type="number"
+                            value={editingItem?.QTY || ""}
+                            onChange={(e) => handleEditingItemChange("QTY", Number(e.target.value) || "")}
+                            placeholder="Qty"
+                            className="text-sm"
+                          />
+                          <Input
+                            value={editingItem?.Supplier || ""}
+                            onChange={(e) => handleEditingItemChange("Supplier", e.target.value)}
+                            placeholder="Supplier"
+                            className="text-sm"
+                          />
+                          <Input
+                            value={editingItem?.Location || ""}
+                            onChange={(e) => handleEditingItemChange("Location", e.target.value)}
+                            placeholder="Location"
+                            className="text-sm"
+                          />
+                          <Input
+                            value={editingItem?.Package || ""}
+                            onChange={(e) => handleEditingItemChange("Package", e.target.value)}
+                            placeholder="Package"
+                            className="text-sm"
+                          />
                         </div>
                       ) : (
-                        // Display Mode
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="font-medium">{item["Part number"]}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {item["Part description"]} • Qty: {item.QTY} • {item.Supplier} • {item.Location} •{" "}
-                              {item.Package}
-                            </div>
-                          </div>
-                          <div className="flex gap-1">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => startEditingBatchItem(item)}
-                              disabled={loading}
-                              title="Edit item"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => removeFromBatch(item.batchId)}
-                              disabled={loading}
-                              title="Remove item"
-                            >
-                              <X className="w-4 h-4" />
-                            </Button>
+                        <div className="flex-1">
+                          <div className="font-medium">{item["Part number"]}</div>
+                          <div className="text-sm text-gray-600">
+                            {item["Part description"]} • Qty: {item.QTY} • {item.Supplier} • {item.Location} •{" "}
+                            {item.Package}
                           </div>
                         </div>
                       )}
+
+                      <div className="flex gap-1">
+                        {editingBatchId === item.batchId ? (
+                          <>
+                            <Button size="sm" variant="outline" onClick={saveEditingBatchItem}>
+                              Save
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={cancelEditingBatchItem}>
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button size="sm" variant="outline" onClick={() => startEditingBatchItem(item)}>
+                              Edit
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => removeFromBatch(item.batchId)}>
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1263,65 +1399,67 @@ export default function AddInventoryItem({
           )}
         </div>
 
-        <DialogFooter className="flex justify-between">
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>
-              Cancel
-            </Button>
-            {batchItems.length > 0 && (
-              <Button type="button" variant="outline" onClick={() => setBatchItems([])} disabled={loading}>
-                Clear Batch
-              </Button>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => handleDialogClose(false)} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            onClick={submitBatch}
+            disabled={loading || batchItems.length === 0 || !requesterName.trim()}
+            className="min-w-[120px]"
+          >
+            {loading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Submitting...
+              </>
+            ) : (
+              `Submit Batch (${batchItems.length})`
             )}
-          </div>
-          <Button onClick={submitBatch} disabled={loading || batchItems.length === 0 || !requesterName.trim()}>
-            {loading ? "Submitting..." : `Submit Batch of ${batchItems.length} Items for Approval`}
           </Button>
         </DialogFooter>
-      </DialogContent>
-      {/* Cancel Current Entry Confirmation */}
-      <Dialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Cancel Entry?</DialogTitle>
-            <DialogDescription>
-              You have unsaved changes in the current item. Are you sure you want to cancel and lose this information?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={cancelClose}>
-              Keep Editing
-            </Button>
-            <Button variant="destructive" onClick={confirmCancel}>
-              Yes, Cancel Entry
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      {/* Batch Confirmation Dialog */}
-      <Dialog open={showBatchConfirm} onOpenChange={setShowBatchConfirm}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Unsaved Batch Items</DialogTitle>
-            <DialogDescription>
-              You have {batchItems.length} item{batchItems.length !== 1 ? "s" : ""} in your batch that haven't been
-              submitted yet. What would you like to do?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={cancelClose}>
-              Keep Editing
-            </Button>
-            <Button variant="destructive" onClick={confirmCancel}>
-              Discard Batch
-            </Button>
-            <Button onClick={submitBatch} disabled={loading || !requesterName.trim()}>
-              Submit Batch Now
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        {/* Cancel Confirmation Dialog */}
+        <Dialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Discard Changes?</DialogTitle>
+              <DialogDescription>
+                You have unsaved changes in the form. Are you sure you want to discard them?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={cancelClose}>
+                Keep Editing
+              </Button>
+              <Button variant="destructive" onClick={confirmCancel}>
+                Discard Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Batch Confirmation Dialog */}
+        <Dialog open={showBatchConfirm} onOpenChange={setShowBatchConfirm}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Discard Batch?</DialogTitle>
+              <DialogDescription>
+                You have {batchItems.length} items in your batch that haven't been submitted. Are you sure you want to
+                discard them?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={cancelClose}>
+                Keep Editing
+              </Button>
+              <Button variant="destructive" onClick={confirmCancel}>
+                Discard Batch
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </DialogContent>
     </Dialog>
   )
 }
