@@ -1076,6 +1076,7 @@ export default function AddInventoryItem({
                       placeholder="Enter part number"
                       required
                       disabled={loading}
+                      autoComplete="off"
                       className={partNumberCheck.isDuplicate ? "border-orange-300 bg-orange-50" : ""}
                     />
                     {partNumberCheck.isChecking && (
@@ -1154,6 +1155,7 @@ export default function AddInventoryItem({
                     placeholder="Enter manufacturer part number"
                     required
                     disabled={loading}
+                    autoComplete="off"
                   />
                 </div>
 
@@ -1196,6 +1198,7 @@ export default function AddInventoryItem({
                     placeholder="Enter part description"
                     required
                     disabled={loading}
+                    autoComplete="off"
                   />
                 </div>
 
@@ -1335,12 +1338,14 @@ export default function AddInventoryItem({
                             onChange={(e) => handleEditingItemChange("Part number", e.target.value)}
                             placeholder="Part Number"
                             className="text-sm"
+                            autoComplete="off"
                           />
                           <Input
                             value={editingItem?.["Part description"] || ""}
                             onChange={(e) => handleEditingItemChange("Part description", e.target.value)}
                             placeholder="Description"
                             className="text-sm"
+                            autoComplete="off"
                           />
                           <Input
                             type="number"
