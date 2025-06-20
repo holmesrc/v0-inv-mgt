@@ -72,11 +72,15 @@ export default function InventoryDashboard() {
   // Show upload screen if no inventory data
   const [showUpload, setShowUpload] = useState(false)
 
+  // Add this after the existing state declarations (around line 45)
+  const [itemsWithPendingChanges, setItemsWithPendingChanges] = useState<Set<string>>(new Set())
+
   // Load data from database on component mount
   useEffect(() => {
     loadInventoryFromDatabase()
     loadSettingsFromDatabase()
     checkSlackConfiguration()
+    loadPendingChanges() // Add this line
   }, [])
 
   // Check Slack configuration with better error handling
@@ -312,6 +316,31 @@ export default function InventoryDashboard() {
     }
   }
 
+  // Add this function after loadSettingsFromDatabase (around line 300)
+  const loadPendingChanges = async () => {
+    try {
+      const response = await fetch("/api/inventory/pending")
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          // Extract part numbers from pending changes
+          const pendingPartNumbers = new Set<string>()
+          result.data.forEach((change: any) => {
+            if (change.status === "pending" && change.item_data?.part_number) {
+              pendingPartNumbers.add(change.item_data.part_number)
+            }
+            if (change.status === "pending" && change.original_data?.part_number) {
+              pendingPartNumbers.add(change.original_data.part_number)
+            }
+          })
+          setItemsWithPendingChanges(pendingPartNumbers)
+        }
+      }
+    } catch (error) {
+      console.error("Error loading pending changes:", error)
+    }
+  }
+
   const saveInventoryToDatabase = async (inventoryData: InventoryItem[], note = "", filename = "") => {
     try {
       setSyncing(true)
@@ -477,6 +506,9 @@ export default function InventoryDashboard() {
               // Don't fail the entire operation if Slack fails
             }
           }
+
+          // Refresh pending changes list
+          await loadPendingChanges()
 
           return result
         } else {
@@ -1736,6 +1768,7 @@ Please check your Slack configuration.`)
                       <td className="px-4 py-3 border-r border-gray-100 align-top">{item["Part description"]}</td>
                       <td className="px-4 py-3 border-r border-gray-100 align-top">{item["Supplier"]}</td>
                       <td className="px-4 py-3 border-r border-gray-100 align-top">{item["Location"]}</td>
+                      {/* In the Package column cell (around line 1200), replace the existing content with: */}
                       <td className="px-4 py-3 border-r border-gray-100 align-top">
                         <div className="flex items-center gap-1">
                           <Badge
@@ -1751,6 +1784,14 @@ Please check your Slack configuration.`)
                             >
                               ⚠️
                             </span>
+                          )}
+                          {itemsWithPendingChanges.has(item["Part number"]) && (
+                            <div className="flex flex-col items-center">
+                              <span className="text-xs text-orange-600" title="Changes awaiting approval">
+                                ⏳
+                              </span>
+                              <span className="text-xs text-orange-600 font-medium">Awaiting Approval</span>
+                            </div>
                           )}
                         </div>
                       </td>
@@ -1982,6 +2023,12 @@ Please check your Slack configuration.`)
                                     <Select
                                       defaultValue={item["Package"]}
                                       onValueChange={(value) => {
+                                        // Store the selected value on the select element for later retrieval
+                                        const packageSelect = document.querySelector("#package-select") as HTMLElement
+                                        if (packageSelect) {
+                                          packageSelect.setAttribute("data-selected-value", value)
+                                        }
+
                                         // Update warning when package type changes
                                         const dialogElement = document.querySelector('[role="dialog"]')
                                         const quantityInput = dialogElement?.querySelector(
@@ -2130,12 +2177,32 @@ Please check your Slack configuration.`)
                                       const quantityInput = dialogElement?.querySelector(
                                         'input[id="quantity"]',
                                       ) as HTMLInputElement
-                                      const packageSelect = dialogElement?.querySelector(
+                                      const packageSelectTrigger = dialogElement?.querySelector(
                                         "#package-select",
                                       ) as HTMLElement
-                                      const selectedPackage =
-                                        packageSelect?.getAttribute("data-value") || item["Package"]
                                       const qty = Number(quantityInput?.value) || item["QTY"]
+
+                                      // Get the selected package type more reliably
+                                      let selectedPackage = item["Package"] // Default to current package
+                                      const packageSelectValue =
+                                        packageSelectTrigger?.querySelector('[data-state="checked"]')?.textContent
+                                      if (packageSelectValue) {
+                                        selectedPackage = packageSelectValue.trim()
+                                      } else {
+                                        // Fallback: check the trigger text content
+                                        const triggerText = packageSelectTrigger?.querySelector("span")?.textContent
+                                        if (triggerText && triggerText !== "Select package type") {
+                                          selectedPackage = triggerText.trim()
+                                        }
+                                      }
+
+                                      console.log("🔍 Package validation debug:", {
+                                        qty,
+                                        selectedPackage,
+                                        suggestedPackage: getCorrectPackageType(qty),
+                                        triggerElement: packageSelectTrigger,
+                                        triggerText: packageSelectTrigger?.querySelector("span")?.textContent,
+                                      })
 
                                       // Validate package type before saving
                                       const suggestedPackage = getCorrectPackageType(qty)
@@ -2145,7 +2212,12 @@ Please check your Slack configuration.`)
 
                                       if (!isExcludedPackage && selectedPackage.toUpperCase() !== suggestedPackage) {
                                         alert(
-                                          `❌ Package type validation failed!\n\nFor ${qty} units, the package type must be "${suggestedPackage}".\n\nPlease select the correct package type before updating.`,
+                                          `❌ Package type validation failed!
+
+For ${qty} units, the package type must be "${suggestedPackage}".
+Currently selected: "${selectedPackage}"
+
+Please select the correct package type before updating.`,
                                         )
                                         return
                                       }
