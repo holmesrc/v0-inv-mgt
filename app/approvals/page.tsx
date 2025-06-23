@@ -19,6 +19,7 @@ import {
   ChevronRight,
 } from "lucide-react"
 import Link from "next/link"
+import ProtectedApprovals from "@/components/protected-approvals"
 
 interface PendingChange {
   id: string
@@ -606,302 +607,305 @@ export default function ApprovalsPage() {
   const pendingItems = pendingChanges.filter((c) => c.status === "pending")
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Approval Dashboard</h1>
-          <p className="text-muted-foreground">Manage pending inventory changes and approvals</p>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={loadPendingChanges} variant="outline" disabled={loading}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-          <Link href="/">
-            <Button variant="outline">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Inventory
-            </Button>
-          </Link>
-        </div>
-      </div>
-
-      {/* Error Alert */}
-      {error && (
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            {error}
-            <Button variant="outline" size="sm" className="ml-2" onClick={() => setError(null)}>
-              Dismiss
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Batch Approval Instructions */}
-      <Card className="border-blue-200 bg-blue-50">
-        <CardHeader>
-          <CardTitle className="text-blue-800">Batch Approval Instructions</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-blue-700">
-          <div className="space-y-2">
-            <p>
-              <strong>Batch Actions:</strong>
-            </p>
-            <ul className="list-disc list-inside space-y-1 ml-4">
-              <li>
-                <strong>Approve Batch:</strong> Approves all pending items in the batch and adds them to inventory
-              </li>
-              <li>
-                <strong>Reject Batch:</strong> Rejects the entire batch (no items are added)
-              </li>
-            </ul>
-            <p>
-              <strong>Individual Item Actions:</strong>
-            </p>
-            <ul className="list-disc list-inside space-y-1 ml-4">
-              <li>
-                <strong>Approve Item:</strong> Immediately adds that specific item to inventory
-              </li>
-              <li>
-                <strong>Reject Item:</strong> Marks that item as rejected (won't be added)
-              </li>
-              <li>Use individual actions when you want to approve some items but not others</li>
-            </ul>
+    <ProtectedApprovals>
+      <div className="container mx-auto p-6 space-y-6">
+        {/* All existing content stays the same */}
+        {/* Header */}
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold">Approval Dashboard</h1>
+            <p className="text-muted-foreground">Manage pending inventory changes and approvals</p>
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex gap-2">
+            <Button onClick={loadPendingChanges} variant="outline" disabled={loading}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+            <Link href="/">
+              <Button variant="outline">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Inventory
+              </Button>
+            </Link>
+          </div>
+        </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Changes</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{pendingChanges.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{pendingCount}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Approved</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{approvedCount}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Rejected</CardTitle>
-            <XCircle className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{rejectedCount}</div>
-          </CardContent>
-        </Card>
-      </div>
+        {/* Error Alert */}
+        {error && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              {error}
+              <Button variant="outline" size="sm" className="ml-2" onClick={() => setError(null)}>
+                Dismiss
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
-      {/* Bulk Actions */}
-      {pendingCount > 0 && (
+        {/* Batch Approval Instructions */}
+        <Card className="border-blue-200 bg-blue-50">
+          <CardHeader>
+            <CardTitle className="text-blue-800">Batch Approval Instructions</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-blue-700">
+            <div className="space-y-2">
+              <p>
+                <strong>Batch Actions:</strong>
+              </p>
+              <ul className="list-disc list-inside space-y-1 ml-4">
+                <li>
+                  <strong>Approve Batch:</strong> Approves all pending items in the batch and adds them to inventory
+                </li>
+                <li>
+                  <strong>Reject Batch:</strong> Rejects the entire batch (no items are added)
+                </li>
+              </ul>
+              <p>
+                <strong>Individual Item Actions:</strong>
+              </p>
+              <ul className="list-disc list-inside space-y-1 ml-4">
+                <li>
+                  <strong>Approve Item:</strong> Immediately adds that specific item to inventory
+                </li>
+                <li>
+                  <strong>Reject Item:</strong> Marks that item as rejected (won't be added)
+                </li>
+                <li>Use individual actions when you want to approve some items but not others</li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Changes</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{pendingChanges.length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pending</CardTitle>
+              <Clock className="h-4 w-4 text-yellow-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-yellow-600">{pendingCount}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Approved</CardTitle>
+              <CheckCircle className="h-4 w-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{approvedCount}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Rejected</CardTitle>
+              <XCircle className="h-4 w-4 text-red-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">{rejectedCount}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Bulk Actions */}
+        {pendingCount > 0 && (
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Checkbox
+                      checked={selectedIds.size === pendingItems.length && pendingItems.length > 0}
+                      onCheckedChange={handleSelectAll}
+                    />
+                    Bulk Actions
+                  </CardTitle>
+                  <CardDescription>
+                    {selectedIds.size} of {pendingCount} pending items selected
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => handleBulkApproval("approve")}
+                    disabled={selectedIds.size === 0 || bulkProcessing}
+                    variant="default"
+                  >
+                    {bulkProcessing ? (
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                    )}
+                    Approve Selected ({selectedIds.size})
+                  </Button>
+                  <Button
+                    onClick={() => handleBulkApproval("reject")}
+                    disabled={selectedIds.size === 0 || bulkProcessing}
+                    variant="destructive"
+                  >
+                    {bulkProcessing ? (
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <XCircle className="w-4 h-4 mr-2" />
+                    )}
+                    Reject Selected ({selectedIds.size})
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+          </Card>
+        )}
+
+        {/* Pending Changes Table */}
         <Card>
           <CardHeader>
-            <div className="flex justify-between items-center">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Checkbox
-                    checked={selectedIds.size === pendingItems.length && pendingItems.length > 0}
-                    onCheckedChange={handleSelectAll}
-                  />
-                  Bulk Actions
-                </CardTitle>
-                <CardDescription>
-                  {selectedIds.size} of {pendingCount} pending items selected
-                </CardDescription>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => handleBulkApproval("approve")}
-                  disabled={selectedIds.size === 0 || bulkProcessing}
-                  variant="default"
-                >
-                  {bulkProcessing ? (
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                  )}
-                  Approve Selected ({selectedIds.size})
-                </Button>
-                <Button
-                  onClick={() => handleBulkApproval("reject")}
-                  disabled={selectedIds.size === 0 || bulkProcessing}
-                  variant="destructive"
-                >
-                  {bulkProcessing ? (
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <XCircle className="w-4 h-4 mr-2" />
-                  )}
-                  Reject Selected ({selectedIds.size})
-                </Button>
-              </div>
-            </div>
+            <CardTitle>All Changes</CardTitle>
+            <CardDescription>
+              Review and manage inventory changes. Click the arrow to expand batch items for individual approval.
+            </CardDescription>
           </CardHeader>
-        </Card>
-      )}
+          <CardContent>
+            {pendingChanges.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">No changes found.</p>
+              </div>
+            ) : (
+              <div className="max-h-[600px] overflow-y-auto border rounded-md">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-white z-10">
+                    <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={selectedIds.size === pendingItems.length && pendingItems.length > 0}
+                          onCheckedChange={handleSelectAll}
+                        />
+                      </TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Details</TableHead>
+                      <TableHead>Requested By</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingChanges.map((change) => {
+                      const isBatch = change.item_data?.is_batch === true
 
-      {/* Pending Changes Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>All Changes</CardTitle>
-          <CardDescription>
-            Review and manage inventory changes. Click the arrow to expand batch items for individual approval.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {pendingChanges.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">No changes found.</p>
-            </div>
-          ) : (
-            <div className="max-h-[600px] overflow-y-auto border rounded-md">
-              <Table>
-                <TableHeader className="sticky top-0 bg-white z-10">
-                  <TableRow>
-                    <TableHead className="w-12">
-                      <Checkbox
-                        checked={selectedIds.size === pendingItems.length && pendingItems.length > 0}
-                        onCheckedChange={handleSelectAll}
-                      />
-                    </TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Details</TableHead>
-                    <TableHead>Requested By</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pendingChanges.map((change) => {
-                    const isBatch = change.item_data?.is_batch === true
+                      if (isBatch) {
+                        return renderBatchItems(change)
+                      }
 
-                    if (isBatch) {
-                      return renderBatchItems(change)
-                    }
-
-                    // Regular non-batch items
-                    return (
-                      <TableRow key={change.id} className={change.status === "pending" ? "bg-yellow-50" : ""}>
-                        <TableCell>
-                          {change.status === "pending" && (
-                            <Checkbox
-                              checked={selectedIds.has(change.id)}
-                              onCheckedChange={() => handleSelectItem(change.id)}
-                            />
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {getStatusIcon(change.status)}
-                            <Badge
-                              variant={
-                                change.status === "pending"
-                                  ? "secondary"
-                                  : change.status === "approved"
-                                    ? "default"
-                                    : "destructive"
-                              }
-                            >
-                              {change.status}
+                      // Regular non-batch items
+                      return (
+                        <TableRow key={change.id} className={change.status === "pending" ? "bg-yellow-50" : ""}>
+                          <TableCell>
+                            {change.status === "pending" && (
+                              <Checkbox
+                                checked={selectedIds.has(change.id)}
+                                onCheckedChange={() => handleSelectItem(change.id)}
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {getStatusIcon(change.status)}
+                              <Badge
+                                variant={
+                                  change.status === "pending"
+                                    ? "secondary"
+                                    : change.status === "approved"
+                                      ? "default"
+                                      : "destructive"
+                                }
+                              >
+                                {change.status}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={getChangeTypeColor(change.change_type)}>
+                              {change.change_type.toUpperCase()}
                             </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={getChangeTypeColor(change.change_type)}>
-                            {change.change_type.toUpperCase()}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="max-w-md">{formatChangeDetails(change)}</TableCell>
-                        <TableCell>{change.requested_by}</TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            {new Date(change.created_at).toLocaleDateString()}
-                            <br />
-                            <span className="text-muted-foreground">
-                              {new Date(change.created_at).toLocaleTimeString()}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {change.status === "pending" ? (
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="default"
-                                onClick={() => handleApproval(change.id, "approve")}
-                                disabled={processingId === change.id}
-                              >
-                                {processingId === change.id ? (
-                                  <RefreshCw className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <CheckCircle className="w-4 h-4" />
-                                )}
-                                Approve
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleApproval(change.id, "reject")}
-                                disabled={processingId === change.id}
-                              >
-                                {processingId === change.id ? (
-                                  <RefreshCw className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <XCircle className="w-4 h-4" />
-                                )}
-                                Reject
-                              </Button>
+                          </TableCell>
+                          <TableCell className="max-w-md">{formatChangeDetails(change)}</TableCell>
+                          <TableCell>{change.requested_by}</TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              {new Date(change.created_at).toLocaleDateString()}
+                              <br />
+                              <span className="text-muted-foreground">
+                                {new Date(change.created_at).toLocaleTimeString()}
+                              </span>
                             </div>
-                          ) : (
-                            <div className="text-sm text-muted-foreground">
-                              {change.status === "approved" ? "✅ Approved" : "❌ Rejected"}
-                              {change.approved_by && (
-                                <>
-                                  <br />
-                                  by {change.approved_by}
-                                </>
-                              )}
-                              {change.approved_at && (
-                                <>
-                                  <br />
-                                  {new Date(change.approved_at).toLocaleDateString()}
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+                          </TableCell>
+                          <TableCell>
+                            {change.status === "pending" ? (
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  onClick={() => handleApproval(change.id, "approve")}
+                                  disabled={processingId === change.id}
+                                >
+                                  {processingId === change.id ? (
+                                    <RefreshCw className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <CheckCircle className="w-4 h-4" />
+                                  )}
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleApproval(change.id, "reject")}
+                                  disabled={processingId === change.id}
+                                >
+                                  {processingId === change.id ? (
+                                    <RefreshCw className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <XCircle className="w-4 h-4" />
+                                  )}
+                                  Reject
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="text-sm text-muted-foreground">
+                                {change.status === "approved" ? "✅ Approved" : "❌ Rejected"}
+                                {change.approved_by && (
+                                  <>
+                                    <br />
+                                    by {change.approved_by}
+                                  </>
+                                )}
+                                {change.approved_at && (
+                                  <>
+                                    <br />
+                                    {new Date(change.approved_at).toLocaleDateString()}
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </ProtectedApprovals>
   )
 }
