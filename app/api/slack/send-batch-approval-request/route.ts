@@ -59,7 +59,11 @@ export async function POST(request: NextRequest) {
       })
       .join("\n\n")
 
+    // Get the base app URL (without any path)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://v0-inv-mgt.vercel.app"
+    // Remove any trailing slashes and ensure we don't duplicate /approvals
+    const baseUrl = appUrl.replace(/\/+$/, "") // Remove trailing slashes
+    const approvalUrl = baseUrl.endsWith("/approvals") ? baseUrl : `${baseUrl}/approvals`
 
     // Create simple text message (like the second screenshot)
     let message = `🔄 *Batch Inventory Change Request*\n\n`
@@ -71,7 +75,7 @@ export async function POST(request: NextRequest) {
     message += `Suppliers: ${suppliersText}\n\n`
     message += `${itemsList}\n\n`
     message += `📋 Please review this batch change in the approval dashboard:\n`
-    message += `${appUrl}/approvals`
+    message += approvalUrl
 
     const slackPayload = {
       text: message,
