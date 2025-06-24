@@ -585,16 +585,19 @@ export default function InventoryDashboard() {
           return sortDirection === "asc" ? aValue - bValue : bValue - aValue
         }
 
-        // Handle Location with natural sorting
+        // Handle Location with improved natural sorting for hierarchical locations
         if (sortColumn === "Location") {
-          const naturalSort = (str1: string, str2: string) => {
+          const naturalLocationSort = (str1: string, str2: string) => {
+            // Split by common separators (-, _, space)
             const aParts = str1.split(/[-_\s]+/)
             const bParts = str2.split(/[-_\s]+/)
 
+            // Compare each part level by level
             for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
               const aPart = aParts[i] || ""
               const bPart = bParts[i] || ""
 
+              // Extract letter and number portions from each part
               const aMatch = aPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
               const bMatch = bPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
 
@@ -602,10 +605,12 @@ export default function InventoryDashboard() {
                 const [, aPrefix, aNumber, aSuffix] = aMatch
                 const [, bPrefix, bNumber, bSuffix] = bMatch
 
+                // First compare the letter prefix (H4 vs H3)
                 if (aPrefix !== bPrefix) {
                   return aPrefix.localeCompare(bPrefix)
                 }
 
+                // Then compare the numeric part numerically
                 if (aNumber && bNumber) {
                   const aNum = Number.parseInt(aNumber, 10)
                   const bNum = Number.parseInt(bNumber, 10)
@@ -613,67 +618,104 @@ export default function InventoryDashboard() {
                     return aNum - bNum
                   }
                 } else if (aNumber && !bNumber) {
-                  return 1
+                  return 1 // Numbers come after non-numbers
                 } else if (!aNumber && bNumber) {
-                  return -1
+                  return -1 // Non-numbers come before numbers
                 }
 
+                // Finally compare any suffix
                 if (aSuffix !== bSuffix) {
                   return aSuffix.localeCompare(bSuffix)
                 }
               } else {
+                // Fallback to string comparison if regex doesn't match
                 const comparison = aPart.toLowerCase().localeCompare(bPart.toLowerCase())
                 if (comparison !== 0) {
                   return comparison
                 }
               }
             }
+
             return 0
           }
 
-          const result = naturalSort(String(aValue), String(bValue))
+          const result = naturalLocationSort(String(aValue), String(bValue))
           return sortDirection === "asc" ? result : -result
         }
 
-        // Handle Part number with natural sorting for numbers
+        // Handle Part number with improved numbers-first sorting
         if (sortColumn === "Part number" || sortColumn === "MFG Part number") {
-          const aStr = String(aValue).toLowerCase()
-          const bStr = String(bValue).toLowerCase()
+          const aStr = String(aValue).trim()
+          const bStr = String(bValue).trim()
 
-          // Extract numbers for proper numeric sorting
-          const aMatch = aStr.match(/(\d+)/)
-          const bMatch = bStr.match(/(\d+)/)
+          // Improved logic: Check if strings are purely numeric (including decimals and dashes)
+          const aIsNumericOnly = /^[\d\-.]+$/.test(aStr) && !/[a-zA-Z]/.test(aStr)
+          const bIsNumericOnly = /^[\d\-.]+$/.test(bStr) && !/[a-zA-Z]/.test(bStr)
 
-          if (aMatch && bMatch) {
-            const aNum = Number.parseInt(aMatch[1], 10)
-            const bNum = Number.parseInt(bMatch[1], 10)
-            if (aNum !== bNum) {
-              return sortDirection === "asc" ? aNum - bNum : bNum - aNum
-            }
+          // Check if strings start with numbers (for mixed alphanumeric)
+          const aStartsWithNumber = /^\d/.test(aStr)
+          const bStartsWithNumber = /^\d/.test(bStr)
+
+          // Priority order: 1) Pure numbers, 2) Starts with numbers, 3) Starts with letters
+          const aCategory = aIsNumericOnly ? 1 : aStartsWithNumber ? 2 : 3
+          const bCategory = bIsNumericOnly ? 1 : bStartsWithNumber ? 2 : 3
+
+          // If different categories, sort by category
+          if (aCategory !== bCategory) {
+            const result = aCategory - bCategory
+            return sortDirection === "asc" ? result : -result
           }
 
-          // Fallback to string comparison
-          const result = aStr.localeCompare(bStr)
-          return sortDirection === "asc" ? result : -result
+          // Same category - sort within category
+          if (aCategory === 1) {
+            // Both are pure numbers - sort numerically
+            const aNum = Number.parseFloat(aStr.replace(/[^\d.-]/g, "")) || 0
+            const bNum = Number.parseFloat(bStr.replace(/[^\d.-]/g, "")) || 0
+            return sortDirection === "asc" ? aNum - bNum : bNum - aNum
+          } else if (aCategory === 2) {
+            // Both start with numbers - extract leading number for primary sort
+            const aNumMatch = aStr.match(/^(\d+\.?\d*)/)
+            const bNumMatch = bStr.match(/^(\d+\.?\d*)/)
+
+            if (aNumMatch && bNumMatch) {
+              const aLeadingNum = Number.parseFloat(aNumMatch[1])
+              const bLeadingNum = Number.parseFloat(bNumMatch[1])
+
+              if (aLeadingNum !== bLeadingNum) {
+                return sortDirection === "asc" ? aLeadingNum - bLeadingNum : bLeadingNum - aLeadingNum
+              }
+            }
+
+            // If leading numbers are same, fall back to string comparison
+            const result = aStr.toLowerCase().localeCompare(bStr.toLowerCase())
+            return sortDirection === "asc" ? result : -result
+          } else {
+            // Both start with letters - alphabetical sort
+            const result = aStr.toLowerCase().localeCompare(bStr.toLowerCase())
+            return sortDirection === "asc" ? result : -result
+          }
         }
 
-        // Default string sorting
+        // Default string sorting for other columns
         const aStr = String(aValue).toLowerCase()
         const bStr = String(bValue).toLowerCase()
         const result = aStr.localeCompare(bStr)
         return sortDirection === "asc" ? result : -result
       })
     } else {
-      // Default sort by Location (natural sorting)
+      // Default sort by Location using improved hierarchical logic - RESPECTS SORT DIRECTION
       filtered.sort((a, b) => {
-        const naturalSort = (str1: string, str2: string) => {
+        const naturalLocationSort = (str1: string, str2: string) => {
+          // Split by common separators (-, _, space)
           const aParts = str1.split(/[-_\s]+/)
           const bParts = str2.split(/[-_\s]+/)
 
+          // Compare each part level by level
           for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
             const aPart = aParts[i] || ""
             const bPart = bParts[i] || ""
 
+            // Extract letter and number portions from each part
             const aMatch = aPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
             const bMatch = bPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
 
@@ -681,10 +723,12 @@ export default function InventoryDashboard() {
               const [, aPrefix, aNumber, aSuffix] = aMatch
               const [, bPrefix, bNumber, bSuffix] = bMatch
 
+              // First compare the letter prefix (H4 vs H3)
               if (aPrefix !== bPrefix) {
                 return aPrefix.localeCompare(bPrefix)
               }
 
+              // Then compare the numeric part numerically
               if (aNumber && bNumber) {
                 const aNum = Number.parseInt(aNumber, 10)
                 const bNum = Number.parseInt(bNumber, 10)
@@ -692,25 +736,29 @@ export default function InventoryDashboard() {
                   return aNum - bNum
                 }
               } else if (aNumber && !bNumber) {
-                return 1
+                return 1 // Numbers come after non-numbers
               } else if (!aNumber && bNumber) {
-                return -1
+                return -1 // Non-numbers come before numbers
               }
 
+              // Finally compare any suffix
               if (aSuffix !== bSuffix) {
                 return aSuffix.localeCompare(bSuffix)
               }
             } else {
+              // Fallback to string comparison if regex doesn't match
               const comparison = aPart.toLowerCase().localeCompare(bPart.toLowerCase())
               if (comparison !== 0) {
                 return comparison
               }
             }
           }
+
           return 0
         }
 
-        return naturalSort(a["Location"], b["Location"])
+        const result = naturalLocationSort(a["Location"], b["Location"])
+        return sortDirection === "asc" ? result : -result
       })
     }
 
@@ -1768,7 +1816,6 @@ Please check your Slack configuration.`)
                       <td className="px-4 py-3 border-r border-gray-100 align-top">{item["Part description"]}</td>
                       <td className="px-4 py-3 border-r border-gray-100 align-top">{item["Supplier"]}</td>
                       <td className="px-4 py-3 border-r border-gray-100 align-top">{item["Location"]}</td>
-                      {/* In the Package column cell (around line 1200), replace the existing content with: */}
                       <td className="px-4 py-3 border-r border-gray-100 align-top">
                         <div className="flex items-center gap-1">
                           <Badge
