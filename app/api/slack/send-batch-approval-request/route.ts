@@ -40,24 +40,27 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate total quantity
-    const totalQty = batchItems.reduce((sum, item) => sum + (item.qty || 0), 0)
+    const totalQty = batchItems.reduce((sum: number, item: any) => sum + (item.qty || 0), 0)
 
     // Get unique suppliers
-    const uniqueSuppliers = [...new Set(batchItems.map((item) => item.supplier).filter(Boolean))]
+    const uniqueSuppliers = [...new Set(batchItems.map((item: any) => item.supplier).filter(Boolean))]
     const suppliersText = uniqueSuppliers.length > 0 ? uniqueSuppliers.join(", ") : "Various"
 
     // Create item list (show all items for batch)
     const itemsList = batchItems
-      .map((item, index) => {
+      .map((item: any, index: number) => {
         const partNum = item.part_number || "N/A"
         const description = item.part_description || "No description"
         const qty = item.qty || 0
         const supplier = item.supplier || "N/A"
         const location = item.location || "N/A"
 
-        return `• ${partNum} - ${description}\n  Quantity: ${qty}\n  Location: ${location}\n  Supplier: ${supplier}`
+        return `• ${partNum} - ${description}
+Quantity: ${qty}
+Location: ${location}
+Supplier: ${supplier}`
       })
-      .join("\n\n")
+      .join("\n")
 
     // Get the base app URL (without any path)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://v0-inv-mgt.vercel.app"
@@ -65,16 +68,29 @@ export async function POST(request: NextRequest) {
     const baseUrl = appUrl.replace(/\/+$/, "") // Remove trailing slashes
     const approvalUrl = baseUrl.endsWith("/approvals") ? baseUrl : `${baseUrl}/approvals`
 
-    // Create simple text message (like the second screenshot)
-    let message = `🔄 *Batch Inventory Change Request*\n\n`
-    message += `*Type:* BATCH ADD\n`
-    message += `*Requested by:* ${requestedBy}\n`
-    message += `*Change ID:* ${changeId}\n\n`
-    message += `*Adding ${batchItems.length} New Items:*\n`
-    message += `Total Quantity: ${totalQty.toLocaleString()}\n`
-    message += `Suppliers: ${suppliersText}\n\n`
-    message += `${itemsList}\n\n`
-    message += `📋 Please review this batch change in the approval dashboard:\n`
+    // Create simple text message
+    let message = `🔄 *Batch Inventory Change Request*
+
+`
+    message += `*Type:* BATCH ADD
+`
+    message += `*Requested by:* ${requestedBy}
+`
+    message += `*Change ID:* ${changeId}
+
+`
+    message += `*Adding ${batchItems.length} New Items:*
+`
+    message += `Total Quantity: ${totalQty.toLocaleString()}
+`
+    message += `Suppliers: ${suppliersText}
+
+`
+    message += `${itemsList}
+
+`
+    message += `📋 Please review this batch change in the approval dashboard:
+`
     message += approvalUrl
 
     const slackPayload = {
