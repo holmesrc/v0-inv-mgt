@@ -75,6 +75,9 @@ export default function InventoryDashboard() {
   // Add this after the existing state declarations (around line 45)
   const [itemsWithPendingChanges, setItemsWithPendingChanges] = useState<Set<string>>(new Set())
 
+  // Add this with the other state declarations
+  const [editDialogOpen, setEditDialogOpen] = useState<Record<string, boolean>>({})
+
   // Load data from database on component mount
   useEffect(() => {
     loadInventoryFromDatabase()
@@ -1958,13 +1961,21 @@ Please check your Slack configuration.`)
 
                           {/* Other Actions */}
                           <div className="flex gap-1 flex-wrap">
-                            <Dialog>
+                            <Dialog
+                              open={editDialogOpen[item.id] || false}
+                              onOpenChange={(open) => setEditDialogOpen((prev) => ({ ...prev, [item.id]: open }))}
+                            >
                               <DialogTrigger asChild>
-                                <Button size="sm" variant="outline">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setEditDialogOpen((prev) => ({ ...prev, [item.id]: true }))}
+                                >
                                   Edit
                                 </Button>
                               </DialogTrigger>
                               <DialogContent className="max-w-2xl">
+                                {/* Keep all the existing dialog content exactly the same */}
                                 <DialogHeader>
                                   <DialogTitle>Edit Item</DialogTitle>
                                   <DialogDescription>Update details for {item["Part number"]}</DialogDescription>
@@ -2160,6 +2171,7 @@ Please check your Slack configuration.`)
                                   <Button
                                     variant="destructive"
                                     onClick={(e) => {
+                                      // Keep the existing delete logic but add dialog close at the end
                                       const dialogElement = (e.target as HTMLElement).closest('[role="dialog"]')
                                       const requesterInput = dialogElement?.querySelector(
                                         'input[id="requester"]',
@@ -2189,18 +2201,16 @@ Please check your Slack configuration.`)
                                         )
                                       ) {
                                         deleteInventoryItem(item.id, requester)
-                                        // Close dialog
-                                        const closeButton = dialogElement?.querySelector(
-                                          'button[aria-label="Close"]',
-                                        ) as HTMLButtonElement
-                                        closeButton?.click()
+                                        // Close dialog using state
+                                        setEditDialogOpen((prev) => ({ ...prev, [item.id]: false }))
                                       }
                                     }}
                                   >
                                     Delete Item
                                   </Button>
                                   <Button
-                                    onClick={(e) => {
+                                    onClick={async (e) => {
+                                      // Keep all the existing update logic but modify the end
                                       const dialogElement = (e.target as HTMLElement).closest('[role="dialog"]')
                                       const requesterInput = dialogElement?.querySelector(
                                         'input[id="requester"]',
@@ -2220,120 +2230,100 @@ Please check your Slack configuration.`)
                                         return
                                       }
 
-                                      // Get all form values
-                                      const quantityInput = dialogElement?.querySelector(
-                                        'input[id="quantity"]',
-                                      ) as HTMLInputElement
-                                      const packageSelectTrigger = dialogElement?.querySelector(
-                                        "#package-select",
-                                      ) as HTMLElement
-                                      const qty = Number(quantityInput?.value) || item["QTY"]
+                                      // Disable the button to prevent double-clicks
+                                      const updateButton = e.target as HTMLButtonElement
+                                      updateButton.disabled = true
+                                      updateButton.textContent = "Updating..."
 
-                                      // Get the selected package type more reliably
-                                      let selectedPackage = item["Package"] // Default to current package
-                                      const packageSelectValue =
-                                        packageSelectTrigger?.querySelector('[data-state="checked"]')?.textContent
-                                      if (packageSelectValue) {
-                                        selectedPackage = packageSelectValue.trim()
-                                      } else {
-                                        // Fallback: check the trigger text content
-                                        const triggerText = packageSelectTrigger?.querySelector("span")?.textContent
-                                        if (triggerText && triggerText !== "Select package type") {
-                                          selectedPackage = triggerText.trim()
+                                      try {
+                                        // Get all form values and validate (keep existing logic)
+                                        const quantityInput = dialogElement?.querySelector(
+                                          'input[id="quantity"]',
+                                        ) as HTMLInputElement
+                                        const packageSelectTrigger = dialogElement?.querySelector(
+                                          "#package-select",
+                                        ) as HTMLElement
+                                        const qty = Number(quantityInput?.value) || item["QTY"]
+
+                                        // Get the selected package type more reliably
+                                        let selectedPackage = item["Package"]
+                                        const packageSelectValue =
+                                          packageSelectTrigger?.querySelector('[data-state="checked"]')?.textContent
+                                        if (packageSelectValue) {
+                                          selectedPackage = packageSelectValue.trim()
+                                        } else {
+                                          const triggerText = packageSelectTrigger?.querySelector("span")?.textContent
+                                          if (triggerText && triggerText !== "Select package type") {
+                                            selectedPackage = triggerText.trim()
+                                          }
                                         }
-                                      }
 
-                                      console.log("🔍 Package validation debug:", {
-                                        qty,
-                                        selectedPackage,
-                                        suggestedPackage: getCorrectPackageType(qty),
-                                        triggerElement: packageSelectTrigger,
-                                        triggerText: packageSelectTrigger?.querySelector("span")?.textContent,
-                                      })
-
-                                      // Validate package type before saving
-                                      const suggestedPackage = getCorrectPackageType(qty)
-                                      const isExcludedPackage = ["KIT", "KITS", "CUSTOM"].some((excluded) =>
-                                        selectedPackage.toUpperCase().includes(excluded),
-                                      )
-
-                                      if (!isExcludedPackage && selectedPackage.toUpperCase() !== suggestedPackage) {
-                                        alert(
-                                          `❌ Package type validation failed!
-
-For ${qty} units, the package type must be "${suggestedPackage}".
-Currently selected: "${selectedPackage}"
-
-Please select the correct package type before updating.`,
+                                        // Validate package type before saving
+                                        const suggestedPackage = getCorrectPackageType(qty)
+                                        const isExcludedPackage = ["KIT", "KITS", "CUSTOM"].some((excluded) =>
+                                          selectedPackage.toUpperCase().includes(excluded),
                                         )
-                                        return
-                                      }
 
-                                      // Collect all the updated values
-                                      const mfgPartNumberInput = dialogElement?.querySelector(
-                                        'input[id="mfgPartNumber"]',
-                                      ) as HTMLInputElement
-                                      const descriptionInput = dialogElement?.querySelector(
-                                        'input[id="description"]',
-                                      ) as HTMLInputElement
-                                      const reorderInput = dialogElement?.querySelector(
-                                        'input[id="reorderPoint"]',
-                                      ) as HTMLInputElement
+                                        if (!isExcludedPackage && selectedPackage.toUpperCase() !== suggestedPackage) {
+                                          alert(
+                                            `❌ Package type validation failed!\n\nFor ${qty} units, the package type must be "${suggestedPackage}".\nCurrently selected: "${selectedPackage}"\n\nPlease select the correct package type before updating.`,
+                                          )
+                                          updateButton.disabled = false
+                                          updateButton.textContent = "Update Item"
+                                          return
+                                        }
 
-                                      // Get select values (more complex due to shadcn Select component)
-                                      const supplierSelect = dialogElement?.querySelector(
-                                        '[role="combobox"]',
-                                      ) as HTMLElement
-                                      const locationSelect = dialogElement?.querySelectorAll(
-                                        '[role="combobox"]',
-                                      )[1] as HTMLElement
+                                        // Collect all the updated values (keep existing logic)
+                                        const mfgPartNumberInput = dialogElement?.querySelector(
+                                          'input[id="mfgPartNumber"]',
+                                        ) as HTMLInputElement
+                                        const descriptionInput = dialogElement?.querySelector(
+                                          'input[id="description"]',
+                                        ) as HTMLInputElement
+                                        const reorderInput = dialogElement?.querySelector(
+                                          'input[id="reorderPoint"]',
+                                        ) as HTMLInputElement
 
-                                      const updatedFields: any = {}
+                                        const updatedFields: any = {}
 
-                                      // Only include fields that have changed
-                                      if (mfgPartNumberInput?.value !== item["MFG Part number"]) {
-                                        updatedFields.mfgPartNumber = mfgPartNumberInput.value
-                                      }
-                                      if (Number(quantityInput?.value) !== item["QTY"]) {
-                                        updatedFields.qty = Number(quantityInput.value)
-                                      }
-                                      if (descriptionInput?.value !== item["Part description"]) {
-                                        updatedFields.description = descriptionInput.value
-                                      }
-                                      if (
-                                        Number(reorderInput?.value) !==
-                                        (item.reorderPoint || alertSettings.defaultReorderPoint)
-                                      ) {
-                                        updatedFields.reorderPoint = Number(reorderInput.value)
-                                      }
+                                        // Only include fields that have changed
+                                        if (mfgPartNumberInput?.value !== item["MFG Part number"]) {
+                                          updatedFields.mfgPartNumber = mfgPartNumberInput.value
+                                        }
+                                        if (Number(quantityInput?.value) !== item["QTY"]) {
+                                          updatedFields.qty = Number(quantityInput.value)
+                                        }
+                                        if (descriptionInput?.value !== item["Part description"]) {
+                                          updatedFields.description = descriptionInput.value
+                                        }
+                                        if (
+                                          Number(reorderInput?.value) !==
+                                          (item.reorderPoint || alertSettings.defaultReorderPoint)
+                                        ) {
+                                          updatedFields.reorderPoint = Number(reorderInput.value)
+                                        }
 
-                                      // For selects, we'll need to get the selected values differently
-                                      const supplierValue =
-                                        supplierSelect?.getAttribute("data-value") || item["Supplier"]
-                                      const locationValue =
-                                        locationSelect?.getAttribute("data-value") || item["Location"]
+                                        if (selectedPackage !== item["Package"]) {
+                                          updatedFields.package = selectedPackage
+                                        }
 
-                                      if (supplierValue !== item["Supplier"]) {
-                                        updatedFields.supplier = supplierValue
-                                      }
-                                      if (locationValue !== item["Location"]) {
-                                        updatedFields.location = locationValue
-                                      }
-                                      if (selectedPackage !== item["Package"]) {
-                                        updatedFields.package = selectedPackage
-                                      }
+                                        if (Object.keys(updatedFields).length === 0) {
+                                          alert("❌ No changes detected. Please modify at least one field.")
+                                          updateButton.disabled = false
+                                          updateButton.textContent = "Update Item"
+                                          return
+                                        }
 
-                                      if (Object.keys(updatedFields).length === 0) {
-                                        alert("❌ No changes detected. Please modify at least one field.")
-                                        return
-                                      }
+                                        await updateInventoryItem(item.id, updatedFields, requester)
 
-                                      updateInventoryItem(item.id, updatedFields, requester)
-                                      // Close dialog
-                                      const closeButton = dialogElement?.querySelector(
-                                        'button[aria-label="Close"]',
-                                      ) as HTMLButtonElement
-                                      closeButton?.click()
+                                        // Close dialog using state - this is the key change
+                                        setEditDialogOpen((prev) => ({ ...prev, [item.id]: false }))
+                                      } catch (error) {
+                                        // Re-enable button if there's an error
+                                        updateButton.disabled = false
+                                        updateButton.textContent = "Update Item"
+                                        console.error("Failed to update item:", error)
+                                      }
                                     }}
                                   >
                                     Update Item

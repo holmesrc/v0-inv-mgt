@@ -582,6 +582,9 @@ export default function AddInventoryItem({
     }
 
     setQuickUpdateLoading(true)
+    // Clear the duplicate check immediately to close the popup
+    setPartNumberCheck({ isChecking: false, isDuplicate: false, existingItem: null })
+    setBatchDuplicateCheck({ isDuplicate: false, existingBatchItem: null })
     setError(null)
 
     try {
@@ -690,9 +693,8 @@ export default function AddInventoryItem({
           `Successfully submitted quantity update for ${existingItem["Part number"]}! Added ${quickUpdateQty} (${existingItem.QTY} → ${existingItem.QTY + quickUpdateQty})`,
         )
 
-        // Reset the quick update form
-        setQuickUpdateQty(0)
-        setCurrentItem((prev) => ({ ...prev, partNumber: "" }))
+        // Reset the form completely to prevent any re-submission
+        resetCurrentItem()
 
         // Clear success message after 3 seconds
         setTimeout(() => setSuccess(null), 3000)
@@ -703,8 +705,10 @@ export default function AddInventoryItem({
       console.error("❌ Error updating quantity:", error)
       const errorMessage = error instanceof Error ? error.message : "Failed to submit quantity update"
       setError(`Quantity update failed: ${errorMessage}`)
+      // Reset the part number to clear any duplicate state
+      setCurrentItem((prev) => ({ ...prev, partNumber: "" }))
     } finally {
-      setQuickUpdateLoading(false)
+      //setQuickUpdateLoading(false)
     }
   }
 
