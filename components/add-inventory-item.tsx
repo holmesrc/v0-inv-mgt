@@ -269,12 +269,10 @@ export default function AddInventoryItem({
 
   // Track if we're using custom input values
   const [useCustomSupplier, setUseCustomSupplier] = useState(false)
-  const [useCustomLocation, setUseCustomLocation] = useState(false)
   const [useCustomPackage, setUseCustomPackage] = useState(false)
 
   // Refs for input fields
   const supplierInputRef = useRef<HTMLInputElement>(null)
-  const locationInputRef = useRef<HTMLInputElement>(null)
   const packageInputRef = useRef<HTMLInputElement>(null)
 
   const [partNumberCheck, setPartNumberCheck] = useState<{
@@ -285,6 +283,14 @@ export default function AddInventoryItem({
     isChecking: false,
     isDuplicate: false,
     existingItem: null,
+  })
+
+  const [batchDuplicateCheck, setBatchDuplicateCheck] = useState<{
+    isDuplicate: boolean
+    existingBatchItem: BatchItem | null
+  }>({
+    isDuplicate: false,
+    existingBatchItem: null,
   })
 
   // Add these new state variables at the top of the component (around line 200):
@@ -358,6 +364,7 @@ export default function AddInventoryItem({
     debounce((partNumber: string) => {
       if (!partNumber.trim()) {
         setPartNumberCheck({ isChecking: false, isDuplicate: false, existingItem: null })
+        setBatchDuplicateCheck({ isDuplicate: false, existingBatchItem: null })
         return
       }
 
@@ -369,14 +376,19 @@ export default function AddInventoryItem({
       )
 
       // Check against current batch items
-      const batchDuplicate = batchItems.some(
+      const batchDuplicate = batchItems.find(
         (item) => item["Part number"].toLowerCase() === partNumber.trim().toLowerCase(),
       )
 
       setPartNumberCheck({
         isChecking: false,
-        isDuplicate: !!duplicateItem || batchDuplicate,
+        isDuplicate: !!duplicateItem,
         existingItem: duplicateItem || null,
+      })
+
+      setBatchDuplicateCheck({
+        isDuplicate: !!batchDuplicate,
+        existingBatchItem: batchDuplicate || null,
       })
     }, 300),
     [inventory, batchItems],
@@ -496,7 +508,6 @@ export default function AddInventoryItem({
     })
     setQuickUpdateQty(0)
     setUseCustomSupplier(false)
-    setUseCustomLocation(false)
     setUseCustomPackage(false)
   }
 
@@ -945,9 +956,6 @@ export default function AddInventoryItem({
       if (field === "supplier") {
         setUseCustomSupplier(true)
         setTimeout(() => supplierInputRef.current?.focus(), 100)
-      } else if (field === "location") {
-        setUseCustomLocation(true)
-        setTimeout(() => locationInputRef.current?.focus(), 100)
       } else if (field === "package") {
         setUseCustomPackage(true)
         setTimeout(() => packageInputRef.current?.focus(), 100)
@@ -955,7 +963,6 @@ export default function AddInventoryItem({
     } else {
       handleInputChange(field, value)
       if (field === "supplier") setUseCustomSupplier(false)
-      else if (field === "location") setUseCustomLocation(false)
       else if (field === "package") setUseCustomPackage(false)
     }
   }
@@ -1144,6 +1151,72 @@ export default function AddInventoryItem({
                       </AlertDescription>
                     </Alert>
                   )}
+
+                  {/* Batch duplicate warning with quick update option */}
+                  {batchDuplicateCheck.isDuplicate && batchDuplicateCheck.existingBatchItem && (
+                    <Alert className="bg-blue-50 border-blue-200">
+                      <AlertTriangle className="h-4 w-4 text-blue-600" />
+                      <AlertDescription className="text-blue-800">
+                        <div className="space-y-3">
+                          <div>
+                            <strong>🔄 Part already in current batch!</strong>
+                            <br />
+                            <strong>Current Batch Item:</strong>{" "}
+                            {batchDuplicateCheck.existingBatchItem["Part description"]} •<strong>Qty:</strong>{" "}
+                            {batchDuplicateCheck.existingBatchItem.QTY} •<strong>Location:</strong>{" "}
+                            {batchDuplicateCheck.existingBatchItem.Location} •<strong>Package:</strong>{" "}
+                            {batchDuplicateCheck.existingBatchItem.Package}
+                          </div>
+
+                          <div className="bg-white p-3 rounded border border-blue-200">
+                            <div className="text-sm font-medium text-blue-900 mb-2">💡 Update Batch Item Quantity</div>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                min="1"
+                                value={quickUpdateQty || ""}
+                                onChange={(e) => setQuickUpdateQty(Number(e.target.value) || 0)}
+                                placeholder="New total qty"
+                                className="w-32 h-8 text-sm"
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  if (quickUpdateQty > 0 && batchDuplicateCheck.existingBatchItem) {
+                                    // Update the existing batch item quantity
+                                    setBatchItems((prev) =>
+                                      prev.map((item) =>
+                                        item.batchId === batchDuplicateCheck.existingBatchItem!.batchId
+                                          ? { ...item, QTY: quickUpdateQty }
+                                          : item,
+                                      ),
+                                    )
+                                    setSuccess(`Updated batch item quantity to ${quickUpdateQty}`)
+                                    setCurrentItem((prev) => ({ ...prev, partNumber: "" }))
+                                    setQuickUpdateQty(0)
+                                    setTimeout(() => setSuccess(null), 2000)
+                                  }
+                                }}
+                                disabled={quickUpdateQty <= 0}
+                                className="h-8 text-xs"
+                              >
+                                <Edit className="w-3 h-3 mr-1" />
+                                Update to {quickUpdateQty > 0 ? quickUpdateQty : "?"}
+                              </Button>
+                            </div>
+                            <div className="text-xs text-blue-700 mt-1">
+                              Current batch qty: {batchDuplicateCheck.existingBatchItem.QTY} → New:{" "}
+                              {quickUpdateQty || "?"}
+                            </div>
+                          </div>
+
+                          <div className="text-sm text-blue-700">
+                            You can also edit the item directly in the batch below or remove it and add a new one.
+                          </div>
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -1240,30 +1313,15 @@ export default function AddInventoryItem({
 
                 <div className="space-y-2">
                   <Label htmlFor="location">Location</Label>
-                  {useCustomLocation ? (
-                    <Input
-                      ref={locationInputRef}
-                      value={currentItem.location}
-                      onChange={(e) => handleInputChange("location", e.target.value)}
-                      placeholder="Enter custom location"
-                      disabled={loading}
-                      onBlur={() => {
-                        if (!currentItem.location.trim()) {
-                          setUseCustomLocation(false)
-                        }
-                      }}
-                    />
-                  ) : (
-                    <LocationInput
-                      value={currentItem.location}
-                      onChange={(value) => handleInputChange("location", value)}
-                      existingLocations={uniqueLocations}
-                      pendingLocations={pendingLocations}
-                      currentBatchLocations={currentBatchLocations}
-                      disabled={loading}
-                      placeholder="Type location or select existing"
-                    />
-                  )}
+                  <LocationInput
+                    value={currentItem.location}
+                    onChange={(value) => handleInputChange("location", value)}
+                    existingLocations={uniqueLocations}
+                    pendingLocations={pendingLocations}
+                    currentBatchLocations={currentBatchLocations}
+                    disabled={loading}
+                    placeholder="Type location or select existing"
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -1307,7 +1365,11 @@ export default function AddInventoryItem({
               </div>
 
               <div className="flex gap-2 mt-4">
-                <Button onClick={addToBatch} disabled={loading || partNumberCheck.isDuplicate} className="flex-1">
+                <Button
+                  onClick={addToBatch}
+                  disabled={loading || partNumberCheck.isDuplicate || batchDuplicateCheck.isDuplicate}
+                  className="flex-1"
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   Add to Batch
                 </Button>
