@@ -1169,29 +1169,32 @@ export default function AddInventoryItem({
                           </div>
 
                           <div className="bg-white p-3 rounded border border-blue-200">
-                            <div className="text-sm font-medium text-blue-900 mb-2">💡 Update Batch Item Quantity</div>
+                            <div className="text-sm font-medium text-blue-900 mb-2">💡 Add to Batch Item Quantity</div>
                             <div className="flex items-center gap-2">
                               <Input
                                 type="number"
                                 min="1"
                                 value={quickUpdateQty || ""}
                                 onChange={(e) => setQuickUpdateQty(Number(e.target.value) || 0)}
-                                placeholder="New total qty"
+                                placeholder="Qty to add"
                                 className="w-32 h-8 text-sm"
                               />
                               <Button
                                 size="sm"
                                 onClick={() => {
                                   if (quickUpdateQty > 0 && batchDuplicateCheck.existingBatchItem) {
-                                    // Update the existing batch item quantity
+                                    const newTotalQty = batchDuplicateCheck.existingBatchItem.QTY + quickUpdateQty
+                                    // Update the existing batch item quantity by ADDING to it
                                     setBatchItems((prev) =>
                                       prev.map((item) =>
                                         item.batchId === batchDuplicateCheck.existingBatchItem!.batchId
-                                          ? { ...item, QTY: quickUpdateQty }
+                                          ? { ...item, QTY: newTotalQty }
                                           : item,
                                       ),
                                     )
-                                    setSuccess(`Updated batch item quantity to ${quickUpdateQty}`)
+                                    setSuccess(
+                                      `Added ${quickUpdateQty} to batch item (${batchDuplicateCheck.existingBatchItem.QTY} → ${newTotalQty})`,
+                                    )
                                     setCurrentItem((prev) => ({ ...prev, partNumber: "" }))
                                     setQuickUpdateQty(0)
                                     setTimeout(() => setSuccess(null), 2000)
@@ -1201,12 +1204,12 @@ export default function AddInventoryItem({
                                 className="h-8 text-xs"
                               >
                                 <Edit className="w-3 h-3 mr-1" />
-                                Update to {quickUpdateQty > 0 ? quickUpdateQty : "?"}
+                                Add {quickUpdateQty > 0 ? quickUpdateQty : "?"} qty
                               </Button>
                             </div>
                             <div className="text-xs text-blue-700 mt-1">
-                              Current batch qty: {batchDuplicateCheck.existingBatchItem.QTY} → New:{" "}
-                              {quickUpdateQty || "?"}
+                              Current: {batchDuplicateCheck.existingBatchItem.QTY} → New:{" "}
+                              {batchDuplicateCheck.existingBatchItem.QTY + (quickUpdateQty || 0)}
                             </div>
                           </div>
 
