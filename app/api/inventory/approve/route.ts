@@ -321,6 +321,8 @@ async function handleSingleItemApproval(pendingChange: any, action: string, appr
     throw new Error("Database not configured")
   }
 
+  const originalId = pendingChange.original_data?.id as string | undefined
+
   if (action === "reject") {
     // Just update the status to rejected
     const { error: updateError } = await supabase
@@ -389,34 +391,64 @@ async function handleSingleItemApproval(pendingChange: any, action: string, appr
       location: String(pendingChange.item_data.location || "").trim(),
       supplier: String(pendingChange.item_data.supplier || "").trim(),
       package: correctPackageType, // Auto-update package based on new quantity
+      mfg_part_number: String(pendingChange.item_data.mfg_part_number || "").trim(),
+      part_description: String(pendingChange.item_data.part_description || "").trim(),
     }
 
     console.log(`📦 Auto-updating package type: ${newQty} qty → ${correctPackageType} package`)
 
-    const { data, error } = await supabase
-      .from("inventory")
-      .update(updateData)
-      .eq("part_number", pendingChange.original_data.part_number)
-      .select()
-      .single()
+    // For updates, we need to be more specific about which item to update
+    // Use the original data to identify the exact item, including location if there are duplicates
+    const originalPartNumber = pendingChange.original_data.part_number
+    const originalLocation = pendingChange.original_data.location
+
+    console.log(`Updating item: ${originalPartNumber} at location: ${originalLocation}`)
+
+    let updateQuery = supabase.from("inventory").update(updateData)
+
+    if (originalId) {
+      // Use the exact primary key when we have it
+      updateQuery = updateQuery.eq("id", originalId)
+    } else {
+      // Fall back to part_number + location
+      updateQuery = updateQuery
+        .eq("part_number", originalPartNumber)
+        .eq("location", originalLocation)
+    }
+
+    const { data, error } = await updateQuery.select().maybeSingle()
 
     if (error) {
-      console.error("Error updating inventory item:", error)
       return NextResponse.json(
-        {
-          success: false,
-          error: `Failed to update item: ${error.message}`,
-        },
+        { success: false, error: `Failed to update item: ${error.message}` },
         { status: 500 },
+      )
+    }
+    if (!data) {
+      return NextResponse.json(
+        { success: false, error: "No matching item found to update." },
+        { status: 404 },
       )
     }
     inventoryResults.push(data)
   } else if (pendingChange.change_type === "delete") {
-    // Delete item
-    const { error } = await supabase
-      .from("inventory")
-      .delete()
-      .eq("part_number", pendingChange.original_data.part_number)
+    // Delete item - also handle potential duplicates
+    const originalPartNumber = pendingChange.original_data.part_number
+    const originalLocation = pendingChange.original_data.location
+
+    console.log(`Deleting item: ${originalPartNumber} at location: ${originalLocation}`)
+
+    let deleteQuery = supabase.from("inventory").delete()
+
+    if (originalId) {
+      deleteQuery = deleteQuery.eq("id", originalId)
+    } else {
+      deleteQuery = deleteQuery
+        .eq("part_number", originalPartNumber)
+        .eq("location", originalLocation)
+    }
+
+    const { error } = await deleteQuery
 
     if (error) {
       console.error("Error deleting inventory item:", error)

@@ -1,7 +1,6 @@
 "use client"
-import { useState, useRef, useMemo, useEffect, useCallback } from "react"
-import type React from "react"
 
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,228 +9,23 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, AlertTriangle, X, Package, User, Edit } from "lucide-react"
+import { Plus, AlertTriangle, Package, Zap } from "lucide-react"
 import type { InventoryItem } from "@/types/inventory"
 
 interface AddInventoryItemProps {
-  onAddItem: (item: Omit<InventoryItem, "id" | "lastUpdated">, requester: string) => void
+  onAddItem: (item: Omit<InventoryItem, "id" | "lastUpdated">, requester: string) => Promise<void>
   packageTypes: string[]
   suppliers: string[]
   locations: string[]
   defaultReorderPoint: number
   inventory: InventoryItem[]
-}
-
-interface BatchItem extends Omit<InventoryItem, "id" | "lastUpdated"> {
-  batchId: string
-}
-
-interface LocationInputProps {
-  value: string
-  onChange: (value: string) => void
-  existingLocations: string[]
-  pendingLocations: string[]
-  currentBatchLocations: string[] // Add this new prop
-  disabled?: boolean
-  placeholder?: string
-}
-
-function LocationInput({
-  value,
-  onChange,
-  existingLocations,
-  pendingLocations,
-  currentBatchLocations, // Add this
-  disabled,
-  placeholder,
-}: LocationInputProps) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [filteredLocations, setFilteredLocations] = useState<string[]>([])
-  const [suggestedNext, setSuggestedNext] = useState<string>("")
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const predictNextLocation = useCallback((existingLocs: string[], pendingLocs: string[], batchLocs: string[]) => {
-    console.log("🎯 === LOCATION PREDICTION START ===")
-    console.log("📦 Existing locations (last 10):", existingLocs.slice(-10))
-    console.log("⏳ Pending locations:", pendingLocs)
-    console.log("🔄 Current batch locations:", batchLocs)
-    console.log(
-      "🔢 Existing count:",
-      existingLocs.length,
-      "Pending count:",
-      pendingLocs.length,
-      "Batch count:",
-      batchLocs.length,
-    )
-
-    const allLocations = [...existingLocs, ...pendingLocs, ...batchLocs]
-    console.log("🔗 Combined locations (last 15):", allLocations.slice(-15))
-    console.log("🔢 Total combined count:", allLocations.length)
-
-    if (allLocations.length === 0) {
-      console.log("❌ No locations found, returning empty")
-      return ""
-    }
-
-    // Parse locations to find the highest numerical sequence
-    const locationData = allLocations
-      .map((loc) => {
-        const match = loc.match(/^([A-Za-z]+)(\d+)-(\d+)$/)
-        if (match) {
-          const [, prefix, shelf, position] = match
-          const parsed = {
-            original: loc,
-            prefix: prefix.toUpperCase(),
-            shelf: Number.parseInt(shelf, 10),
-            position: Number.parseInt(position, 10),
-            sortKey: `${prefix.toUpperCase()}-${shelf.padStart(3, "0")}-${position.toString().padStart(3, "0")}`,
-          }
-          console.log(`  📍 Parsed ${loc} ->`, parsed)
-          return parsed
-        } else {
-          console.log(`  ❌ Could not parse location: ${loc}`)
-          return null
-        }
-      })
-      .filter(Boolean)
-
-    console.log("📊 Parsed location data:", locationData)
-
-    if (locationData.length === 0) {
-      console.log("❌ No parseable locations found, returning empty")
-      return ""
-    }
-
-    // Sort by prefix, then shelf, then position
-    locationData.sort((a, b) => {
-      if (a.prefix !== b.prefix) return a.prefix.localeCompare(b.prefix)
-      if (a.shelf !== b.shelf) return a.shelf - b.shelf
-      return a.position - b.position
-    })
-
-    console.log("📈 Sorted location data:", locationData)
-
-    // Find the highest location
-    const highest = locationData[locationData.length - 1]
-    console.log("🏆 Highest location found:", highest)
-
-    // Suggest next position
-    const suggestion = `${highest.prefix}${highest.shelf}-${highest.position + 1}`
-    console.log("💡 Suggested next location:", suggestion)
-    console.log("🎯 === LOCATION PREDICTION END ===")
-
-    return suggestion
-  }, [])
-
-  // Update filtered locations and suggestion when value or locations change
-  useEffect(() => {
-    const allLocations = [...existingLocations, ...pendingLocations, ...currentBatchLocations]
-
-    if (!value.trim()) {
-      setFilteredLocations(existingLocations.slice(0, 10)) // Show first 10 existing when empty
-      setSuggestedNext(predictNextLocation(existingLocations, pendingLocations, currentBatchLocations))
-    } else {
-      const filtered = allLocations.filter((loc) => loc.toLowerCase().includes(value.toLowerCase())).slice(0, 8)
-      setFilteredLocations(filtered)
-
-      // Only show suggestion if current value doesn't exactly match existing
-      const exactMatch = allLocations.some((loc) => loc.toLowerCase() === value.toLowerCase())
-      if (!exactMatch) {
-        setSuggestedNext(predictNextLocation(existingLocations, pendingLocations, currentBatchLocations))
-      } else {
-        setSuggestedNext("")
-      }
-    }
-  }, [value, existingLocations, pendingLocations, currentBatchLocations, predictNextLocation])
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value
-    onChange(newValue)
-    setIsOpen(true)
-  }
-
-  const handleSelectLocation = (location: string) => {
-    onChange(location)
-    setIsOpen(false)
-    inputRef.current?.blur()
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
-      setIsOpen(false)
-    } else if (e.key === "Enter" && suggestedNext && !isOpen) {
-      e.preventDefault()
-      onChange(suggestedNext)
-    }
-  }
-
-  const showSuggestions = isOpen && (filteredLocations.length > 0 || suggestedNext)
-
-  return (
-    <div className="relative">
-      <Input
-        ref={inputRef}
-        value={value}
-        onChange={handleInputChange}
-        onFocus={() => setIsOpen(true)}
-        onBlur={() => setTimeout(() => setIsOpen(false), 200)}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        disabled={disabled}
-        className="pr-10"
-      />
-
-      {/* Suggestion indicator */}
-      {suggestedNext && !value && (
-        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-muted-foreground">
-          Next: {suggestedNext}
-        </div>
-      )}
-
-      {/* Dropdown */}
-      {showSuggestions && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-          {/* Smart suggestion */}
-          {suggestedNext && !existingLocations.includes(suggestedNext) && (
-            <div
-              className="px-3 py-2 cursor-pointer hover:bg-blue-50 border-b border-gray-100 bg-blue-25"
-              onClick={() => handleSelectLocation(suggestedNext)}
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-blue-600 font-medium">🎯 {suggestedNext}</span>
-                <span className="text-xs text-blue-500">(Suggested Next)</span>
-              </div>
-            </div>
-          )}
-
-          {/* Existing locations */}
-          {filteredLocations.map((location, index) => (
-            <div
-              key={`${location}-${index}`}
-              className="px-3 py-2 cursor-pointer hover:bg-gray-50 flex items-center justify-between"
-              onClick={() => handleSelectLocation(location)}
-            >
-              <span>{location}</span>
-              <span className="text-xs text-muted-foreground">Existing</span>
-            </div>
-          ))}
-
-          {/* No matches */}
-          {filteredLocations.length === 0 && !suggestedNext && (
-            <div className="px-3 py-2 text-sm text-muted-foreground">No matching locations found</div>
-          )}
-        </div>
-      )}
-    </div>
-  )
 }
 
 export default function AddInventoryItem({
@@ -242,1305 +36,624 @@ export default function AddInventoryItem({
   defaultReorderPoint,
   inventory,
 }: AddInventoryItemProps) {
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
-  const [requesterName, setRequesterName] = useState("")
-  const [batchItems, setBatchItems] = useState<BatchItem[]>([])
-  const [currentItem, setCurrentItem] = useState({
+  const [isOpen, setIsOpen] = useState(false)
+  const [formData, setFormData] = useState({
     partNumber: "",
     mfgPartNumber: "",
-    qty: "",
+    quantity: "",
     description: "",
     supplier: "",
     location: "",
     package: "",
-    reorderPoint: defaultReorderPoint,
+    reorderPoint: defaultReorderPoint.toString(),
+    requester: "",
   })
+  const [batchItems, setBatchItems] = useState<Array<Omit<InventoryItem, "id" | "lastUpdated">>>([])
+  const [duplicateWarning, setDuplicateWarning] = useState<{
+    type: "inventory" | "batch"
+    existingItem: InventoryItem | Omit<InventoryItem, "id" | "lastUpdated">
+    batchIndex?: number
+  } | null>(null)
+  const [quickUpdateQuantity, setQuickUpdateQuantity] = useState("")
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
-  const [showBatchConfirm, setShowBatchConfirm] = useState(false)
-  const [pendingLocations, setPendingLocations] = useState<string[]>([])
+  // Helper function to determine correct package type based on quantity
+  const getCorrectPackageType = (qty: number): string => {
+    if (qty >= 1 && qty <= 100) {
+      return "EXACT"
+    } else if (qty >= 101 && qty <= 500) {
+      return "ESTIMATED"
+    } else if (qty > 500) {
+      return "REEL"
+    }
+    return "EXACT" // Default fallback
+  }
 
-  // Track which item is being edited
-  const [editingBatchId, setEditingBatchId] = useState<string | null>(null)
-  const [editingItem, setEditingItem] = useState<BatchItem | null>(null)
+  // Check for duplicates when part number changes
+  useEffect(() => {
+    if (formData.partNumber.trim()) {
+      // Check inventory first
+      const existingInInventory = inventory.find(
+        (item) => item["Part number"].toLowerCase() === formData.partNumber.toLowerCase().trim(),
+      )
 
-  // Track if we're using custom input values
-  const [useCustomSupplier, setUseCustomSupplier] = useState(false)
-  const [useCustomPackage, setUseCustomPackage] = useState(false)
-
-  // Refs for input fields
-  const supplierInputRef = useRef<HTMLInputElement>(null)
-  const packageInputRef = useRef<HTMLInputElement>(null)
-
-  const [partNumberCheck, setPartNumberCheck] = useState<{
-    isChecking: boolean
-    isDuplicate: boolean
-    existingItem: InventoryItem | null
-  }>({
-    isChecking: false,
-    isDuplicate: false,
-    existingItem: null,
-  })
-
-  const [batchDuplicateCheck, setBatchDuplicateCheck] = useState<{
-    isDuplicate: boolean
-    existingBatchItem: BatchItem | null
-  }>({
-    isDuplicate: false,
-    existingBatchItem: null,
-  })
-
-  // Add these new state variables at the top of the component (around line 200):
-  const [quickUpdateQty, setQuickUpdateQty] = useState(0)
-  const [quickUpdateLoading, setQuickUpdateLoading] = useState(false)
-
-  // Aggressive deduplication with debugging
-  const uniquePackageTypes = useMemo(() => {
-    const cleaned = packageTypes
-      .filter((type) => type && typeof type === "string" && type.trim().length > 0)
-      .map((type) => type.trim().toUpperCase())
-    const uniqueSet = new Set(cleaned)
-    const uniqueArray = Array.from(uniqueSet).sort()
-    return uniqueArray
-  }, [packageTypes])
-
-  const uniqueSuppliers = useMemo(() => {
-    const cleaned = suppliers
-      .filter((supplier) => supplier && typeof supplier === "string" && supplier.trim().length > 0)
-      .map((supplier) => supplier.trim())
-    const uniqueSet = new Set(cleaned)
-    return Array.from(uniqueSet).sort()
-  }, [suppliers])
-
-  const uniqueLocations = useMemo(() => {
-    const cleaned = locations
-      .filter((location) => location && typeof location === "string" && location.trim().length > 0)
-      .map((location) => location.trim())
-
-    const uniqueLocations = Array.from(new Set(cleaned))
-
-    const sortedLocations = uniqueLocations.sort((a, b) => {
-      const extractParts = (loc: string) => {
-        const match = loc.match(/^([A-Za-z]*)(\d*)(?:[^A-Za-z0-9]*([A-Za-z]*)(\d*))?/)
-        if (!match) return { prefix1: loc, num1: 0, prefix2: "", num2: 0 }
-
-        const [, prefix1 = "", numStr1 = "", prefix2 = "", numStr2 = ""] = match
-        const num1 = numStr1 ? Number.parseInt(numStr1, 10) : 0
-        const num2 = numStr2 ? Number.parseInt(numStr2, 10) : 0
-
-        return { prefix1, num1, prefix2, num2 }
-      }
-
-      const partsA = extractParts(a)
-      const partsB = extractParts(b)
-
-      if (partsA.prefix1 !== partsB.prefix1) {
-        return partsA.prefix1.localeCompare(partsB.prefix1)
-      }
-
-      if (partsA.num1 !== partsB.num1) {
-        return partsA.num1 - partsB.num1
-      }
-
-      if (partsA.prefix2 !== partsB.prefix2) {
-        return partsA.prefix2.localeCompare(partsB.prefix2)
-      }
-
-      if (partsA.num2 !== partsB.num2) {
-        return partsA.num2 - partsB.num2
-      }
-
-      return a.localeCompare(b)
-    })
-
-    return sortedLocations
-  }, [locations])
-
-  // Debounced duplicate checking
-  const checkPartNumberDuplicate = useCallback(
-    debounce((partNumber: string) => {
-      if (!partNumber.trim()) {
-        setPartNumberCheck({ isChecking: false, isDuplicate: false, existingItem: null })
-        setBatchDuplicateCheck({ isDuplicate: false, existingBatchItem: null })
+      if (existingInInventory) {
+        setDuplicateWarning({
+          type: "inventory",
+          existingItem: existingInInventory,
+        })
         return
       }
 
-      setPartNumberCheck((prev) => ({ ...prev, isChecking: true }))
-
-      // Check against existing inventory
-      const duplicateItem = inventory?.find(
-        (item) => item["Part number"].toLowerCase() === partNumber.trim().toLowerCase(),
+      // Check current batch
+      const existingInBatch = batchItems.findIndex(
+        (item) => item["Part number"].toLowerCase() === formData.partNumber.toLowerCase().trim(),
       )
 
-      // Check against current batch items
-      const batchDuplicate = batchItems.find(
-        (item) => item["Part number"].toLowerCase() === partNumber.trim().toLowerCase(),
-      )
-
-      setPartNumberCheck({
-        isChecking: false,
-        isDuplicate: !!duplicateItem,
-        existingItem: duplicateItem || null,
-      })
-
-      setBatchDuplicateCheck({
-        isDuplicate: !!batchDuplicate,
-        existingBatchItem: batchDuplicate || null,
-      })
-    }, 300),
-    [inventory, batchItems],
-  )
-
-  // Helper debounce function
-  function debounce<T extends (...args: any[]) => void>(func: T, wait: number): T {
-    let timeout: NodeJS.Timeout
-    return ((...args: any[]) => {
-      clearTimeout(timeout)
-      timeout = setTimeout(() => func(...args), wait)
-    }) as T
-  }
-
-  // Real-time duplicate checking
-  useEffect(() => {
-    checkPartNumberDuplicate(currentItem.partNumber)
-  }, [currentItem.partNumber, checkPartNumberDuplicate])
-
-  // Debug logging for locations
-  useEffect(() => {
-    console.log("AddInventoryItem received locations:", locations)
-  }, [locations])
-
-  // Fetch pending locations to include in location prediction
-  useEffect(() => {
-    const fetchPendingLocations = async () => {
-      try {
-        console.log("🔍 Fetching pending locations...")
-        const base =
-          (typeof window !== "undefined" ? window.location.origin : "") || process.env.NEXT_PUBLIC_APP_URL || ""
-        const response = await fetch(`${base}/api/inventory/pending`)
-        if (response.ok) {
-          const data = await response.json()
-          console.log("📋 Raw pending data received:", data)
-
-          // Extract locations from pending changes - handle both individual items and batch items
-          const locations = []
-          const debugInfo = {
-            totalChanges: data.data?.length || 0,
-            processedChanges: [],
-            extractedLocations: [],
-          }
-
-          if (data.data) {
-            for (const change of data.data) {
-              const changeInfo = {
-                id: change.id,
-                changeType: change.change_type,
-                status: change.status,
-                hasItemData: !!change.item_data,
-                hasBatchItems: !!(change.item_data && change.item_data.batch_items),
-                hasDirectLocation: !!(change.item_data && change.item_data.location),
-                extractedFromThis: [],
-              }
-
-              // Handle batch changes (batch_items array in item_data)
-              if (change.item_data && change.item_data.batch_items && Array.isArray(change.item_data.batch_items)) {
-                console.log(`📦 Processing batch change ${change.id} with ${change.item_data.batch_items.length} items`)
-                for (const item of change.item_data.batch_items) {
-                  if (item.location && item.location.trim()) {
-                    const loc = item.location.trim()
-                    locations.push(loc)
-                    changeInfo.extractedFromThis.push(loc)
-                    console.log(`  ✅ Found batch location: ${loc}`)
-                  }
-                }
-              }
-              // Handle individual changes (direct location field in item_data)
-              else if (change.item_data && change.item_data.location && change.item_data.location.trim()) {
-                const loc = change.item_data.location.trim()
-                locations.push(loc)
-                changeInfo.extractedFromThis.push(loc)
-                console.log(`  ✅ Found individual location: ${loc}`)
-              }
-
-              debugInfo.processedChanges.push(changeInfo)
-            }
-          }
-
-          debugInfo.extractedLocations = locations
-          console.log("📍 Final extracted pending locations:", locations)
-          console.log("🔍 Debug info:", debugInfo)
-
-          setPendingLocations(locations)
-        } else {
-          console.warn("⚠️ Failed to fetch pending changes:", response.status)
-        }
-      } catch (error) {
-        console.error("❌ Failed to fetch pending locations:", error)
+      if (existingInBatch !== -1) {
+        setDuplicateWarning({
+          type: "batch",
+          existingItem: batchItems[existingInBatch],
+          batchIndex: existingInBatch,
+        })
+        return
       }
     }
 
-    if (open) {
-      fetchPendingLocations()
+    // Clear warning if no duplicates
+    setDuplicateWarning(null)
+  }, [formData.partNumber, inventory, batchItems])
+
+  // Auto-suggest package type based on quantity
+  useEffect(() => {
+    const qty = Number(formData.quantity)
+    if (qty > 0 && !formData.package) {
+      const suggestedPackage = getCorrectPackageType(qty)
+      setFormData((prev) => ({ ...prev, package: suggestedPackage }))
     }
-  }, [open])
+  }, [formData.quantity, formData.package])
 
-  // Extract locations from current batch items
-  const currentBatchLocations = useMemo(() => {
-    return batchItems
-      .map((item) => item.Location)
-      .filter((location) => location && location.trim())
-      .map((location) => location.trim())
-  }, [batchItems])
-
-  const resetCurrentItem = () => {
-    setCurrentItem({
+  const resetForm = () => {
+    setFormData({
       partNumber: "",
       mfgPartNumber: "",
-      qty: "",
+      quantity: "",
       description: "",
       supplier: "",
       location: "",
       package: "",
-      reorderPoint: defaultReorderPoint,
+      reorderPoint: defaultReorderPoint.toString(),
+      requester: "",
     })
-    setQuickUpdateQty(0)
-    setUseCustomSupplier(false)
-    setUseCustomPackage(false)
-  }
-
-  const resetAll = () => {
-    setRequesterName("")
-    setBatchItems([])
-    resetCurrentItem()
+    setDuplicateWarning(null)
+    setQuickUpdateQuantity("")
     setError(null)
-    setSuccess(null)
   }
 
-  const addToBatch = () => {
-    // Validate current item
-    if (!currentItem.partNumber.trim()) {
+  const handleAddToBatch = () => {
+    if (!formData.partNumber.trim()) {
       setError("Part number is required")
       return
     }
 
-    // Check for duplicate part numbers in batch
-    const isDuplicate = batchItems.some((item) => item["Part number"] === currentItem.partNumber.trim())
-    if (isDuplicate) {
-      setError("This part number is already in the batch")
+    if (!formData.requester.trim() || formData.requester.toLowerCase() === "current user") {
+      setError("Please provide a valid requester name")
       return
     }
 
-    // NEW: Check for duplicate part numbers in existing inventory
-    const duplicateItem = inventory?.find(
-      (item) => item["Part number"].toLowerCase() === currentItem.partNumber.trim().toLowerCase(),
-    )
-    if (duplicateItem) {
-      setError(
-        `Part number "${currentItem.partNumber.trim()}" already exists in inventory at location: ${duplicateItem.Location || "Unknown"}. Quantity: ${duplicateItem.QTY}, Package: ${duplicateItem.Package || "Unknown"}. Use the Edit function to modify existing items.`,
-      )
-      return
+    const qty = Number(formData.quantity) || 0
+    const correctPackage = getCorrectPackageType(qty)
+
+    const newItem: Omit<InventoryItem, "id" | "lastUpdated"> = {
+      "Part number": formData.partNumber.trim(),
+      "MFG Part number": formData.mfgPartNumber.trim(),
+      QTY: qty,
+      "Part description": formData.description.trim(),
+      Supplier: formData.supplier.trim(),
+      Location: formData.location.trim(),
+      Package: correctPackage, // Auto-correct package type
+      reorderPoint: Number(formData.reorderPoint) || defaultReorderPoint,
     }
 
-    const newBatchItem: BatchItem = {
-      batchId: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      "Part number": currentItem.partNumber.trim(),
-      "MFG Part number": currentItem.mfgPartNumber,
-      QTY: currentItem.qty,
-      "Part description": currentItem.description,
-      Supplier: currentItem.supplier,
-      Location: currentItem.location,
-      Package: currentItem.package,
-      reorderPoint: currentItem.reorderPoint,
-    }
-
-    setBatchItems((prev) => [...prev, newBatchItem])
-    resetCurrentItem()
+    setBatchItems((prev) => [...prev, newItem])
+    resetForm()
     setError(null)
-    setSuccess(`Added ${newBatchItem["Part number"]} to batch (${batchItems.length + 1} items total)`)
-
-    // Clear success message after 2 seconds
-    setTimeout(() => setSuccess(null), 2000)
   }
 
-  const removeFromBatch = (batchId: string) => {
-    setBatchItems((prev) => prev.filter((item) => item.batchId !== batchId))
-  }
-
-  // Add this new function to handle the quick quantity update (around line 400):
-  const handleQuickQuantityUpdate = async (existingItem: InventoryItem) => {
-    if (!requesterName.trim()) {
-      setError("Requester name is required")
+  const handleQuickUpdate = async () => {
+    if (!duplicateWarning || !quickUpdateQuantity.trim()) {
+      setError("Please enter a quantity to add")
       return
     }
 
-    if (quickUpdateQty <= 0) {
-      setError("Please enter a valid quantity to add")
+    const additionalQty = Number(quickUpdateQuantity)
+    if (isNaN(additionalQty) || additionalQty <= 0) {
+      setError("Please enter a valid positive number")
       return
     }
 
-    setQuickUpdateLoading(true)
-    // Clear the duplicate check immediately to close the popup
-    //setPartNumberCheck({ isChecking: false, isDuplicate: false, existingItem: null })
-    //setBatchDuplicateCheck({ isDuplicate: false, existingBatchItem: null })
+    if (!formData.requester.trim() || formData.requester.toLowerCase() === "current user") {
+      setError("Please provide a valid requester name")
+      return
+    }
+
+    setIsUpdating(true)
     setError(null)
 
     try {
-      console.log(`🔄 Quick updating quantity for ${existingItem["Part number"]}`)
-      console.log(
-        `📊 Current: ${existingItem.QTY}, Adding: ${quickUpdateQty}, New total: ${existingItem.QTY + quickUpdateQty}`,
-      )
+      if (duplicateWarning.type === "inventory") {
+        const existingItem = duplicateWarning.existingItem as InventoryItem
+        const newQuantity = existingItem.QTY + additionalQty
 
-      // Create the updated item data with automatic package type correction
-      const newQty = existingItem.QTY + quickUpdateQty
-      const correctPackageType =
-        newQty >= 1 && newQty <= 100 ? "EXACT" : newQty >= 101 && newQty <= 500 ? "ESTIMATED" : "REEL"
-
-      const updatedItem = {
-        part_number: existingItem["Part number"],
-        mfg_part_number: existingItem["MFG Part number"],
-        qty: newQty,
-        part_description: existingItem["Part description"],
-        supplier: existingItem.Supplier,
-        location: existingItem.Location,
-        package: correctPackageType, // Auto-correct package type based on new quantity
-        reorder_point: existingItem.reorderPoint || 10,
-      }
-
-      console.log(
-        `📦 Quick update: ${existingItem.QTY} → ${newQty} qty, package: ${existingItem.Package} → ${correctPackageType}`,
-      )
-
-      console.log("📤 Sending quantity update to API:", updatedItem)
-
-      // Submit the quantity update as a pending change
-      const response = await fetch("/api/inventory/pending", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          changeType: "update",
-          itemData: updatedItem,
-          originalData: {
-            part_number: existingItem["Part number"],
-            mfg_part_number: existingItem["MFG Part number"],
-            qty: existingItem.QTY,
-            part_description: existingItem["Part description"],
-            supplier: existingItem.Supplier,
-            location: existingItem.Location,
-            package: existingItem.Package,
-            reorder_point: existingItem.reorderPoint || 10,
+        // Submit update for approval
+        const response = await fetch("/api/inventory/pending", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-          requestedBy: requesterName.trim(),
-        }),
-      })
+          body: JSON.stringify({
+            changeType: "update",
+            itemData: {
+              part_number: existingItem["Part number"],
+              mfg_part_number: existingItem["MFG Part number"],
+              qty: newQuantity,
+              part_description: existingItem["Part description"],
+              supplier: existingItem.Supplier,
+              location: existingItem.Location,
+              package: getCorrectPackageType(newQuantity), // Auto-correct package
+              reorder_point: existingItem.reorderPoint || defaultReorderPoint,
+            },
+            originalData: {
+              part_number: existingItem["Part number"],
+              mfg_part_number: existingItem["MFG Part number"],
+              qty: existingItem.QTY,
+              part_description: existingItem["Part description"],
+              supplier: existingItem.Supplier,
+              location: existingItem.Location,
+              package: existingItem.Package,
+              reorder_point: existingItem.reorderPoint || defaultReorderPoint,
+            },
+            requestedBy: formData.requester.trim(),
+          }),
+        })
 
-      console.log("📥 API Response:", {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-      })
+        if (response.ok) {
+          const result = await response.json()
+          if (result.success) {
+            // Send Slack notification
+            try {
+              await fetch("/api/slack/send-approval-request", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  changeType: "update",
+                  itemData: {
+                    part_number: existingItem["Part number"],
+                    qty: newQuantity,
+                  },
+                  originalData: {
+                    part_number: existingItem["Part number"],
+                    qty: existingItem.QTY,
+                  },
+                  requestedBy: formData.requester.trim(),
+                  changeId: result.data.id,
+                }),
+              })
+            } catch (slackError) {
+              console.error("Failed to send Slack notification:", slackError)
+            }
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("❌ API Error Response:", errorText)
-        throw new Error(`API Error (${response.status}): ${errorText}`)
-      }
-
-      const result = await response.json()
-      console.log("📋 API Result:", result)
-
-      if (result.success) {
-        // Send Slack notification for the quantity update
-        try {
-          const slackResponse = await fetch("/api/slack/send-approval-request", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              changeType: "update",
-              itemData: updatedItem, // <-- correct key
-              originalData: {
-                // <-- correct key
-                part_number: existingItem["Part number"],
-                mfg_part_number: existingItem["MFG Part number"],
-                qty: existingItem.QTY,
-                part_description: existingItem["Part description"],
-                supplier: existingItem.Supplier,
-                location: existingItem.Location,
-                package: existingItem.Package,
-                reorder_point: existingItem.reorderPoint || 10,
-              },
-              requestedBy: requesterName.trim(),
-              changeId: result.data.id,
-            }),
-          })
-
-          if (slackResponse.ok) {
-            console.log("✅ Slack notification sent successfully")
+            alert(
+              `✅ Quantity update submitted for approval!\n\n${existingItem["Part number"]}: ${existingItem.QTY} → ${newQuantity} units\n\nRequested by: ${formData.requester}`,
+            )
+            setQuickUpdateQuantity("")
+            // Don't close the dialog - let user make more updates if needed
           } else {
-            console.warn("⚠️ Slack notification failed, but update was submitted successfully")
+            throw new Error(result.error || "Failed to submit update")
           }
-        } catch (slackError) {
-          console.error("❌ Failed to send Slack notification:", slackError)
-          // Don't fail the entire operation if Slack fails
+        } else {
+          throw new Error("Failed to submit update for approval")
+        }
+      } else if (duplicateWarning.type === "batch") {
+        // Update batch item
+        const batchIndex = duplicateWarning.batchIndex!
+        const existingBatchItem = batchItems[batchIndex]
+        const newQuantity = existingBatchItem.QTY + additionalQty
+
+        const updatedBatchItems = [...batchItems]
+        updatedBatchItems[batchIndex] = {
+          ...existingBatchItem,
+          QTY: newQuantity,
+          Package: getCorrectPackageType(newQuantity), // Auto-correct package
         }
 
-        console.log("✅ Quantity update submitted successfully")
-        setSuccess(
-          `Successfully submitted quantity update for ${existingItem["Part number"]}! Added ${quickUpdateQty} (${existingItem.QTY} → ${existingItem.QTY + quickUpdateQty})`,
+        setBatchItems(updatedBatchItems)
+        alert(
+          `✅ Batch item updated!\n\n${existingBatchItem["Part number"]}: ${existingBatchItem.QTY} → ${newQuantity} units`,
         )
-
-        // Reset the quick update form
-        setQuickUpdateQty(0)
-        setCurrentItem((prev) => ({ ...prev, partNumber: "" }))
-
-        // Clear success message after 3 seconds
-        setTimeout(() => setSuccess(null), 3000)
-      } else {
-        throw new Error(result.error || "Failed to submit quantity update")
+        setQuickUpdateQuantity("")
+        // Don't close the dialog - let user make more updates if needed
       }
     } catch (error) {
-      console.error("❌ Error updating quantity:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to submit quantity update"
-      setError(`Quantity update failed: ${errorMessage}`)
-      // Don't reset anything on error, let user try again
+      console.error("Quick update failed:", error)
+      setError(`Failed to update: ${error instanceof Error ? error.message : "Unknown error"}`)
     } finally {
-      setQuickUpdateLoading(false)
+      setIsUpdating(false)
     }
   }
 
-  const submitBatch = async () => {
-    if (!requesterName.trim()) {
-      setError("Requester name is required")
-      return
-    }
-
-    if (requesterName.trim().toLowerCase() === "current user") {
-      setError("'Current User' is not a valid requester name. Please enter your actual name.")
-      return
-    }
-
+  const handleSubmitBatch = async () => {
     if (batchItems.length === 0) {
-      setError("No items to submit. Add at least one item to the batch.")
+      setError("No items in batch to submit")
       return
     }
 
-    setLoading(true)
-    setError(null)
+    if (!formData.requester.trim() || formData.requester.toLowerCase() === "current user") {
+      setError("Please provide a valid requester name")
+      return
+    }
 
     try {
-      console.log(`🚀 Submitting batch of ${batchItems.length} items for requester: ${requesterName}`)
-
-      // Transform batch items to database format with validation
-      const transformedBatchItems = batchItems.map((item, index) => {
-        const transformed = {
-          part_number: String(item["Part number"] || "").trim(),
-          mfg_part_number: String(item["MFG Part number"] || "").trim(),
-          qty: item.QTY === "" || isNaN(Number(item.QTY)) ? 0 : Math.max(0, Number(item.QTY)),
-          part_description: String(item["Part description"] || "").trim(),
-          supplier: String(item.Supplier || "").trim(),
-          location: String(item.Location || "").trim(),
-          package: String(item.Package || "").trim(),
-          reorder_point: isNaN(Number(item.reorderPoint)) ? 10 : Math.max(0, Number(item.reorderPoint)),
-        }
-
-        // Validate required fields
-        if (!transformed.part_number) {
-          throw new Error(`Item ${index + 1}: Part number is required`)
-        }
-        if (!transformed.part_description) {
-          throw new Error(`Item ${index + 1}: Part description is required`)
-        }
-
-        console.log(`📦 Item ${index + 1}:`, transformed)
-        return transformed
-      })
-
-      console.log("📤 Sending batch to API:", {
-        itemCount: transformedBatchItems.length,
-        requester: requesterName.trim(),
-        firstItem: transformedBatchItems[0],
-      })
-
-      // Submit as a single batch
       const response = await fetch("/api/inventory/batch-pending", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          batchItems: transformedBatchItems,
-          requestedBy: requesterName.trim(),
+          batchItems,
+          requestedBy: formData.requester.trim(),
         }),
       })
 
-      console.log("📥 API Response:", {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("❌ API Error Response:", errorText)
-        throw new Error(`API Error (${response.status}): ${errorText}`)
-      }
-
-      const result = await response.json()
-      console.log("📋 API Result:", result)
-
-      if (result.success) {
-        // Send Slack notification for the batch
-        try {
-          console.log("📨 Sending Slack notification...")
-          const slackResponse = await fetch("/api/slack/send-batch-approval-request", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              batchItems: transformedBatchItems,
-              requestedBy: requesterName.trim(),
-              changeId: result.data.id,
-            }),
-          })
-
-          if (slackResponse.ok) {
-            console.log("✅ Slack notification sent successfully")
-          } else {
-            console.warn("⚠️ Slack notification failed, but batch was submitted successfully")
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          // Send Slack notification for batch
+          try {
+            await fetch("/api/slack/send-batch-approval-request", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                batchItems,
+                requestedBy: formData.requester.trim(),
+                changeId: result.data.id,
+              }),
+            })
+          } catch (slackError) {
+            console.error("Failed to send Slack notification:", slackError)
           }
-        } catch (slackError) {
-          console.error("❌ Failed to send Slack notification:", slackError)
-          // Don't fail the entire operation if Slack fails
+
+          alert(`✅ Batch of ${batchItems.length} items submitted for approval!\n\nRequested by: ${formData.requester}`)
+          setBatchItems([])
+          resetForm()
+          setIsOpen(false)
+        } else {
+          throw new Error(result.error || "Failed to submit batch")
         }
-
-        console.log("✅ Batch submitted successfully")
-        setSuccess(`Successfully submitted batch of ${batchItems.length} items for approval!`)
-
-        // Reset everything after successful submission
-        setTimeout(() => {
-          resetAll()
-          setOpen(false)
-        }, 2000)
       } else {
-        throw new Error(result.error || "Failed to submit batch for approval")
+        throw new Error("Failed to submit batch for approval")
       }
     } catch (error) {
-      console.error("❌ Error submitting batch:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to submit batch for approval"
-      setError(`Submission failed: ${errorMessage}`)
-    } finally {
-      setLoading(false)
+      console.error("Batch submission failed:", error)
+      setError(`Failed to submit batch: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
   }
 
-  const startEditingBatchItem = (item: BatchItem) => {
-    setEditingBatchId(item.batchId)
-    setEditingItem({ ...item })
-  }
-
-  const cancelEditingBatchItem = () => {
-    setEditingBatchId(null)
-    setEditingItem(null)
-  }
-
-  const saveEditingBatchItem = () => {
-    if (!editingItem) return
-
-    // Validate the edited item
-    if (!editingItem["Part number"].trim()) {
-      setError("Part number is required")
-      return
-    }
-
-    // Check for duplicate part numbers in batch (excluding the item being edited)
-    const isDuplicate = batchItems.some(
-      (item) => item.batchId !== editingItem.batchId && item["Part number"] === editingItem["Part number"].trim(),
-    )
-    if (isDuplicate) {
-      setError("This part number is already in the batch")
-      return
-    }
-
-    // Check for duplicate part numbers in existing inventory
-    const duplicateItem = inventory?.find(
-      (item) => item["Part number"].toLowerCase() === editingItem["Part number"].trim().toLowerCase(),
-    )
-    if (duplicateItem) {
-      setError(
-        `Part number "${editingItem["Part number"].trim()}" already exists in inventory at location: ${duplicateItem.Location || "Unknown"}. Quantity: ${duplicateItem.QTY}, Package: ${duplicateItem.Package || "Unknown"}. Use the Edit function to modify existing items.`,
-      )
-      return
-    }
-
-    // Update the batch item
-    setBatchItems((prev) =>
-      prev.map((item) =>
-        item.batchId === editingItem.batchId
-          ? { ...editingItem, "Part number": editingItem["Part number"].trim() }
-          : item,
-      ),
-    )
-
-    setEditingBatchId(null)
-    setEditingItem(null)
-    setError(null)
-    setSuccess("Item updated successfully")
-    setTimeout(() => setSuccess(null), 2000)
-  }
-
-  const handleEditingItemChange = (field: string, value: string | number) => {
-    if (!editingItem) return
-
-    setEditingItem((prev) => {
-      if (!prev) return null
-
-      const updated = {
-        ...prev,
-        [field]: value,
-      }
-
-      // Auto-select package type based on quantity
-      if (field === "QTY" && typeof value === "number") {
-        let autoPackage = ""
-        if (value >= 1 && value <= 100) {
-          autoPackage = "EXACT"
-        } else if (value >= 101 && value <= 500) {
-          autoPackage = "ESTIMATED"
-        } else if (value > 500) {
-          autoPackage = "REEL"
-        }
-
-        // Only auto-set if current package is empty or matches one of the auto types
-        const currentPkg = prev.Package.toUpperCase()
-        if (!currentPkg || currentPkg === "EXACT" || currentPkg === "ESTIMATED" || currentPkg === "REEL") {
-          updated.Package = autoPackage
-        }
-      }
-
-      return updated
-    })
-  }
-
-  const handleInputChange = (field: string, value: string | number) => {
-    setCurrentItem((prev) => {
-      const updated = {
-        ...prev,
-        [field]: value,
-      }
-
-      // Auto-select package type based on quantity
-      if (field === "qty" && typeof value === "number" && value > 0) {
-        let autoPackage = ""
-        if (value >= 1 && value <= 100) {
-          autoPackage = "EXACT"
-        } else if (value >= 101 && value <= 500) {
-          autoPackage = "ESTIMATED"
-        } else if (value > 500) {
-          autoPackage = "REEL"
-        }
-
-        // Only auto-set if current package is empty or matches one of the auto types
-        const currentPkg = prev.package.toUpperCase()
-        if (!currentPkg || currentPkg === "EXACT" || currentPkg === "ESTIMATED" || currentPkg === "REEL") {
-          updated.package = autoPackage
-        }
-      }
-
-      return updated
-    })
-  }
-
-  const handleSelectChange = (field: string, value: string) => {
-    if (value === "custom") {
-      if (field === "supplier") {
-        setUseCustomSupplier(true)
-        setTimeout(() => supplierInputRef.current?.focus(), 100)
-      } else if (field === "package") {
-        setUseCustomPackage(true)
-        setTimeout(() => packageInputRef.current?.focus(), 100)
-      }
-    } else {
-      handleInputChange(field, value)
-      if (field === "supplier") setUseCustomSupplier(false)
-      else if (field === "package") setUseCustomPackage(false)
-    }
-  }
-
-  const hasUnsavedWork = () => {
-    const hasCurrentItemData =
-      currentItem.partNumber.trim() ||
-      currentItem.mfgPartNumber.trim() ||
-      currentItem.description.trim() ||
-      currentItem.supplier.trim() ||
-      currentItem.location.trim() ||
-      currentItem.package.trim() ||
-      (currentItem.qty !== "" && currentItem.qty > 0)
-
-    return hasCurrentItemData || batchItems.length > 0
-  }
-
-  const handleDialogClose = (newOpen: boolean) => {
-    if (!newOpen && hasUnsavedWork()) {
-      if (batchItems.length > 0) {
-        setShowBatchConfirm(true)
-      } else {
-        setShowCancelConfirm(true)
-      }
-    } else {
-      setOpen(newOpen)
-      if (!newOpen) {
-        resetAll()
-      }
-    }
-  }
-
-  const confirmCancel = () => {
-    setShowCancelConfirm(false)
-    setShowBatchConfirm(false)
-    resetAll()
-    setOpen(false)
-  }
-
-  const cancelClose = () => {
-    setShowCancelConfirm(false)
-    setShowBatchConfirm(false)
+  const removeBatchItem = (index: number) => {
+    setBatchItems((prev) => prev.filter((_, i) => i !== index))
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleDialogClose}>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button>
+        <Button onClick={() => setIsOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
-          Add New Item
+          Add Item
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add New Inventory Items</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Package className="w-5 h-5" />
+            Add Item to Batch
+          </DialogTitle>
           <DialogDescription>
-            Add one or more inventory items. The entire batch will be submitted as one approval request.
+            Add items to your batch, then submit all for approval at once. Batch contains {batchItems.length} item(s).
           </DialogDescription>
         </DialogHeader>
 
-        {error && (
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {success && (
-          <Alert className="bg-green-50 border-green-200">
-            <AlertDescription className="text-green-800">{success}</AlertDescription>
-          </Alert>
-        )}
-
-        <div className="space-y-6">
-          {/* Requester Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="w-4 h-4" />
-                Requester Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <Label htmlFor="requester">Requester Name *</Label>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left Column - Add Item Form */}
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="partNumber">Part Number *</Label>
                 <Input
-                  id="requester"
-                  value={requesterName}
-                  onChange={(e) => setRequesterName(e.target.value)}
-                  placeholder="Enter your name"
-                  required
-                  disabled={loading}
+                  id="partNumber"
+                  value={formData.partNumber}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, partNumber: e.target.value }))}
+                  placeholder="Enter part number"
+                  className={duplicateWarning ? "border-orange-300 bg-orange-50" : ""}
                 />
-                <p className="text-xs text-muted-foreground">
-                  The entire batch will be submitted under this name as one approval request.
-                </p>
               </div>
-            </CardContent>
-          </Card>
+              <div>
+                <Label htmlFor="mfgPartNumber">MFG Part Number *</Label>
+                <Input
+                  id="mfgPartNumber"
+                  value={formData.mfgPartNumber}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, mfgPartNumber: e.target.value }))}
+                  placeholder="Enter manufacturer part number"
+                />
+              </div>
+            </div>
 
-          {/* Current Item Form */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="w-4 h-4" />
-                Add Item to Batch
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="partNumber">Part Number *</Label>
-                  <div className="relative">
-                    <Input
-                      id="partNumber"
-                      value={currentItem.partNumber}
-                      onChange={(e) => handleInputChange("partNumber", e.target.value)}
-                      placeholder="Enter part number"
-                      required
-                      disabled={loading}
-                      autoComplete="off"
-                      className={partNumberCheck.isDuplicate ? "border-orange-300 bg-orange-50" : ""}
-                    />
-                    {partNumberCheck.isChecking && (
-                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            {/* Duplicate Warning */}
+            {duplicateWarning && (
+              <Alert className="border-orange-200 bg-orange-50">
+                <AlertTriangle className="h-4 w-4 text-orange-600" />
+                <AlertDescription>
+                  <div className="space-y-3">
+                    <div>
+                      <strong className="text-orange-800">
+                        ⚠️ Part{" "}
+                        {duplicateWarning.type === "inventory"
+                          ? "already exists in inventory"
+                          : "already in current batch"}
+                        !
+                      </strong>
+                      <br />
+                      <span className="text-sm">
+                        Location: <strong>{duplicateWarning.existingItem.Location}</strong> • Qty:{" "}
+                        <strong>{duplicateWarning.existingItem.QTY}</strong> • Package:{" "}
+                        <strong>{duplicateWarning.existingItem.Package}</strong>
+                      </span>
+                    </div>
+
+                    <div className="bg-white p-3 rounded border border-orange-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Zap className="w-4 h-4 text-blue-600" />
+                        <span className="font-medium text-blue-800">Quick Quantity Update</span>
                       </div>
-                    )}
-                  </div>
-
-                  {/* Enhanced duplicate warning with quick update option */}
-                  {partNumberCheck.isDuplicate && partNumberCheck.existingItem && (
-                    <Alert className="bg-orange-50 border-orange-200">
-                      <AlertTriangle className="h-4 w-4 text-orange-600" />
-                      <AlertDescription className="text-orange-800">
-                        <div className="space-y-3">
-                          <div>
-                            <strong>⚠️ Part already exists in inventory!</strong>
-                            <br />
-                            <strong>Location:</strong> {partNumberCheck.existingItem.Location} • <strong>Qty:</strong>{" "}
-                            {partNumberCheck.existingItem.QTY} • <strong>Package:</strong>{" "}
-                            {partNumberCheck.existingItem.Package}
-                          </div>
-
-                          <div className="bg-white p-3 rounded border border-orange-200">
-                            <div className="text-sm font-medium text-orange-900 mb-2">💡 Quick Quantity Update</div>
-                            <div className="flex items-center gap-2">
-                              <Input
-                                type="number"
-                                min="1"
-                                value={quickUpdateQty || ""}
-                                onChange={(e) => setQuickUpdateQty(Number(e.target.value) || 0)}
-                                placeholder="Qty to add"
-                                className="w-24 h-8 text-sm"
-                                disabled={quickUpdateLoading}
-                              />
-                              <Button
-                                size="sm"
-                                onClick={() => handleQuickQuantityUpdate(partNumberCheck.existingItem!)}
-                                disabled={quickUpdateLoading || quickUpdateQty <= 0 || !requesterName.trim()}
-                                className="h-8 text-xs"
-                              >
-                                {quickUpdateLoading ? (
-                                  <>
-                                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
-                                    Updating...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Edit className="w-3 h-3 mr-1" />
-                                    Add {quickUpdateQty > 0 ? quickUpdateQty : "?"} qty
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-                            <div className="text-xs text-orange-700 mt-1">
-                              Current: {partNumberCheck.existingItem.QTY} → New:{" "}
-                              {partNumberCheck.existingItem.QTY + (quickUpdateQty || 0)}
-                            </div>
-                          </div>
-
-                          <div className="text-sm text-orange-700">
-                            Use the Edit function in the main inventory table to modify existing items.
-                          </div>
-                        </div>
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  {/* Batch duplicate warning with quick update option */}
-                  {batchDuplicateCheck.isDuplicate && batchDuplicateCheck.existingBatchItem && (
-                    <Alert className="bg-blue-50 border-blue-200">
-                      <AlertTriangle className="h-4 w-4 text-blue-600" />
-                      <AlertDescription className="text-blue-800">
-                        <div className="space-y-3">
-                          <div>
-                            <strong>🔄 Part already in current batch!</strong>
-                            <br />
-                            <strong>Current Batch Item:</strong>{" "}
-                            {batchDuplicateCheck.existingBatchItem["Part description"]} •<strong>Qty:</strong>{" "}
-                            {batchDuplicateCheck.existingBatchItem.QTY} •<strong>Location:</strong>{" "}
-                            {batchDuplicateCheck.existingBatchItem.Location} •<strong>Package:</strong>{" "}
-                            {batchDuplicateCheck.existingBatchItem.Package}
-                          </div>
-
-                          <div className="bg-white p-3 rounded border border-blue-200">
-                            <div className="text-sm font-medium text-blue-900 mb-2">💡 Add to Batch Item Quantity</div>
-                            <div className="flex items-center gap-2">
-                              <Input
-                                type="number"
-                                min="1"
-                                value={quickUpdateQty || ""}
-                                onChange={(e) => setQuickUpdateQty(Number(e.target.value) || 0)}
-                                placeholder="Qty to add"
-                                className="w-32 h-8 text-sm"
-                              />
-                              <Button
-                                size="sm"
-                                onClick={() => {
-                                  if (quickUpdateQty > 0 && batchDuplicateCheck.existingBatchItem) {
-                                    const newTotalQty = batchDuplicateCheck.existingBatchItem.QTY + quickUpdateQty
-                                    // Update the existing batch item quantity by ADDING to it
-                                    setBatchItems((prev) =>
-                                      prev.map((item) =>
-                                        item.batchId === batchDuplicateCheck.existingBatchItem!.batchId
-                                          ? { ...item, QTY: newTotalQty }
-                                          : item,
-                                      ),
-                                    )
-                                    setSuccess(
-                                      `Added ${quickUpdateQty} to batch item (${batchDuplicateCheck.existingBatchItem.QTY} → ${newTotalQty})`,
-                                    )
-                                    setCurrentItem((prev) => ({ ...prev, partNumber: "" }))
-                                    setQuickUpdateQty(0)
-                                    setTimeout(() => setSuccess(null), 2000)
-                                  }
-                                }}
-                                disabled={quickUpdateQty <= 0}
-                                className="h-8 text-xs"
-                              >
-                                <Edit className="w-3 h-3 mr-1" />
-                                Add {quickUpdateQty > 0 ? quickUpdateQty : "?"} qty
-                              </Button>
-                            </div>
-                            <div className="text-xs text-blue-700 mt-1">
-                              Current: {batchDuplicateCheck.existingBatchItem.QTY} → New:{" "}
-                              {batchDuplicateCheck.existingBatchItem.QTY + (quickUpdateQty || 0)}
-                            </div>
-                          </div>
-
-                          <div className="text-sm text-blue-700">
-                            You can also edit the item directly in the batch below or remove it and add a new one.
-                          </div>
-                        </div>
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="mfgPartNumber">MFG Part Number *</Label>
-                  <Input
-                    id="mfgPartNumber"
-                    value={currentItem.mfgPartNumber}
-                    onChange={(e) => handleInputChange("mfgPartNumber", e.target.value)}
-                    placeholder="Enter manufacturer part number"
-                    required
-                    disabled={loading}
-                    autoComplete="off"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="qty">Quantity *</Label>
-                  <Input
-                    id="qty"
-                    type="number"
-                    min="1"
-                    value={currentItem.qty}
-                    onChange={(e) => handleInputChange("qty", Number(e.target.value) || "")}
-                    placeholder="Enter quantity"
-                    required
-                    disabled={loading}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Auto-selects: Exact (1-100), Estimated (101-500), Reel (500+)
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="reorderPoint">Reorder Point</Label>
-                  <Input
-                    id="reorderPoint"
-                    type="number"
-                    min="0"
-                    value={currentItem.reorderPoint}
-                    onChange={(e) => handleInputChange("reorderPoint", Number(e.target.value) || 0)}
-                    placeholder="Enter reorder point"
-                    disabled={loading}
-                  />
-                </div>
-
-                <div className="col-span-2 space-y-2">
-                  <Label htmlFor="description">Part Description *</Label>
-                  <Input
-                    id="description"
-                    value={currentItem.description}
-                    onChange={(e) => handleInputChange("description", e.target.value)}
-                    placeholder="Enter part description"
-                    required
-                    disabled={loading}
-                    autoComplete="off"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="supplier">Supplier</Label>
-                  {useCustomSupplier ? (
-                    <Input
-                      ref={supplierInputRef}
-                      value={currentItem.supplier}
-                      onChange={(e) => handleInputChange("supplier", e.target.value)}
-                      placeholder="Enter custom supplier"
-                      disabled={loading}
-                      onBlur={() => {
-                        if (!currentItem.supplier.trim()) {
-                          setUseCustomSupplier(false)
-                        }
-                      }}
-                    />
-                  ) : (
-                    <Select
-                      value={currentItem.supplier}
-                      onValueChange={(value) => handleSelectChange("supplier", value)}
-                      disabled={loading}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select supplier" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {uniqueSuppliers.map((supplier) => (
-                          <SelectItem key={supplier} value={supplier}>
-                            {supplier}
-                          </SelectItem>
-                        ))}
-                        <SelectItem value="custom">+ Add Custom Supplier</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="location">Location</Label>
-                  <LocationInput
-                    value={currentItem.location}
-                    onChange={(value) => handleInputChange("location", value)}
-                    existingLocations={uniqueLocations}
-                    pendingLocations={pendingLocations}
-                    currentBatchLocations={currentBatchLocations}
-                    disabled={loading}
-                    placeholder="Type location or select existing"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="package">Package Type</Label>
-                  {useCustomPackage ? (
-                    <Input
-                      ref={packageInputRef}
-                      value={currentItem.package}
-                      onChange={(e) => handleInputChange("package", e.target.value)}
-                      placeholder="Enter custom package type"
-                      disabled={loading}
-                      onBlur={() => {
-                        if (!currentItem.package.trim()) {
-                          setUseCustomPackage(false)
-                        }
-                      }}
-                    />
-                  ) : (
-                    <Select
-                      value={currentItem.package}
-                      onValueChange={(value) => handleSelectChange("package", value)}
-                      disabled={loading}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select package type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {uniquePackageTypes.map((packageType) => (
-                          <SelectItem key={packageType} value={packageType}>
-                            {packageType}
-                          </SelectItem>
-                        ))}
-                        <SelectItem value="custom">+ Add Custom Package</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    Package auto-selected based on quantity. You can override for kits or custom packages.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-2 mt-4">
-                <Button
-                  onClick={addToBatch}
-                  disabled={loading || partNumberCheck.isDuplicate || batchDuplicateCheck.isDuplicate}
-                  className="flex-1"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add to Batch
-                </Button>
-                <Button type="button" variant="outline" onClick={resetCurrentItem} disabled={loading}>
-                  Clear Form
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Batch Items Display */}
-          {batchItems.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>Items in Batch ({batchItems.length})</span>
-                  <Badge variant="secondary">{batchItems.length} items ready</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {batchItems.map((item) => (
-                    <div key={item.batchId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      {editingBatchId === item.batchId ? (
-                        <div className="flex-1 grid grid-cols-6 gap-2 mr-4">
-                          <Input
-                            value={editingItem?.["Part number"] || ""}
-                            onChange={(e) => handleEditingItemChange("Part number", e.target.value)}
-                            placeholder="Part Number"
-                            className="text-sm"
-                            autoComplete="off"
-                          />
-                          <Input
-                            value={editingItem?.["Part description"] || ""}
-                            onChange={(e) => handleEditingItemChange("Part description", e.target.value)}
-                            placeholder="Description"
-                            className="text-sm"
-                            autoComplete="off"
-                          />
-                          <Input
-                            type="number"
-                            value={editingItem?.QTY || ""}
-                            onChange={(e) => handleEditingItemChange("QTY", Number(e.target.value) || "")}
-                            placeholder="Qty"
-                            className="text-sm"
-                          />
-                          <Input
-                            value={editingItem?.Supplier || ""}
-                            onChange={(e) => handleEditingItemChange("Supplier", e.target.value)}
-                            placeholder="Supplier"
-                            className="text-sm"
-                          />
-                          <Input
-                            value={editingItem?.Location || ""}
-                            onChange={(e) => handleEditingItemChange("Location", e.target.value)}
-                            placeholder="Location"
-                            className="text-sm"
-                          />
-                          <Input
-                            value={editingItem?.Package || ""}
-                            onChange={(e) => handleEditingItemChange("Package", e.target.value)}
-                            placeholder="Package"
-                            className="text-sm"
-                          />
-                        </div>
-                      ) : (
+                      <div className="flex gap-2 items-end">
                         <div className="flex-1">
-                          <div className="font-medium">{item["Part number"]}</div>
-                          <div className="text-sm text-gray-600">
-                            {item["Part description"]} • Qty: {item.QTY} • {item.Supplier} • {item.Location} •{" "}
-                            {item.Package}
-                          </div>
+                          <Label htmlFor="quickUpdate" className="text-xs">
+                            Qty to add
+                          </Label>
+                          <Input
+                            id="quickUpdate"
+                            type="number"
+                            min="1"
+                            value={quickUpdateQuantity}
+                            onChange={(e) => setQuickUpdateQuantity(e.target.value)}
+                            placeholder="e.g., 50"
+                            className="h-8"
+                          />
                         </div>
-                      )}
-
-                      <div className="flex gap-1">
-                        {editingBatchId === item.batchId ? (
-                          <>
-                            <Button size="sm" variant="outline" onClick={saveEditingBatchItem}>
-                              Save
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={cancelEditingBatchItem}>
-                              Cancel
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            <Button size="sm" variant="outline" onClick={() => startEditingBatchItem(item)}>
-                              Edit
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => removeFromBatch(item.batchId)}>
-                              <X className="w-4 h-4" />
-                            </Button>
-                          </>
-                        )}
+                        <Button
+                          size="sm"
+                          onClick={handleQuickUpdate}
+                          disabled={isUpdating || !quickUpdateQuantity.trim() || !formData.requester.trim()}
+                          className="h-8"
+                        >
+                          {isUpdating ? "Updating..." : "Update"}
+                        </Button>
+                      </div>
+                      <div className="text-xs text-gray-600 mt-1">
+                        Current: <strong>{duplicateWarning.existingItem.QTY}</strong> → New:{" "}
+                        <strong>{duplicateWarning.existingItem.QTY + (Number(quickUpdateQuantity) || 0)}</strong>
                       </div>
                     </div>
-                  ))}
+
+                    <div className="text-sm text-orange-700 bg-orange-100 p-2 rounded">
+                      Use the Edit function in the main inventory table to modify existing items.
+                    </div>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="quantity">Quantity *</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  min="0"
+                  value={formData.quantity}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, quantity: e.target.value }))}
+                  placeholder="Enter quantity"
+                />
+              </div>
+              <div>
+                <Label htmlFor="reorderPoint">Reorder Point</Label>
+                <Input
+                  id="reorderPoint"
+                  type="number"
+                  min="0"
+                  value={formData.reorderPoint}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, reorderPoint: e.target.value }))}
+                  placeholder={`Default: ${defaultReorderPoint}`}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="description">Part Description</Label>
+              <Input
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder="Enter part description"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="supplier">Supplier</Label>
+                <Select
+                  value={formData.supplier}
+                  onValueChange={(value) => setFormData((prev) => ({ ...prev, supplier: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select supplier" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {suppliers.map((supplier) => (
+                      <SelectItem key={supplier} value={supplier}>
+                        {supplier}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="location">Location</Label>
+                <Select
+                  value={formData.location}
+                  onValueChange={(value) => setFormData((prev) => ({ ...prev, location: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {locations.map((location) => (
+                      <SelectItem key={location} value={location}>
+                        {location}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="package">Package Type</Label>
+              <Select
+                value={formData.package}
+                onValueChange={(value) => setFormData((prev) => ({ ...prev, package: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Auto-suggested based on quantity" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="EXACT">EXACT (1-100 units)</SelectItem>
+                  <SelectItem value="ESTIMATED">ESTIMATED (101-500 units)</SelectItem>
+                  <SelectItem value="REEL">REEL (500+ units)</SelectItem>
+                  <SelectItem value="KIT">KIT</SelectItem>
+                  <SelectItem value="CUSTOM">CUSTOM</SelectItem>
+                  {packageTypes
+                    .filter((pkg) => !["EXACT", "ESTIMATED", "REEL", "KIT", "CUSTOM"].includes(pkg))
+                    .map((packageType) => (
+                      <SelectItem key={packageType} value={packageType}>
+                        {packageType}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {formData.quantity && formData.package && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  {(() => {
+                    const qty = Number(formData.quantity)
+                    const suggested = getCorrectPackageType(qty)
+                    const isCorrect = formData.package === suggested
+                    const isExcluded = ["KIT", "KITS", "CUSTOM"].some((excluded) =>
+                      formData.package.toUpperCase().includes(excluded),
+                    )
+
+                    if (isExcluded) {
+                      return `✅ Custom package type: ${formData.package}`
+                    } else if (isCorrect) {
+                      return `✅ Correct package type for ${qty} units`
+                    } else {
+                      return `⚠️ Suggested: ${suggested} for ${qty} units`
+                    }
+                  })()}
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </div>
+
+            <div>
+              <Label htmlFor="requester">Requester Name *</Label>
+              <Input
+                id="requester"
+                value={formData.requester}
+                onChange={(e) => setFormData((prev) => ({ ...prev, requester: e.target.value }))}
+                placeholder="Enter your name"
+                required
+              />
+              <p className="text-xs text-muted-foreground mt-1">Required for all changes that need approval</p>
+            </div>
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button onClick={handleAddToBatch} className="w-full" disabled={!formData.partNumber.trim()}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add to Batch
+            </Button>
+          </div>
+
+          {/* Right Column - Batch Items */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">Current Batch ({batchItems.length} items)</h3>
+              {batchItems.length > 0 && (
+                <Button onClick={handleSubmitBatch} disabled={!formData.requester.trim()}>
+                  Submit Batch for Approval
+                </Button>
+              )}
+            </div>
+
+            <div className="max-h-96 overflow-y-auto space-y-2">
+              {batchItems.length === 0 ? (
+                <div className="text-center text-muted-foreground py-8">
+                  <Package className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p>No items in batch yet</p>
+                  <p className="text-sm">Add items using the form on the left</p>
+                </div>
+              ) : (
+                batchItems.map((item, index) => (
+                  <div key={index} className="border rounded p-3 bg-gray-50">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="font-medium">{item["Part number"]}</div>
+                      <Button size="sm" variant="outline" onClick={() => removeBatchItem(index)}>
+                        Remove
+                      </Button>
+                    </div>
+                    <div className="text-sm text-muted-foreground space-y-1">
+                      <div>MFG: {item["MFG Part number"]}</div>
+                      <div>Qty: {item.QTY}</div>
+                      <div>Description: {item["Part description"]}</div>
+                      <div className="flex gap-4">
+                        <span>Supplier: {item.Supplier}</span>
+                        <span>Location: {item.Location}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{item.Package}</Badge>
+                        <span>Reorder: {item.reorderPoint}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => handleDialogClose(false)} disabled={loading}>
-            Cancel
-          </Button>
-          <Button
-            onClick={submitBatch}
-            disabled={loading || batchItems.length === 0 || !requesterName.trim()}
-            className="min-w-[120px]"
-          >
-            {loading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Submitting...
-              </>
-            ) : (
-              `Submit Batch (${batchItems.length})`
-            )}
+          <Button variant="outline" onClick={() => setIsOpen(false)}>
+            Close
           </Button>
         </DialogFooter>
-
-        {/* Cancel Confirmation Dialog */}
-        <Dialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Discard Changes?</DialogTitle>
-              <DialogDescription>
-                You have unsaved changes in the form. Are you sure you want to discard them?
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={cancelClose}>
-                Keep Editing
-              </Button>
-              <Button variant="destructive" onClick={confirmCancel}>
-                Discard Changes
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Batch Confirmation Dialog */}
-        <Dialog open={showBatchConfirm} onOpenChange={setShowBatchConfirm}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Discard Batch?</DialogTitle>
-              <DialogDescription>
-                You have {batchItems.length} items in your batch that haven't been submitted. Are you sure you want to
-                discard them?
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={cancelClose}>
-                Keep Editing
-              </Button>
-              <Button variant="destructive" onClick={confirmCancel}>
-                Discard Batch
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </DialogContent>
     </Dialog>
   )
