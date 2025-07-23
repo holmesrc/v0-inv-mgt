@@ -29,6 +29,7 @@ import {
   Download,
   RefreshCw,
   Database,
+  Plus,
 } from "lucide-react"
 import type { InventoryItem, PurchaseRequest, AlertSettings } from "@/types/inventory"
 import {
@@ -37,10 +38,10 @@ import {
   sendInteractiveLowStockAlert,
   sendInteractiveFullLowStockAlert,
   testSlackConnection,
+  createPrefillPurchaseRequestUrl,
 } from "@/lib/slack"
 import { downloadExcelFile } from "@/lib/excel-generator"
 import FileUpload from "./file-upload"
-import AddInventoryItem from "./add-inventory-item"
 import { getExcelFileMetadata } from "@/lib/storage"
 import ProtectedUploadButton from "./protected-upload-button"
 import PendingChangesDisplay from "./pending-changes-display"
@@ -1404,14 +1405,119 @@ Please check your Slack configuration.`)
           <p className="text-muted-foreground">Managing {inventory.length} inventory items</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <AddInventoryItem
-            onAddItem={addInventoryItem}
-            packageTypes={packageTypes}
-            suppliers={suppliers}
-            locations={uniqueLocations} // Updated here
-            defaultReorderPoint={alertSettings.defaultReorderPoint}
-            inventory={inventory} // Add this line
-          />
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Item
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New Item</DialogTitle>
+                <DialogDescription>Add a new item to the inventory</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Requester Name *</Label>
+                  <Input id="add-requester" placeholder="Enter your name" required />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Part Number *</Label>
+                    <Input id="add-part-number" placeholder="Enter part number" required />
+                  </div>
+                  <div>
+                    <Label>MFG Part Number</Label>
+                    <Input id="add-mfg-part-number" placeholder="Enter MFG part number" />
+                  </div>
+                </div>
+                <div>
+                  <Label>Description *</Label>
+                  <Input id="add-description" placeholder="Enter description" required />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Quantity *</Label>
+                    <Input id="add-quantity" type="number" min="0" placeholder="Enter quantity" required />
+                  </div>
+                  <div>
+                    <Label>Reorder Point</Label>
+                    <Input
+                      id="add-reorder-point"
+                      type="number"
+                      min="0"
+                      defaultValue={alertSettings.defaultReorderPoint}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Location</Label>
+                    <Input id="add-location" placeholder="Enter location" />
+                  </div>
+                  <div>
+                    <Label>Supplier</Label>
+                    <Input id="add-supplier" placeholder="Enter supplier" />
+                  </div>
+                </div>
+                <div>
+                  <Label>Package Type</Label>
+                  <Input id="add-package" placeholder="Enter package type" />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  onClick={async (e) => {
+                    const dialog = (e.target as HTMLElement).closest('[role="dialog"]')
+                    const requesterInput = dialog?.querySelector("#add-requester") as HTMLInputElement
+                    const partNumberInput = dialog?.querySelector("#add-part-number") as HTMLInputElement
+                    const mfgPartNumberInput = dialog?.querySelector("#add-mfg-part-number") as HTMLInputElement
+                    const descriptionInput = dialog?.querySelector("#add-description") as HTMLInputElement
+                    const quantityInput = dialog?.querySelector("#add-quantity") as HTMLInputElement
+                    const reorderPointInput = dialog?.querySelector("#add-reorder-point") as HTMLInputElement
+                    const locationInput = dialog?.querySelector("#add-location") as HTMLInputElement
+                    const supplierInput = dialog?.querySelector("#add-supplier") as HTMLInputElement
+                    const packageInput = dialog?.querySelector("#add-package") as HTMLInputElement
+
+                    if (
+                      !requesterInput?.value?.trim() ||
+                      !partNumberInput?.value?.trim() ||
+                      !descriptionInput?.value?.trim() ||
+                      !quantityInput?.value?.trim()
+                    ) {
+                      alert("Please fill in all required fields")
+                      return
+                    }
+
+                    const newItem = {
+                      "Part number": partNumberInput.value.trim(),
+                      "MFG Part number": mfgPartNumberInput?.value?.trim() || "",
+                      "Part description": descriptionInput.value.trim(),
+                      QTY: Number.parseInt(quantityInput.value) || 0,
+                      Location: locationInput?.value?.trim() || "",
+                      Supplier: supplierInput?.value?.trim() || "",
+                      Package: packageInput?.value?.trim() || "",
+                      reorderPoint: Number.parseInt(reorderPointInput?.value) || alertSettings.defaultReorderPoint,
+                    }
+
+                    try {
+                      await addInventoryItem(newItem, requesterInput.value.trim())
+                      // Close dialog
+                      const closeButton = document.querySelector(
+                        '[data-state="open"] button[aria-label="Close"]',
+                      ) as HTMLButtonElement
+                      closeButton?.click()
+                    } catch (error) {
+                      console.error("Failed to add item:", error)
+                    }
+                  }}
+                >
+                  Add Item
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <Button onClick={handleDownloadExcel} variant="outline">
             <Download className="w-4 h-4 mr-2" />
             Download Excel
@@ -1522,7 +1628,7 @@ Please check your Slack configuration.`)
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
             {error}
-            <Button variant="outline" size="sm" className="ml-2" onClick={() => setError(null)}>
+            <Button variant="outline" size="sm" className="ml-2 bg-transparent" onClick={() => setError(null)}>
               Dismiss
             </Button>
           </AlertDescription>
@@ -2334,7 +2440,31 @@ Please check your Slack configuration.`)
 
                             <Dialog>
                               <DialogTrigger asChild>
-                                <Button size="sm" variant="outline">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  title="Click to configure or Shift+Click to open pre-filled form directly"
+                                  onClick={(e) => {
+                                    // If Shift key is pressed, open the pre-filled form directly
+                                    if (e.shiftKey) {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      
+                                      // Create a pre-filled URL for this item
+                                      const prefillItem = {
+                                        partNumber: item["Part number"],
+                                        description: item["Part description"],
+                                        currentStock: item["QTY"],
+                                        reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
+                                        supplier: item["Supplier"]
+                                      };
+                                      
+                                      const purchaseRequestUrl = createPrefillPurchaseRequestUrl(prefillItem);
+                                      window.open(purchaseRequestUrl, '_blank');
+                                      return false;
+                                    }
+                                  }}
+                                >
                                   <ShoppingCart className="w-3 h-3" />
                                   Reorder
                                 </Button>
@@ -2371,31 +2501,65 @@ Please check your Slack configuration.`)
                                   </div>
                                 </div>
                                 <DialogFooter>
-                                  <Button
-                                    onClick={(e) => {
-                                      const dialog = (e.target as HTMLElement).closest('[role="dialog"]')
-                                      const quantityInput = dialog?.querySelector(
-                                        'input[type="number"]',
-                                      ) as HTMLInputElement
-                                      const urgencySelect = dialog?.querySelector('[role="combobox"]') as HTMLElement
-                                      const urgencyValue = urgencySelect?.getAttribute("data-value") || "medium"
+                                  <div className="flex gap-2">
+                                    <Button
+                                      onClick={(e) => {
+                                        const dialog = (e.target as HTMLElement).closest('[role="dialog"]')
+                                        const quantityInput = dialog?.querySelector(
+                                          'input[type="number"]',
+                                        ) as HTMLInputElement
+                                        const urgencySelect = dialog?.querySelector('[role="combobox"]') as HTMLElement
+                                        const urgencyValue = urgencySelect?.getAttribute("data-value") || "medium"
 
-                                      if (quantityInput) {
-                                        createPurchaseRequest(
-                                          item,
-                                          Number.parseInt(quantityInput.value),
-                                          urgencyValue as "low" | "medium" | "high",
-                                        )
-                                        // Close dialog
-                                        const closeButton = document.querySelector(
-                                          '[data-state="open"] button[aria-label="Close"]',
-                                        ) as HTMLButtonElement
-                                        closeButton?.click()
-                                      }
-                                    }}
-                                  >
-                                    Create Request
-                                  </Button>
+                                        if (quantityInput) {
+                                          createPurchaseRequest(
+                                            item,
+                                            Number.parseInt(quantityInput.value),
+                                            urgencyValue as "low" | "medium" | "high",
+                                          )
+                                          // Close dialog
+                                          const closeButton = document.querySelector(
+                                            '[data-state="open"] button[aria-label="Close"]',
+                                          ) as HTMLButtonElement
+                                          closeButton?.click()
+                                        }
+                                      }}
+                                    >
+                                      Create Request
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      onClick={(e) => {
+                                        const dialog = (e.target as HTMLElement).closest('[role="dialog"]')
+                                        const quantityInput = dialog?.querySelector(
+                                          'input[type="number"]',
+                                        ) as HTMLInputElement
+                                        const urgencySelect = dialog?.querySelector('[role="combobox"]') as HTMLElement
+                                        const urgencyValue = urgencySelect?.getAttribute("data-value") || "medium"
+
+                                        if (quantityInput) {
+                                          // Create a pre-filled URL for this item
+                                          const prefillItem = {
+                                            partNumber: item["Part number"],
+                                            description: item["Part description"],
+                                            quantity: Number.parseInt(quantityInput.value),
+                                            supplier: item["Supplier"]
+                                          };
+                                          
+                                          const purchaseRequestUrl = createPrefillPurchaseRequestUrl(prefillItem);
+                                          window.open(purchaseRequestUrl, '_blank');
+                                          
+                                          // Close dialog
+                                          const closeButton = document.querySelector(
+                                            '[data-state="open"] button[aria-label="Close"]',
+                                          ) as HTMLButtonElement
+                                          closeButton?.click()
+                                        }
+                                      }}
+                                    >
+                                      Open in Slack
+                                    </Button>
+                                  </div>
                                 </DialogFooter>
                               </DialogContent>
                             </Dialog>

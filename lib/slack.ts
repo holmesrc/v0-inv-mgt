@@ -77,10 +77,13 @@ export function createLowStockAlertMessage(items: any[]) {
 
   // Add first 3 items
   displayItems.forEach((item) => {
+    // Use the helper function to create the pre-filled URL
+    const purchaseRequestUrl = createPrefillPurchaseRequestUrl(item)
+    
     message += `• *${item.partNumber}* - ${item.description}\n`
     message += `  Current: ${item.currentStock} | Reorder at: ${item.reorderPoint}\n`
     message += `  Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n`
-    message += `  🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>\n\n`
+    message += `  🛒 <${purchaseRequestUrl}|Create Purchase Request>\n\n`
   })
 
   // Add remaining count and instructions
@@ -103,10 +106,13 @@ export function createFullLowStockMessage(items: any[]) {
   message += `*${items.length} items* are below their reorder points:\n\n`
 
   items.forEach((item, index) => {
+    // Use the helper function to create the pre-filled URL
+    const purchaseRequestUrl = createPrefillPurchaseRequestUrl(item)
+    
     message += `${index + 1}. *${item.partNumber}* - ${item.description}\n`
     message += `   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n`
     message += `   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n`
-    message += `   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Create Purchase Request>\n\n`
+    message += `   🛒 <${purchaseRequestUrl}|Create Purchase Request>\n\n`
   })
 
   message += `📋 *Action Required:*\n`
@@ -123,6 +129,13 @@ export function formatPurchaseRequest(request: any) {
     high: "🔴",
   }
 
+  // Use the helper function to create the pre-filled URL
+  const purchaseRequestUrl = createPrefillPurchaseRequestUrl({
+    partNumber: request.partNumber,
+    description: request.description,
+    quantity: request.quantity
+  })
+
   return (
     `📋 *New Purchase Request* ${urgencyEmoji[request.urgency]}\n\n` +
     `Part: ${request.partNumber} - ${request.description}\n` +
@@ -130,7 +143,7 @@ export function formatPurchaseRequest(request: any) {
     `Urgency: ${request.urgency.toUpperCase()}\n` +
     `Requested by: ${request.requestedBy}\n` +
     `Date: ${new Date(request.requestDate).toLocaleDateString()}\n\n` +
-    `Use this shortcut to process: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031`
+    `🛒 <${purchaseRequestUrl}|Click here to process this request>`
   )
 }
 
@@ -162,7 +175,7 @@ export function createSimpleTextAlert(items: any[]) {
   return message
 }
 
-// Updated to include individual reorder buttons for each item
+// Updated to include individual reorder buttons for each item with pre-filled data
 export function createSimpleLowStockBlocks(items: any[]) {
   const displayItems = items.slice(0, 3)
   const remainingCount = items.length - displayItems.length
@@ -181,6 +194,15 @@ export function createSimpleLowStockBlocks(items: any[]) {
   displayItems.forEach((item) => {
     // Truncate description if too long
     const description = item.description.length > 60 ? item.description.substring(0, 57) + "..." : item.description
+    
+    // Create a modified item with the truncated description
+    const modifiedItem = {
+      ...item,
+      description: description
+    }
+    
+    // Use the helper function to create the pre-filled URL
+    const purchaseRequestUrl = createPrefillPurchaseRequestUrl(modifiedItem)
 
     blocks.push({
       type: "section",
@@ -194,7 +216,7 @@ export function createSimpleLowStockBlocks(items: any[]) {
           type: "plain_text",
           text: "Reorder",
         },
-        url: "https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031",
+        url: purchaseRequestUrl,
       },
     })
   })
@@ -230,7 +252,7 @@ export function createSimpleLowStockBlocks(items: any[]) {
   return blocks
 }
 
-// Updated to include individual reorder buttons for each item
+// Updated to include individual reorder buttons for each item with pre-filled data
 export function createSimpleFullLowStockBlocks(items: any[]) {
   // Limit to 15 items to avoid Slack limits (each item = 1 block, plus header = 16 total)
   const displayItems = items.slice(0, 15)
@@ -249,6 +271,15 @@ export function createSimpleFullLowStockBlocks(items: any[]) {
   displayItems.forEach((item, index) => {
     // Truncate description if too long
     const description = item.description.length > 50 ? item.description.substring(0, 47) + "..." : item.description
+    
+    // Create a modified item with the truncated description
+    const modifiedItem = {
+      ...item,
+      description: description
+    }
+    
+    // Use the helper function to create the pre-filled URL
+    const purchaseRequestUrl = createPrefillPurchaseRequestUrl(modifiedItem)
 
     blocks.push({
       type: "section",
@@ -262,7 +293,7 @@ export function createSimpleFullLowStockBlocks(items: any[]) {
           type: "plain_text",
           text: "Reorder",
         },
-        url: "https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031",
+        url: purchaseRequestUrl,
       },
     })
   })
@@ -347,10 +378,13 @@ export function createTextOnlyLowStockAlert(items: any[]) {
   message += `The following items are below their reorder points:\n\n`
 
   displayItems.forEach((item, index) => {
+    // Use the helper function to create the pre-filled URL
+    const purchaseRequestUrl = createPrefillPurchaseRequestUrl(item)
+    
     message += `${index + 1}. *${item.partNumber}* - ${item.description}\n`
     message += `   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n`
     message += `   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n`
-    message += `   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Reorder this item>\n\n`
+    message += `   🛒 <${purchaseRequestUrl}|Reorder this item>\n\n`
   })
 
   if (remainingCount > 0) {
@@ -371,10 +405,13 @@ export function createTextOnlyFullLowStockAlert(items: any[]) {
   message += `*${items.length} items* are below their reorder points:\n\n`
 
   items.forEach((item, index) => {
+    // Use the helper function to create the pre-filled URL
+    const purchaseRequestUrl = createPrefillPurchaseRequestUrl(item)
+    
     message += `${index + 1}. *${item.partNumber}* - ${item.description}\n`
     message += `   Current: ${item.currentStock} | Reorder: ${item.reorderPoint}\n`
     message += `   Supplier: ${item.supplier || "N/A"} | Location: ${item.location || "N/A"}\n`
-    message += `   🛒 <https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031|Reorder this item>\n\n`
+    message += `   🛒 <${purchaseRequestUrl}|Reorder this item>\n\n`
   })
 
   message += `📋 *Action Required:*\n`
@@ -385,6 +422,33 @@ export function createTextOnlyFullLowStockAlert(items: any[]) {
 }
 
 // Test Slack connection with better error handling - UPDATED to not send actual message
+// Helper function to create pre-filled purchase request URLs
+export function createPrefillPurchaseRequestUrl(item: {
+  partNumber: string
+  description: string
+  currentStock?: number
+  reorderPoint?: number
+  supplier?: string
+  quantity?: number
+}) {
+  // Create URL with pre-filled parameters for the Slack shortcut
+  const encodedPartNumber = encodeURIComponent(item.partNumber)
+  const encodedDescription = encodeURIComponent(item.description)
+  
+  // Calculate suggested quantity if not provided
+  let suggestedQty = item.quantity
+  if (suggestedQty === undefined && item.currentStock !== undefined && item.reorderPoint !== undefined) {
+    suggestedQty = Math.max(item.reorderPoint - item.currentStock + 5, 1) // Reorder point - current + buffer
+  } else if (suggestedQty === undefined) {
+    suggestedQty = 1 // Default if we don't have enough info
+  }
+  
+  const encodedSupplier = encodeURIComponent(item.supplier || "")
+  
+  // Build the pre-filled URL
+  return `https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031?prefill={"part_number":"${encodedPartNumber}","description":"${encodedDescription}","quantity":"${suggestedQty}","supplier":"${encodedSupplier}"}`
+}
+
 export async function testSlackConnection() {
   try {
     // Check if the webhook URL is configured without sending a message
