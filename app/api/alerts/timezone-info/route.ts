@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getScheduleDescription, generateEasternTimeCronSchedule, convertToUTC } from "@/lib/timezone"
+import { getScheduleDescription, generateEasternTimeCronSchedule, getEasternTimeInfo } from "@/lib/timezone"
 
 export async function GET(request: NextRequest) {
   try {
     const scheduleInfo = getScheduleDescription('America/New_York')
     const cronSchedule = generateEasternTimeCronSchedule()
-    const utcConversion = convertToUTC(9, 'America/New_York') // 9 AM Eastern
+    const timeInfo = getEasternTimeInfo()
     
     // Calculate next Monday 9 AM Eastern
     const now = new Date()
@@ -42,11 +42,16 @@ export async function GET(request: NextRequest) {
         name: 'America/New_York',
         current: scheduleInfo,
         cronSchedule: cronSchedule,
+        timeInfo: {
+          abbreviation: timeInfo.abbreviation,
+          isDST: timeInfo.isDST,
+          offsetHours: timeInfo.offsetHours,
+          utcHourFor9AM: timeInfo.utcHourFor9AM
+        },
         utcConversion: {
           localTime: '9:00 AM Eastern',
-          utcHour: utcConversion.utcHour,
-          utcDay: utcConversion.utcDay,
-          cronExpression: utcConversion.cronSchedule
+          utcHour: timeInfo.utcHourFor9AM,
+          cronExpression: cronSchedule
         },
         nextExecution: {
           eastern: nextMondayEastern,
