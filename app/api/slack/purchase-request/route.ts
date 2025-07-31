@@ -201,8 +201,12 @@ export async function POST(request: Request) {
       ]
     };
     
-    // Send to Slack webhook - using your existing webhook URL
-    const webhookUrl = "https://hooks.slack.com/services/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";
+    // Send to Slack webhook - using environment variable
+    const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+    
+    if (!webhookUrl) {
+      throw new Error('SLACK_WEBHOOK_URL environment variable is not set');
+    }
     
     const response = await fetch(webhookUrl, {
       method: 'POST',
