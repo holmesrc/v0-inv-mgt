@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/alerts/cron",
+      "schedule": "0 13 * * 1"
+    },
+    {
+      "path": "/api/alerts/dst-monitor",
+      "schedule": "0 12 * * *"
+    }
+  ]
+}

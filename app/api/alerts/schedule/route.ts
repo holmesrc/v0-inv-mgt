@@ -1,25 +1,46 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { getScheduleDescription, generateEasternTimeCronSchedule } from "@/lib/timezone"
 
 export async function POST(request: NextRequest) {
   try {
     const { settings, lowStockItems } = await request.json()
 
-    // In a real application, you would use a job scheduler like Vercel Cron Jobs
-    // For now, we'll simulate the scheduling logic
+    // Get timezone-aware schedule information
+    const scheduleInfo = getScheduleDescription('America/New_York')
+    const cronSchedule = generateEasternTimeCronSchedule()
+    
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+    const dayName = dayNames[settings.dayOfWeek] || 'Monday'
 
-    if (settings.enabled && lowStockItems.length > 0) {
-      // This would typically be handled by a cron job
-      // For demo purposes, we'll just return success
+    if (settings.enabled) {
       return NextResponse.json({
         success: true,
-        message: `Alert scheduled for ${settings.dayOfWeek} at ${settings.time}`,
+        message: `Automatic alerts are enabled for ${dayName} at ${settings.time} Eastern Time`,
         itemsCount: lowStockItems.length,
+        cronInfo: {
+          schedule: cronSchedule,
+          description: scheduleInfo.schedule,
+          timezone: 'America/New_York',
+          currentTime: scheduleInfo.currentTime,
+          isDST: scheduleInfo.isDST,
+          endpoint: "/api/alerts/cron",
+          nextRun: "Next Monday at 9:00 AM Eastern Time"
+        }
       })
     }
 
-    return NextResponse.json({ success: true, message: "No alerts needed" })
+    return NextResponse.json({ 
+      success: true, 
+      message: "Automatic alerts are disabled",
+      cronInfo: {
+        schedule: cronSchedule,
+        description: scheduleInfo.schedule,
+        timezone: 'America/New_York',
+        status: "disabled"
+      }
+    })
   } catch (error) {
-    console.error("Error scheduling alert:", error)
-    return NextResponse.json({ error: "Failed to schedule alert" }, { status: 500 })
+    console.error("Error checking alert schedule:", error)
+    return NextResponse.json({ error: "Failed to check alert schedule" }, { status: 500 })
   }
 }
