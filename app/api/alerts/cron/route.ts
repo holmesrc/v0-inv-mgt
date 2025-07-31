@@ -13,11 +13,14 @@ export async function GET(request: NextRequest) {
     const scheduleInfo = getScheduleDescription('America/New_York')
     console.log(`🕘 Running scheduled inventory alert check at ${scheduleInfo.currentTime}`)
 
+    // Construct base URL more reliably
+    const host = request.headers.get('host')
+    const protocol = request.headers.get('x-forwarded-proto') || 'https'
+    const baseUrl = `${protocol}://${host}`
+    
+    console.log(`🔗 Using base URL: ${baseUrl}`)
+
     // Load current inventory from database
-    const baseUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}` 
-      : 'http://localhost:3000'
-      
     const inventoryResponse = await fetch(`${baseUrl}/api/inventory/load-from-db`, {
       method: 'GET',
       headers: {
