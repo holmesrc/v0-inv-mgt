@@ -1,0 +1,25 @@
+# Test Commands for DST Automation System
+# Replace YOUR_VERCEL_URL with your actual deployment URL
+
+# 1. Test timezone calculations
+curl "https://YOUR_VERCEL_URL/api/alerts/test-timezone"
+
+# 2. Check current DST status
+curl "https://YOUR_VERCEL_URL/api/alerts/dst-notification"
+
+# 3. Get timezone info
+curl "https://YOUR_VERCEL_URL/api/alerts/timezone-info"
+
+# 4. Test the main cron job (requires CRON_SECRET)
+curl -H "Authorization: Bearer dst-inventory-alerts-2025-test" \
+     "https://YOUR_VERCEL_URL/api/alerts/test-cron"
+
+# 5. Test DST monitoring (requires CRON_SECRET)
+curl -H "Authorization: Bearer dst-inventory-alerts-2025-test" \
+     "https://YOUR_VERCEL_URL/api/alerts/dst-monitor"
+
+# Expected Results:
+# - All endpoints should return success: true
+# - Current timezone should show EDT (UTC-4)
+# - Cron schedule should be "0 13 * * 1"
+# - Next DST transition: November 2, 2025 (Fall back to EST)
