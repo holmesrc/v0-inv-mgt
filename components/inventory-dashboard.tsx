@@ -2088,6 +2088,16 @@ Please check your Slack configuration.`)
               {/* Batch Entry Form */}
               {addItemMode === 'batch' && (
               <div className="space-y-4">
+                <div>
+                  <Label>Requester Name *</Label>
+                  <Input 
+                    id="batch-requester" 
+                    placeholder="Enter your name" 
+                    required 
+                    onChange={() => setAddItemFormModified(true)}
+                  />
+                </div>
+                
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">
                     {batchEntryItems.length} item(s) in batch
@@ -2096,16 +2106,19 @@ Please check your Slack configuration.`)
                     <Button 
                       size="sm" 
                       variant="outline"
-                      onClick={() => setBatchEntryItems([...batchEntryItems, { 
-                        partNumber: '', 
-                        mfgPartNumber: '', 
-                        description: '', 
-                        quantity: '', 
-                        location: '', 
-                        supplier: '', 
-                        package: '',
-                        reorderPoint: alertSettings.defaultReorderPoint 
-                      }])}
+                      onClick={() => {
+                        setAddItemFormModified(true) // Mark form as modified
+                        setBatchEntryItems([...batchEntryItems, { 
+                          partNumber: '', 
+                          mfgPartNumber: '', 
+                          description: '', 
+                          quantity: '', 
+                          location: '', 
+                          supplier: '', 
+                          package: '',
+                          reorderPoint: alertSettings.defaultReorderPoint 
+                        }])
+                      }}
                     >
                       <Plus className="w-3 h-3 mr-1" />
                       Add Row
@@ -2113,7 +2126,10 @@ Please check your Slack configuration.`)
                     <Button 
                       size="sm" 
                       variant="outline"
-                      onClick={() => setBatchEntryItems(batchEntryItems.slice(0, -1))}
+                      onClick={() => {
+                        setAddItemFormModified(true) // Mark form as modified
+                        setBatchEntryItems(batchEntryItems.slice(0, -1))
+                      }}
                       disabled={batchEntryItems.length <= 1}
                     >
                       Remove Row
@@ -2142,6 +2158,7 @@ Please check your Slack configuration.`)
                             <Input
                               value={item.partNumber}
                               onChange={(e) => {
+                                setAddItemFormModified(true) // Mark form as modified
                                 const newItems = [...batchEntryItems]
                                 newItems[index].partNumber = e.target.value
                                 setBatchEntryItems(newItems)
@@ -2159,6 +2176,7 @@ Please check your Slack configuration.`)
                             <Input
                               value={item.mfgPartNumber}
                               onChange={(e) => {
+                                setAddItemFormModified(true) // Mark form as modified
                                 const newItems = [...batchEntryItems]
                                 newItems[index].mfgPartNumber = e.target.value
                                 setBatchEntryItems(newItems)
@@ -2171,6 +2189,7 @@ Please check your Slack configuration.`)
                             <Input
                               value={item.description}
                               onChange={(e) => {
+                                setAddItemFormModified(true) // Mark form as modified
                                 const newItems = [...batchEntryItems]
                                 newItems[index].description = e.target.value
                                 setBatchEntryItems(newItems)
@@ -2184,6 +2203,7 @@ Please check your Slack configuration.`)
                               type="number"
                               value={item.quantity}
                               onChange={(e) => {
+                                setAddItemFormModified(true) // Mark form as modified
                                 const newItems = [...batchEntryItems]
                                 newItems[index].quantity = e.target.value
                                 
@@ -2205,6 +2225,7 @@ Please check your Slack configuration.`)
                             <select
                               value={item.location}
                               onChange={(e) => {
+                                setAddItemFormModified(true) // Mark form as modified
                                 const newItems = [...batchEntryItems]
                                 newItems[index].location = e.target.value
                                 setBatchEntryItems(newItems)
@@ -2222,6 +2243,7 @@ Please check your Slack configuration.`)
                             <select
                               value={item.supplier}
                               onChange={(e) => {
+                                setAddItemFormModified(true) // Mark form as modified
                                 const newItems = [...batchEntryItems]
                                 newItems[index].supplier = e.target.value
                                 setBatchEntryItems(newItems)
@@ -2238,6 +2260,7 @@ Please check your Slack configuration.`)
                             <select
                               value={item.package}
                               onChange={(e) => {
+                                setAddItemFormModified(true) // Mark form as modified
                                 const newItems = [...batchEntryItems]
                                 newItems[index].package = e.target.value
                                 setBatchEntryItems(newItems)
@@ -2255,6 +2278,7 @@ Please check your Slack configuration.`)
                               type="number"
                               value={item.reorderPoint}
                               onChange={(e) => {
+                                setAddItemFormModified(true) // Mark form as modified
                                 const newItems = [...batchEntryItems]
                                 newItems[index].reorderPoint = parseInt(e.target.value) || alertSettings.defaultReorderPoint
                                 setBatchEntryItems(newItems)
@@ -2351,6 +2375,15 @@ Please check your Slack configuration.`)
                         package: '',
                         reorderPoint: alertSettings.defaultReorderPoint 
                       }])
+                      
+                      // Clear requester field
+                      const requesterInput = document.querySelector("#batch-requester") as HTMLInputElement
+                      if (requesterInput) {
+                        requesterInput.value = ""
+                      }
+                      
+                      // Reset form modification flag
+                      setAddItemFormModified(false)
                     }}
                   >
                     Clear All
@@ -2358,9 +2391,14 @@ Please check your Slack configuration.`)
                   <Button 
                     className="flex-1"
                     onClick={async () => {
-                      // Validate required fields
-                      const requesterName = prompt("Enter your name for this batch submission:")
-                      if (!requesterName) return
+                      // Get requester name from the batch requester field
+                      const requesterInput = document.querySelector("#batch-requester") as HTMLInputElement
+                      const requesterName = requesterInput?.value?.trim()
+                      
+                      if (!requesterName) {
+                        alert("Please enter your name in the Requester field")
+                        return
+                      }
                       
                       const validItems = batchEntryItems.filter(item => 
                         item.partNumber.trim() && 
@@ -2408,6 +2446,14 @@ Please check your Slack configuration.`)
                         package: '',
                         reorderPoint: alertSettings.defaultReorderPoint 
                       }])
+                      
+                      // Clear requester field
+                      if (requesterInput) {
+                        requesterInput.value = ""
+                      }
+                      
+                      // Reset form modification flag
+                      setAddItemFormModified(false)
                       
                       // Close dialog
                       setAddItemDialogOpen(false)
