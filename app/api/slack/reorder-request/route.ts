@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
       throw new Error('SLACK_WEBHOOK_URL environment variable is not set')
     }
 
-    // Create a rich Slack message for reordering with workflow link
+    // Create a comprehensive Slack message with all data formatted for easy copying
     const message = {
       blocks: [
         {
@@ -23,38 +23,9 @@ export async function POST(request: NextRequest) {
         },
         {
           type: "section",
-          fields: [
-            {
-              type: "mrkdwn",
-              text: `*Part Number:*\n${partNumber}`
-            },
-            {
-              type: "mrkdwn",
-              text: `*Description:*\n${description}`
-            },
-            {
-              type: "mrkdwn",
-              text: `*Current Qty:*\n${currentQty}`
-            },
-            {
-              type: "mrkdwn",
-              text: `*Reorder Point:*\n${reorderPoint}`
-            },
-            {
-              type: "mrkdwn",
-              text: `*Supplier:*\n${supplier || 'TBD'}`
-            },
-            {
-              type: "mrkdwn",
-              text: `*Requested By:*\n${requestedBy || 'System'}`
-            }
-          ]
-        },
-        {
-          type: "section",
           text: {
             type: "mrkdwn",
-            text: `*Status:* ${currentQty <= 0 ? '🔴 Out of Stock' : '🟡 Low Stock'}\n*Urgency:* ${currentQty <= 0 ? 'HIGH' : 'MEDIUM'}`
+            text: `*Part Number:* \`${partNumber}\`\n*Description:* ${description}\n*Current Stock:* ${currentQty}\n*Reorder Point:* ${reorderPoint}\n*Supplier:* ${supplier || 'TBD'}\n*Urgency:* ${currentQty <= 0 ? '🔴 HIGH - Out of Stock' : '🟡 MEDIUM - Low Stock'}\n*Requested By:* ${requestedBy || 'System'}`
           }
         },
         {
@@ -64,14 +35,30 @@ export async function POST(request: NextRequest) {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: "📋 *To complete this reorder:*\n• Click the workflow link below\n• The form will be pre-filled with part details\n• Review and submit the purchase request"
+            text: "📋 *Copy this data for your workflow:*"
           }
         },
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `🔗 *Workflow Link:* https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031\n\n_Note: This link only works within Slack. If it doesn't work, search for "Purchase Request" in Slack workflows._`
+            text: `\`\`\`Part Number: ${partNumber}
+Description: ${description}
+Current Quantity: ${currentQty}
+Reorder Point: ${reorderPoint}
+Supplier: ${supplier || 'TBD'}
+Urgency: ${currentQty <= 0 ? 'High' : 'Medium'}
+Status: ${currentQty <= 0 ? 'Out of Stock' : 'Low Stock'}
+Requested By: ${requestedBy || 'System'}
+Date: ${new Date().toLocaleDateString()}
+Time: ${new Date().toLocaleTimeString()}\`\`\``
+          }
+        },
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: "🔗 *To complete this reorder:*\n1. Search for `Purchase Request` in Slack workflows\n2. Copy the data above into the workflow form\n3. Submit the purchase request\n\n_Or use the workflow link: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031_"
           }
         },
         {
@@ -81,20 +68,32 @@ export async function POST(request: NextRequest) {
               type: "button",
               text: {
                 type: "plain_text",
-                text: "Mark as Ordered",
+                text: "✅ Mark as Ordered",
                 emoji: true
               },
               style: "primary",
-              value: `ordered_${partNumber}`
+              value: `ordered_${partNumber}`,
+              action_id: "mark_ordered"
             },
             {
               type: "button",
               text: {
                 type: "plain_text",
-                text: "Skip for Now",
+                text: "⏭️ Skip for Now",
                 emoji: true
               },
-              value: `skip_${partNumber}`
+              value: `skip_${partNumber}`,
+              action_id: "skip_reorder"
+            },
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "🔄 Open Workflow",
+                emoji: true
+              },
+              url: "https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031",
+              action_id: "open_workflow"
             }
           ]
         },
@@ -103,7 +102,7 @@ export async function POST(request: NextRequest) {
           elements: [
             {
               type: "mrkdwn",
-              text: `📅 Requested: ${new Date().toLocaleString()} | 🏷️ Part: ${partNumber} | 📊 Stock: ${currentQty}/${reorderPoint}`
+              text: `📅 ${new Date().toLocaleString()} | 🏷️ ${partNumber} | 📊 Stock: ${currentQty}/${reorderPoint} | 🚨 ${currentQty <= 0 ? 'URGENT' : 'Standard'}`
             }
           ]
         }
@@ -128,7 +127,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: `Reorder request sent for ${partNumber}`,
       partNumber,
-      instructions: "Check Slack for the reorder message with workflow link"
+      instructions: "Check Slack for the reorder message with formatted data to copy into workflow"
     })
 
   } catch (error) {
