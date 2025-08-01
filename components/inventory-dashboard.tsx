@@ -81,6 +81,7 @@ export default function InventoryDashboard() {
   // Add this with the other state declarations
   const [editDialogOpen, setEditDialogOpen] = useState<Record<string, boolean>>({})
   const [addItemFormModified, setAddItemFormModified] = useState(false)
+  const [addItemMode, setAddItemMode] = useState<'single' | 'batch'>('single')
   const [batchEntryItems, setBatchEntryItems] = useState<any[]>([{ 
     partNumber: '', 
     mfgPartNumber: '', 
@@ -1619,16 +1620,58 @@ Please check your Slack configuration.`)
             }
           }}>
             <DialogTrigger asChild>
-              <Button onClick={() => setAddItemFormModified(false)}>
+              <Button onClick={() => {
+                setAddItemFormModified(false)
+                setAddItemMode('single')
+                setBatchEntryItems([{ 
+                  partNumber: '', 
+                  mfgPartNumber: '', 
+                  description: '', 
+                  quantity: '', 
+                  location: '', 
+                  supplier: '', 
+                  package: '',
+                  reorderPoint: alertSettings.defaultReorderPoint 
+                }])
+              }}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Item
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-[1200px] max-h-[80vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Add New Item</DialogTitle>
-                <DialogDescription>Add a new item to the inventory</DialogDescription>
+                <DialogTitle>Add New Item(s)</DialogTitle>
+                <DialogDescription>Add one or multiple items to the inventory</DialogDescription>
               </DialogHeader>
+              
+              {/* Mode Selection */}
+              <div className="flex gap-2 mb-4 p-1 bg-gray-100 rounded-lg">
+                <Button
+                  size="sm"
+                  variant={addItemMode === 'single' ? 'default' : 'ghost'}
+                  onClick={() => {
+                    setAddItemMode('single')
+                    setAddItemFormModified(false)
+                  }}
+                  className="flex-1"
+                >
+                  Single Item
+                </Button>
+                <Button
+                  size="sm"
+                  variant={addItemMode === 'batch' ? 'default' : 'ghost'}
+                  onClick={() => {
+                    setAddItemMode('batch')
+                    setAddItemFormModified(false)
+                  }}
+                  className="flex-1"
+                >
+                  Batch Entry
+                </Button>
+              </div>
+              
+              {/* Single Item Form */}
+              {addItemMode === 'single' && (
               <div className="space-y-4">
                 <div>
                   <Label>Requester Name *</Label>
@@ -1829,136 +1872,10 @@ Please check your Slack configuration.`)
                   />
                 </div>
               </div>
-              <DialogFooter>
-                <Button
-                  onClick={async (e) => {
-                    const dialog = (e.target as HTMLElement).closest('[role="dialog"]')
-                    const requesterInput = dialog?.querySelector("#add-requester") as HTMLInputElement
-                    const partNumberInput = dialog?.querySelector("#add-part-number") as HTMLInputElement
-                    const mfgPartNumberInput = dialog?.querySelector("#add-mfg-part-number") as HTMLInputElement
-                    const descriptionInput = dialog?.querySelector("#add-description") as HTMLInputElement
-                    const quantityInput = dialog?.querySelector("#add-quantity") as HTMLInputElement
-                    const reorderPointInput = dialog?.querySelector("#add-reorder-point") as HTMLInputElement
-                    
-                    // Handle location - check if dropdown or custom input
-                    const locationTrigger = dialog?.querySelector("#add-location-trigger") as HTMLElement
-                    const locationCustom = dialog?.querySelector("#add-location-custom") as HTMLInputElement
-                    const locationValue = locationTrigger?.getAttribute('data-value') === '__custom__' 
-                      ? locationCustom?.value?.trim() || ""
-                      : locationTrigger?.getAttribute('data-value') || ""
-                    
-                    // Handle supplier - check if dropdown or custom input  
-                    const supplierTrigger = dialog?.querySelector("#add-supplier-trigger") as HTMLElement
-                    const supplierCustom = dialog?.querySelector("#add-supplier-custom") as HTMLInputElement
-                    const supplierValue = supplierTrigger?.getAttribute('data-value') === '__custom__'
-                      ? supplierCustom?.value?.trim() || ""
-                      : supplierTrigger?.getAttribute('data-value') || ""
-                    
-                    // Handle package - check if dropdown or custom input
-                    const packageTrigger = dialog?.querySelector("#add-package-trigger") as HTMLElement
-                    const packageCustom = dialog?.querySelector("#add-package-custom") as HTMLInputElement
-                    const packageValue = packageTrigger?.getAttribute('data-value') === '__custom__'
-                      ? packageCustom?.value?.trim() || ""
-                      : packageTrigger?.getAttribute('data-value') || ""
-
-                    if (
-                      !requesterInput?.value?.trim() ||
-                      !partNumberInput?.value?.trim() ||
-                      !descriptionInput?.value?.trim() ||
-                      !quantityInput?.value?.trim()
-                    ) {
-                      alert("Please fill in all required fields")
-                      return
-                    }
-
-                    const newItem = {
-                      "Part number": partNumberInput.value.trim(),
-                      "MFG Part number": mfgPartNumberInput?.value?.trim() || "",
-                      "Part description": descriptionInput.value.trim(),
-                      QTY: Number.parseInt(quantityInput.value) || 0,
-                      Location: locationValue,
-                      Supplier: supplierValue,
-                      Package: packageValue,
-                      reorderPoint: Number.parseInt(reorderPointInput?.value) || alertSettings.defaultReorderPoint,
-                    }
-
-                    try {
-                      await addInventoryItem(newItem, requesterInput.value.trim())
-                      setAddItemFormModified(false) // Reset form modification flag
-                      // Close dialog
-                      const closeButton = document.querySelector(
-                        '[data-state="open"] button[aria-label="Close"]',
-                      ) as HTMLButtonElement
-                      closeButton?.click()
-                    } catch (error) {
-                      console.error("Failed to add item:", error)
-                    }
-                  }}
-                >
-                  Add Item
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          <Button onClick={handleDownloadExcel} variant="outline">
-            <Download className="w-4 h-4 mr-2" />
-            Download Excel
-          </Button>
-          <ProtectedUploadButton onUploadAuthorized={() => setShowUpload(true)} />
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Upload className="w-4 h-4 mr-2" />
-                Batch Upload
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[800px]">
-              <DialogHeader>
-                <DialogTitle>Batch Upload Inventory</DialogTitle>
-                <DialogDescription>
-                  Upload multiple inventory items at once using an Excel file
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium mb-2">📋 Excel Format Requirements:</h4>
-                  <ul className="text-sm space-y-1">
-                    <li>• <strong>Part Number</strong> - Required, unique identifier</li>
-                    <li>• <strong>MFG Part Number</strong> - Optional, manufacturer part number</li>
-                    <li>• <strong>Part Description</strong> - Required, item description</li>
-                    <li>• <strong>QTY</strong> - Required, quantity in stock</li>
-                    <li>• <strong>Location</strong> - Optional, storage location</li>
-                    <li>• <strong>Supplier</strong> - Optional, supplier name</li>
-                    <li>• <strong>Package</strong> - Optional, package type</li>
-                  </ul>
-                </div>
-                <div className="bg-yellow-50 p-4 rounded-lg">
-                  <h4 className="font-medium mb-2">⚠️ Important Notes:</h4>
-                  <ul className="text-sm space-y-1">
-                    <li>• Duplicate part numbers will be flagged for review</li>
-                    <li>• All items will be submitted for approval before adding to inventory</li>
-                    <li>• Use the same column headers as shown above</li>
-                    <li>• Save your file as .xlsx format</li>
-                  </ul>
-                </div>
-                <FileUpload onDataLoaded={handleDataLoaded} />
-              </div>
-            </DialogContent>
-          </Dialog>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <List className="w-4 h-4 mr-2" />
-                Batch Entry
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[1200px] max-h-[80vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Batch Entry - Multiple Items</DialogTitle>
-                <DialogDescription>
-                  Enter multiple inventory items manually
-                </DialogDescription>
-              </DialogHeader>
+              )}
+              
+              {/* Batch Entry Form */}
+              {addItemMode === 'batch' && (
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">
@@ -2139,98 +2056,172 @@ Please check your Slack configuration.`)
                     </tbody>
                   </table>
                 </div>
-                
-                <div className="flex justify-between items-center pt-4 border-t">
-                  <div className="text-sm text-gray-600">
-                    * Required fields
-                  </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setBatchEntryItems([{ 
-                          partNumber: '', 
-                          mfgPartNumber: '', 
-                          description: '', 
-                          quantity: '', 
-                          location: '', 
-                          supplier: '', 
-                          package: '',
-                          reorderPoint: alertSettings.defaultReorderPoint 
-                        }])
-                      }}
-                    >
-                      Clear All
-                    </Button>
-                    <Button 
-                      onClick={async () => {
-                        // Validate required fields
-                        const requesterName = prompt("Enter your name for this batch submission:")
-                        if (!requesterName) return
-                        
-                        const validItems = batchEntryItems.filter(item => 
-                          item.partNumber.trim() && 
-                          item.description.trim() && 
-                          item.quantity.trim()
-                        )
-                        
-                        if (validItems.length === 0) {
-                          alert("Please fill in at least one complete item (Part Number, Description, and Quantity are required)")
-                          return
-                        }
-                        
-                        // Submit each item
-                        let successCount = 0
-                        for (const item of validItems) {
-                          try {
-                            const newItem = {
-                              "Part number": item.partNumber.trim(),
-                              "MFG Part number": item.mfgPartNumber.trim(),
-                              "Part description": item.description.trim(),
-                              QTY: parseInt(item.quantity) || 0,
-                              Location: item.location.trim(),
-                              Supplier: item.supplier.trim(),
-                              Package: item.package.trim(),
-                              reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
-                            }
-                            
-                            await addInventoryItem(newItem, requesterName)
-                            successCount++
-                          } catch (error) {
-                            console.error(`Failed to add item ${item.partNumber}:`, error)
-                          }
-                        }
-                        
-                        alert(`✅ Batch entry completed! ${successCount} of ${validItems.length} items submitted for approval.`)
-                        
-                        // Reset form
-                        setBatchEntryItems([{ 
-                          partNumber: '', 
-                          mfgPartNumber: '', 
-                          description: '', 
-                          quantity: '', 
-                          location: '', 
-                          supplier: '', 
-                          package: '',
-                          reorderPoint: alertSettings.defaultReorderPoint 
-                        }])
-                        
-                        // Close dialog
-                        const closeButton = document.querySelector('[data-state="open"] button[aria-label="Close"]') as HTMLButtonElement
-                        closeButton?.click()
-                      }}
-                    >
-                      Submit Batch ({batchEntryItems.filter(item => 
+              </div>
+              )}
+              
+              <DialogFooter>
+                {addItemMode === 'single' ? (
+                <Button
+                  onClick={async (e) => {
+                    const dialog = (e.target as HTMLElement).closest('[role="dialog"]')
+                    const requesterInput = dialog?.querySelector("#add-requester") as HTMLInputElement
+                    const partNumberInput = dialog?.querySelector("#add-part-number") as HTMLInputElement
+                    const mfgPartNumberInput = dialog?.querySelector("#add-mfg-part-number") as HTMLInputElement
+                    const descriptionInput = dialog?.querySelector("#add-description") as HTMLInputElement
+                    const quantityInput = dialog?.querySelector("#add-quantity") as HTMLInputElement
+                    const reorderPointInput = dialog?.querySelector("#add-reorder-point") as HTMLInputElement
+                    
+                    // Handle location - check if dropdown or custom input
+                    const locationTrigger = dialog?.querySelector("#add-location-trigger") as HTMLElement
+                    const locationCustom = dialog?.querySelector("#add-location-custom") as HTMLInputElement
+                    const locationValue = locationTrigger?.getAttribute('data-value') === '__custom__' 
+                      ? locationCustom?.value?.trim() || ""
+                      : locationTrigger?.getAttribute('data-value') || ""
+                    
+                    // Handle supplier - check if dropdown or custom input  
+                    const supplierTrigger = dialog?.querySelector("#add-supplier-trigger") as HTMLElement
+                    const supplierCustom = dialog?.querySelector("#add-supplier-custom") as HTMLInputElement
+                    const supplierValue = supplierTrigger?.getAttribute('data-value') === '__custom__'
+                      ? supplierCustom?.value?.trim() || ""
+                      : supplierTrigger?.getAttribute('data-value') || ""
+                    
+                    // Handle package - check if dropdown or custom input
+                    const packageTrigger = dialog?.querySelector("#add-package-trigger") as HTMLElement
+                    const packageCustom = dialog?.querySelector("#add-package-custom") as HTMLInputElement
+                    const packageValue = packageTrigger?.getAttribute('data-value') === '__custom__'
+                      ? packageCustom?.value?.trim() || ""
+                      : packageTrigger?.getAttribute('data-value') || ""
+
+                    if (
+                      !requesterInput?.value?.trim() ||
+                      !partNumberInput?.value?.trim() ||
+                      !descriptionInput?.value?.trim() ||
+                      !quantityInput?.value?.trim()
+                    ) {
+                      alert("Please fill in all required fields")
+                      return
+                    }
+
+                    const newItem = {
+                      "Part number": partNumberInput.value.trim(),
+                      "MFG Part number": mfgPartNumberInput?.value?.trim() || "",
+                      "Part description": descriptionInput.value.trim(),
+                      QTY: Number.parseInt(quantityInput.value) || 0,
+                      Location: locationValue,
+                      Supplier: supplierValue,
+                      Package: packageValue,
+                      reorderPoint: Number.parseInt(reorderPointInput?.value) || alertSettings.defaultReorderPoint,
+                    }
+
+                    try {
+                      await addInventoryItem(newItem, requesterInput.value.trim())
+                      setAddItemFormModified(false) // Reset form modification flag
+                      // Close dialog
+                      const closeButton = document.querySelector(
+                        '[data-state="open"] button[aria-label="Close"]',
+                      ) as HTMLButtonElement
+                      closeButton?.click()
+                    } catch (error) {
+                      console.error("Failed to add item:", error)
+                    }
+                  }}
+                >
+                  Add Item
+                </Button>
+                ) : (
+                <div className="flex gap-2 w-full">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setBatchEntryItems([{ 
+                        partNumber: '', 
+                        mfgPartNumber: '', 
+                        description: '', 
+                        quantity: '', 
+                        location: '', 
+                        supplier: '', 
+                        package: '',
+                        reorderPoint: alertSettings.defaultReorderPoint 
+                      }])
+                    }}
+                  >
+                    Clear All
+                  </Button>
+                  <Button 
+                    className="flex-1"
+                    onClick={async () => {
+                      // Validate required fields
+                      const requesterName = prompt("Enter your name for this batch submission:")
+                      if (!requesterName) return
+                      
+                      const validItems = batchEntryItems.filter(item => 
                         item.partNumber.trim() && 
                         item.description.trim() && 
                         item.quantity.trim()
-                      ).length} items)
-                    </Button>
-                  </div>
+                      )
+                      
+                      if (validItems.length === 0) {
+                        alert("Please fill in at least one complete item (Part Number, Description, and Quantity are required)")
+                        return
+                      }
+                      
+                      // Submit each item
+                      let successCount = 0
+                      for (const item of validItems) {
+                        try {
+                          const newItem = {
+                            "Part number": item.partNumber.trim(),
+                            "MFG Part number": item.mfgPartNumber.trim(),
+                            "Part description": item.description.trim(),
+                            QTY: parseInt(item.quantity) || 0,
+                            Location: item.location.trim(),
+                            Supplier: item.supplier.trim(),
+                            Package: item.package.trim(),
+                            reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
+                          }
+                          
+                          await addInventoryItem(newItem, requesterName)
+                          successCount++
+                        } catch (error) {
+                          console.error(`Failed to add item ${item.partNumber}:`, error)
+                        }
+                      }
+                      
+                      alert(`✅ Batch entry completed! ${successCount} of ${validItems.length} items submitted for approval.`)
+                      
+                      // Reset form
+                      setBatchEntryItems([{ 
+                        partNumber: '', 
+                        mfgPartNumber: '', 
+                        description: '', 
+                        quantity: '', 
+                        location: '', 
+                        supplier: '', 
+                        package: '',
+                        reorderPoint: alertSettings.defaultReorderPoint 
+                      }])
+                      
+                      // Close dialog
+                      const closeButton = document.querySelector('[data-state="open"] button[aria-label="Close"]') as HTMLButtonElement
+                      closeButton?.click()
+                    }}
+                  >
+                    Submit Batch ({batchEntryItems.filter(item => 
+                      item.partNumber.trim() && 
+                      item.description.trim() && 
+                      item.quantity.trim()
+                    ).length} items)
+                  </Button>
                 </div>
-              </div>
+                )}
+              </DialogFooter>
             </DialogContent>
           </Dialog>
+          <Button onClick={handleDownloadExcel} variant="outline">
+            <Download className="w-4 h-4 mr-2" />
+            Download Excel
+          </Button>
+          <ProtectedUploadButton onUploadAuthorized={() => setShowUpload(true)} />
           <Button onClick={handleManualSync} variant="outline" disabled={syncing}>
             {syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
             {syncing ? "Syncing..." : "Sync to Database"}
