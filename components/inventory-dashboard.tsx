@@ -82,6 +82,7 @@ export default function InventoryDashboard() {
   const [editDialogOpen, setEditDialogOpen] = useState<Record<string, boolean>>({})
   const [addItemFormModified, setAddItemFormModified] = useState(false)
   const [addItemMode, setAddItemMode] = useState<'single' | 'batch'>('single')
+  const [addItemDialogOpen, setAddItemDialogOpen] = useState(false)
   const [duplicatePartInfo, setDuplicatePartInfo] = useState<{
     existingItem: any
     mode: 'single' | 'batch'
@@ -1106,7 +1107,49 @@ export default function InventoryDashboard() {
         return true
       }
 
-      // If not found in current inventory, check database
+      // Check pending approvals
+      try {
+        const pendingResponse = await fetch("/api/inventory/pending")
+        if (pendingResponse.ok) {
+          const pendingResult = await pendingResponse.json()
+          if (pendingResult.success && pendingResult.data) {
+            console.log(`📋 Checking ${pendingResult.data.length} pending changes`) // Debug log
+            
+            const pendingDuplicate = pendingResult.data.find((change: any) => 
+              change.status === "pending" && 
+              (change.item_data?.part_number?.toLowerCase() === partNumber.toLowerCase() ||
+               change.original_data?.part_number?.toLowerCase() === partNumber.toLowerCase())
+            )
+
+            if (pendingDuplicate) {
+              console.log(`⏳ Found duplicate in pending changes:`, pendingDuplicate) // Debug log
+              const itemData = pendingDuplicate.item_data || pendingDuplicate.original_data
+              setDuplicatePartInfo({
+                existingItem: {
+                  part_number: itemData.part_number,
+                  part_description: itemData.part_description,
+                  quantity: itemData.quantity,
+                  location: itemData.location,
+                  supplier: itemData.supplier,
+                  package: itemData.package,
+                  mfg_part_number: itemData.mfg_part_number,
+                  reorder_point: itemData.reorder_point || alertSettings.defaultReorderPoint,
+                  isPending: true // Flag to indicate this is from pending changes
+                },
+                mode,
+                batchIndex
+              })
+              setShowDuplicateDialog(true)
+              setCheckingDuplicate(false)
+              return true
+            }
+          }
+        }
+      } catch (pendingError) {
+        console.error("Error checking pending changes:", pendingError)
+      }
+
+      // If not found in current inventory or pending, check database
       const response = await fetch("/api/inventory/load-from-db")
       if (response.ok) {
         const data = await response.json()
@@ -1710,20 +1753,22 @@ Please check your Slack configuration.`)
           <p className="text-muted-foreground">Managing {inventory.length} inventory items</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Dialog onOpenChange={(open) => {
+          <Dialog open={addItemDialogOpen} onOpenChange={(open) => {
             if (!open && addItemFormModified) {
               // User is trying to close the dialog with unsaved changes
               const confirmClose = confirm("You have unsaved changes. Are you sure you want to cancel and lose your changes?")
               if (!confirmClose) {
-                return // Prevent closing
+                return // Don't close the dialog
               }
               setAddItemFormModified(false)
             }
+            setAddItemDialogOpen(open)
           }}>
             <DialogTrigger asChild>
               <Button onClick={() => {
                 setAddItemFormModified(false)
                 setAddItemMode('single')
+                setAddItemDialogOpen(true)
                 setBatchEntryItems([{ 
                   partNumber: '', 
                   mfgPartNumber: '', 
@@ -2220,10 +2265,7 @@ Please check your Slack configuration.`)
                       await addInventoryItem(newItem, requesterInput.value.trim())
                       setAddItemFormModified(false) // Reset form modification flag
                       // Close dialog
-                      const closeButton = document.querySelector(
-                        '[data-state="open"] button[aria-label="Close"]',
-                      ) as HTMLButtonElement
-                      closeButton?.click()
+                      setAddItemDialogOpen(false)
                     } catch (error) {
                       console.error("Failed to add item:", error)
                     }
@@ -2305,8 +2347,7 @@ Please check your Slack configuration.`)
                       }])
                       
                       // Close dialog
-                      const closeButton = document.querySelector('[data-state="open"] button[aria-label="Close"]') as HTMLButtonElement
-                      closeButton?.click()
+                      setAddItemDialogOpen(false)
                     }}
                   >
                     Submit Batch ({batchEntryItems.filter(item => 
@@ -2333,18 +2374,24 @@ Please check your Slack configuration.`)
               
               {duplicatePartInfo && (
                 <div className="space-y-4">
-                  <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-                    <h4 className="font-medium text-yellow-800 mb-2">Existing Item Information:</h4>
+                  <div className={`p-4 rounded-lg border ${duplicatePartInfo.existingItem.isPending ? 'bg-orange-50 border-orange-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                    <h4 className={`font-medium mb-2 ${duplicatePartInfo.existingItem.isPending ? 'text-orange-800' : 'text-yellow-800'}`}>
+                      {duplicatePartInfo.existingItem.isPending ? 'Pending Item Information:' : 'Existing Item Information:'}
+                    </h4>
                     <div className="text-sm space-y-1">
                       <div><strong>Part Number:</strong> {duplicatePartInfo.existingItem.part_number}</div>
                       <div><strong>Description:</strong> {duplicatePartInfo.existingItem.part_description}</div>
-                      <div><strong>Current Quantity:</strong> {duplicatePartInfo.existingItem.quantity} units</div>
+                      <div><strong>Quantity:</strong> {duplicatePartInfo.existingItem.quantity} units</div>
                       <div><strong>Location:</strong> {duplicatePartInfo.existingItem.location}</div>
                       <div><strong>Supplier:</strong> {duplicatePartInfo.existingItem.supplier}</div>
                       <div><strong>Package:</strong> {duplicatePartInfo.existingItem.package}</div>
+                      {duplicatePartInfo.existingItem.isPending && (
+                        <div className="text-orange-600 font-medium">⏳ This item is awaiting approval</div>
+                      )}
                     </div>
                   </div>
                   
+                  {!duplicatePartInfo.existingItem.isPending && (
                   <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                     <h4 className="font-medium text-blue-800 mb-2">Add to Existing Stock:</h4>
                     <div className="space-y-3">
@@ -2368,6 +2415,7 @@ Please check your Slack configuration.`)
                       </div>
                     </div>
                   </div>
+                  )}
                 </div>
               )}
               
@@ -2375,6 +2423,7 @@ Please check your Slack configuration.`)
                 <Button variant="outline" onClick={() => setShowDuplicateDialog(false)}>
                   Cancel
                 </Button>
+                {!duplicatePartInfo?.existingItem.isPending && (
                 <Button 
                   onClick={async () => {
                     if (!duplicatePartInfo) return
@@ -2436,6 +2485,7 @@ Please check your Slack configuration.`)
                 >
                   Add to Stock
                 </Button>
+                )}
                 <Button 
                   variant="outline"
                   onClick={() => {
