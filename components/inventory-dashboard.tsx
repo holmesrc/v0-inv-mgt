@@ -1084,21 +1084,30 @@ export default function InventoryDashboard() {
     if (!partNumber.trim()) return false
 
     console.log(`🔍 Checking for duplicate: "${partNumber}"`) // Debug log
-    console.log(`📊 Current inventory has ${inventory.length} items`) // Debug log
-    
-    // Debug: Show first few inventory items to check structure
-    if (inventory.length > 0) {
-      console.log("📊 Sample inventory item:", inventory[0])
-      console.log("📊 Sample part numbers:", inventory.slice(0, 3).map(item => item["Part number"]))
-    }
-    
     setCheckingDuplicate(true)
 
     try {
-      // First check current inventory state
-      const existingItem = inventory.find(
+      // First get the most current inventory data directly from the database
+      console.log("🗄️ Getting fresh inventory data for duplicate check...") // Debug
+      let currentInventoryData: any[] = []
+      
+      try {
+        const response = await fetch("/api/inventory/load-from-db")
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success && data.items) {
+            currentInventoryData = data.items
+            console.log(`📊 Fresh inventory data: ${currentInventoryData.length} items`) // Debug
+          }
+        }
+      } catch (error) {
+        console.error("Error loading fresh inventory:", error)
+      }
+
+      // Check current inventory data
+      const existingItem = currentInventoryData.find(
         (item: any) => {
-          const itemPartNumber = item["Part number"]?.toLowerCase()
+          const itemPartNumber = item.part_number?.toLowerCase()
           const searchPartNumber = partNumber.toLowerCase()
           console.log(`🔍 Comparing "${itemPartNumber}" with "${searchPartNumber}"`) // Debug
           return itemPartNumber === searchPartNumber
@@ -1108,16 +1117,7 @@ export default function InventoryDashboard() {
       if (existingItem) {
         console.log(`✅ Found duplicate in current inventory:`, existingItem) // Debug log
         setDuplicatePartInfo({
-          existingItem: {
-            part_number: existingItem["Part number"],
-            part_description: existingItem["Part description"],
-            quantity: existingItem["QTY"],
-            location: existingItem["Location"],
-            supplier: existingItem["Supplier"],
-            package: existingItem["Package"],
-            mfg_part_number: existingItem["MFG Part number"],
-            reorder_point: existingItem["Reorder Point"] || alertSettings.defaultReorderPoint
-          },
+          existingItem: existingItem,
           mode,
           batchIndex
         })
@@ -1180,38 +1180,7 @@ export default function InventoryDashboard() {
         console.error("Error checking pending changes:", pendingError)
       }
 
-      // If not found in current inventory or pending, check database
-      const response = await fetch("/api/inventory/load-from-db")
-      if (response.ok) {
-        const data = await response.json()
-        console.log(`📊 Loaded ${data.items?.length || 0} items from database`) // Debug log
-        
-        // Debug: Show sample database items
-        if (data.items && data.items.length > 0) {
-          console.log("📊 Sample database item:", data.items[0])
-          console.log("📊 Sample database part numbers:", data.items.slice(0, 3).map((item: any) => item.part_number))
-        }
-        
-        const dbExistingItem = data.items?.find(
-          (item: any) => item.part_number?.toLowerCase() === partNumber.toLowerCase()
-        )
-
-        if (dbExistingItem) {
-          console.log(`✅ Found duplicate in database:`, dbExistingItem) // Debug log
-          setDuplicatePartInfo({
-            existingItem: dbExistingItem,
-            mode,
-            batchIndex
-          })
-          setShowDuplicateDialog(true)
-          setCheckingDuplicate(false)
-          return true
-        } else {
-          console.log(`❌ No duplicate found for: "${partNumber}"`) // Debug log
-        }
-      } else {
-        console.error("Failed to load inventory data:", response.status)
-      }
+      console.log(`❌ No duplicate found for: "${partNumber}"`) // Debug log
     } catch (error) {
       console.error("Error checking for duplicates:", error)
     }
