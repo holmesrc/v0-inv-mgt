@@ -12,14 +12,17 @@ export async function GET(request: NextRequest) {
       return new Response(`
         <!DOCTYPE html>
         <html>
-        <head><title>Invalid Request</title></head>
+        <head>
+          <title>Invalid Request</title>
+          <meta charset="UTF-8">
+        </head>
         <body>
-          <h1>❌ Invalid Request</h1>
+          <h1>Invalid Request</h1>
           <p>Missing required parameters: action, part, or quantity</p>
         </body>
         </html>
       `, {
-        headers: { 'Content-Type': 'text/html' }
+        headers: { 'Content-Type': 'text/html; charset=utf-8' }
       })
     }
 
@@ -79,74 +82,132 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Return a confirmation page
+    // Return a clean confirmation page that auto-closes
     return new Response(`
       <!DOCTYPE html>
       <html>
       <head>
         <title>${actionText}</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
           body { 
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            max-width: 600px; 
+            max-width: 500px; 
             margin: 50px auto; 
             padding: 20px;
             background: #f5f5f5;
+            text-align: center;
           }
           .card {
             background: white;
             padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            text-align: center;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
           }
-          .emoji { font-size: 48px; margin-bottom: 20px; }
-          .title { color: ${actionColor}; margin-bottom: 10px; }
-          .details { background: #f8f9fa; padding: 15px; border-radius: 6px; margin: 20px 0; }
-          .button { 
-            background: ${actionColor}; 
-            color: white; 
-            padding: 10px 20px; 
-            border: none; 
-            border-radius: 6px; 
-            text-decoration: none;
-            display: inline-block;
+          .emoji { 
+            font-size: 64px; 
+            margin-bottom: 20px; 
+            display: block;
+          }
+          .title { 
+            color: ${actionColor}; 
+            margin-bottom: 20px;
+            font-size: 24px;
+            font-weight: 600;
+          }
+          .details { 
+            background: #f8f9fa; 
+            padding: 20px; 
+            border-radius: 8px; 
+            margin: 20px 0;
+            text-align: left;
+          }
+          .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e9ecef;
+          }
+          .detail-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+          }
+          .label { font-weight: 600; color: #495057; }
+          .value { color: #212529; }
+          .success-message {
+            color: #28a745;
+            font-weight: 500;
+            margin: 20px 0;
+          }
+          .auto-close {
+            color: #6c757d;
+            font-size: 14px;
             margin-top: 20px;
           }
         </style>
+        <script>
+          // Auto-close after 3 seconds
+          setTimeout(function() {
+            window.close();
+          }, 3000);
+        </script>
       </head>
       <body>
         <div class="card">
-          <div class="emoji">${actionEmoji}</div>
+          <span class="emoji">${actionEmoji}</span>
           <h1 class="title">${actionText}</h1>
+          
           <div class="details">
-            <strong>Part Number:</strong> ${partNumber}<br>
-            <strong>Quantity:</strong> ${quantity} units<br>
-            <strong>Decision by:</strong> ${user}<br>
-            <strong>Time:</strong> ${new Date().toLocaleString()}
+            <div class="detail-row">
+              <span class="label">Part Number:</span>
+              <span class="value">${partNumber}</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">Quantity:</span>
+              <span class="value">${quantity} units</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">Decision by:</span>
+              <span class="value">${user}</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">Time:</span>
+              <span class="value">${new Date().toLocaleString()}</span>
+            </div>
           </div>
-          <p>A notification has been sent to the Slack channel.</p>
-          <a href="javascript:window.close()" class="button">Close Window</a>
+          
+          <div class="success-message">
+            ✓ Notification sent to Slack channel
+          </div>
+          
+          <div class="auto-close">
+            This window will close automatically in 3 seconds
+          </div>
         </div>
       </body>
       </html>
     `, {
-      headers: { 'Content-Type': 'text/html' }
+      headers: { 'Content-Type': 'text/html; charset=utf-8' }
     })
 
   } catch (error) {
-    console.error('❌ Order action error:', error)
+    console.error('Order action error:', error)
     return new Response(`
       <!DOCTYPE html>
       <html>
-      <head><title>Error</title></head>
+      <head>
+        <title>Error</title>
+        <meta charset="UTF-8">
+      </head>
       <body>
-        <h1>❌ Error</h1>
+        <h1>Error</h1>
         <p>Failed to process order action: ${error instanceof Error ? error.message : 'Unknown error'}</p>
       </body>
       </html>
     `, {
-      headers: { 'Content-Type': 'text/html' }
+      headers: { 'Content-Type': 'text/html; charset=utf-8' }
     })
   }
 }
