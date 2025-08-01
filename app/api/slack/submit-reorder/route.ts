@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
                 emoji: true
               },
               style: "primary",
-              url: `${baseUrl}/api/slack/order-action?action=approve&part=${encodeURIComponent(partNumber)}&qty=${encodeURIComponent(quantity)}&user=SlackUser`,
+              url: `${baseUrl}/api/slack/order-action?action=approve&part=${encodeURIComponent(partNumber)}&qty=${encodeURIComponent(quantity)}&requester=${encodeURIComponent(requester)}`,
               action_id: "approve_order"
             },
             {
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
                 text: "📝 Request Changes",
                 emoji: true
               },
-              url: `${baseUrl}/api/slack/order-action?action=changes&part=${encodeURIComponent(partNumber)}&qty=${encodeURIComponent(quantity)}&user=SlackUser`,
+              url: `${baseUrl}/api/slack/order-action?action=changes&part=${encodeURIComponent(partNumber)}&qty=${encodeURIComponent(quantity)}&requester=${encodeURIComponent(requester)}`,
               action_id: "request_changes"
             },
             {
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
                 emoji: true
               },
               style: "danger",
-              url: `${baseUrl}/api/slack/order-action?action=deny&part=${encodeURIComponent(partNumber)}&qty=${encodeURIComponent(quantity)}&user=SlackUser`,
+              url: `${baseUrl}/api/slack/order-action?action=deny&part=${encodeURIComponent(partNumber)}&qty=${encodeURIComponent(quantity)}&requester=${encodeURIComponent(requester)}`,
               action_id: "deny_order"
             }
           ]
