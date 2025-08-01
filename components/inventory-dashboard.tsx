@@ -31,6 +31,7 @@ import {
   Database,
   Plus,
   FileText,
+  Upload,
 } from "lucide-react"
 import type { InventoryItem, PurchaseRequest, AlertSettings } from "@/types/inventory"
 import {
@@ -80,6 +81,16 @@ export default function InventoryDashboard() {
   // Add this with the other state declarations
   const [editDialogOpen, setEditDialogOpen] = useState<Record<string, boolean>>({})
   const [addItemFormModified, setAddItemFormModified] = useState(false)
+  const [batchEntryItems, setBatchEntryItems] = useState<any[]>([{ 
+    partNumber: '', 
+    mfgPartNumber: '', 
+    description: '', 
+    quantity: '', 
+    location: '', 
+    supplier: '', 
+    package: '',
+    reorderPoint: alertSettings.defaultReorderPoint 
+  }])
 
   // Load data from database on component mount
   useEffect(() => {
@@ -1894,6 +1905,332 @@ Please check your Slack configuration.`)
             Download Excel
           </Button>
           <ProtectedUploadButton onUploadAuthorized={() => setShowUpload(true)} />
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Upload className="w-4 h-4 mr-2" />
+                Batch Upload
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[800px]">
+              <DialogHeader>
+                <DialogTitle>Batch Upload Inventory</DialogTitle>
+                <DialogDescription>
+                  Upload multiple inventory items at once using an Excel file
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h4 className="font-medium mb-2">📋 Excel Format Requirements:</h4>
+                  <ul className="text-sm space-y-1">
+                    <li>• <strong>Part Number</strong> - Required, unique identifier</li>
+                    <li>• <strong>MFG Part Number</strong> - Optional, manufacturer part number</li>
+                    <li>• <strong>Part Description</strong> - Required, item description</li>
+                    <li>• <strong>QTY</strong> - Required, quantity in stock</li>
+                    <li>• <strong>Location</strong> - Optional, storage location</li>
+                    <li>• <strong>Supplier</strong> - Optional, supplier name</li>
+                    <li>• <strong>Package</strong> - Optional, package type</li>
+                  </ul>
+                </div>
+                <div className="bg-yellow-50 p-4 rounded-lg">
+                  <h4 className="font-medium mb-2">⚠️ Important Notes:</h4>
+                  <ul className="text-sm space-y-1">
+                    <li>• Duplicate part numbers will be flagged for review</li>
+                    <li>• All items will be submitted for approval before adding to inventory</li>
+                    <li>• Use the same column headers as shown above</li>
+                    <li>• Save your file as .xlsx format</li>
+                  </ul>
+                </div>
+                <FileUpload onDataLoaded={handleDataLoaded} />
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <List className="w-4 h-4 mr-2" />
+                Batch Entry
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[1200px] max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Batch Entry - Multiple Items</DialogTitle>
+                <DialogDescription>
+                  Enter multiple inventory items manually
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">
+                    {batchEntryItems.length} item(s) in batch
+                  </span>
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => setBatchEntryItems([...batchEntryItems, { 
+                        partNumber: '', 
+                        mfgPartNumber: '', 
+                        description: '', 
+                        quantity: '', 
+                        location: '', 
+                        supplier: '', 
+                        package: '',
+                        reorderPoint: alertSettings.defaultReorderPoint 
+                      }])}
+                    >
+                      <Plus className="w-3 h-3 mr-1" />
+                      Add Row
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => setBatchEntryItems(batchEntryItems.slice(0, -1))}
+                      disabled={batchEntryItems.length <= 1}
+                    >
+                      Remove Row
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="border rounded-lg overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="p-2 text-left border-r">Part Number *</th>
+                        <th className="p-2 text-left border-r">MFG Part #</th>
+                        <th className="p-2 text-left border-r">Description *</th>
+                        <th className="p-2 text-left border-r">Quantity *</th>
+                        <th className="p-2 text-left border-r">Location</th>
+                        <th className="p-2 text-left border-r">Supplier</th>
+                        <th className="p-2 text-left border-r">Package</th>
+                        <th className="p-2 text-left">Reorder Point</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {batchEntryItems.map((item, index) => (
+                        <tr key={index} className="border-t">
+                          <td className="p-1 border-r">
+                            <Input
+                              value={item.partNumber}
+                              onChange={(e) => {
+                                const newItems = [...batchEntryItems]
+                                newItems[index].partNumber = e.target.value
+                                setBatchEntryItems(newItems)
+                              }}
+                              placeholder="Part number"
+                              className="h-8 text-xs"
+                            />
+                          </td>
+                          <td className="p-1 border-r">
+                            <Input
+                              value={item.mfgPartNumber}
+                              onChange={(e) => {
+                                const newItems = [...batchEntryItems]
+                                newItems[index].mfgPartNumber = e.target.value
+                                setBatchEntryItems(newItems)
+                              }}
+                              placeholder="MFG part"
+                              className="h-8 text-xs"
+                            />
+                          </td>
+                          <td className="p-1 border-r">
+                            <Input
+                              value={item.description}
+                              onChange={(e) => {
+                                const newItems = [...batchEntryItems]
+                                newItems[index].description = e.target.value
+                                setBatchEntryItems(newItems)
+                              }}
+                              placeholder="Description"
+                              className="h-8 text-xs"
+                            />
+                          </td>
+                          <td className="p-1 border-r">
+                            <Input
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const newItems = [...batchEntryItems]
+                                newItems[index].quantity = e.target.value
+                                
+                                // Auto-suggest package type based on quantity
+                                const qty = parseInt(e.target.value) || 0
+                                let suggestedPackage = ""
+                                if (qty === 1) suggestedPackage = "Each"
+                                else if (qty <= 10) suggestedPackage = "Small Pack"
+                                else if (qty <= 100) suggestedPackage = "Medium Pack"
+                                else if (qty <= 1000) suggestedPackage = "Large Pack"
+                                else suggestedPackage = "Bulk"
+                                
+                                if (suggestedPackage && packageTypes.includes(suggestedPackage)) {
+                                  newItems[index].package = suggestedPackage
+                                }
+                                
+                                setBatchEntryItems(newItems)
+                              }}
+                              placeholder="Qty"
+                              className="h-8 text-xs"
+                            />
+                          </td>
+                          <td className="p-1 border-r">
+                            <select
+                              value={item.location}
+                              onChange={(e) => {
+                                const newItems = [...batchEntryItems]
+                                newItems[index].location = e.target.value
+                                setBatchEntryItems(newItems)
+                              }}
+                              className="h-8 text-xs w-full border border-gray-300 rounded px-2"
+                            >
+                              <option value="">Select location</option>
+                              <option value={suggestedLocation}>⭐ {suggestedLocation}</option>
+                              {uniqueLocations.map(loc => (
+                                <option key={loc} value={loc}>{loc}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="p-1 border-r">
+                            <select
+                              value={item.supplier}
+                              onChange={(e) => {
+                                const newItems = [...batchEntryItems]
+                                newItems[index].supplier = e.target.value
+                                setBatchEntryItems(newItems)
+                              }}
+                              className="h-8 text-xs w-full border border-gray-300 rounded px-2"
+                            >
+                              <option value="">Select supplier</option>
+                              {suppliers.map(supplier => (
+                                <option key={supplier} value={supplier}>{supplier}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="p-1 border-r">
+                            <select
+                              value={item.package}
+                              onChange={(e) => {
+                                const newItems = [...batchEntryItems]
+                                newItems[index].package = e.target.value
+                                setBatchEntryItems(newItems)
+                              }}
+                              className="h-8 text-xs w-full border border-gray-300 rounded px-2"
+                            >
+                              <option value="">Select package</option>
+                              {packageTypes.map(pkg => (
+                                <option key={pkg} value={pkg}>{pkg}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="p-1">
+                            <Input
+                              type="number"
+                              value={item.reorderPoint}
+                              onChange={(e) => {
+                                const newItems = [...batchEntryItems]
+                                newItems[index].reorderPoint = parseInt(e.target.value) || alertSettings.defaultReorderPoint
+                                setBatchEntryItems(newItems)
+                              }}
+                              className="h-8 text-xs"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                
+                <div className="flex justify-between items-center pt-4 border-t">
+                  <div className="text-sm text-gray-600">
+                    * Required fields
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setBatchEntryItems([{ 
+                          partNumber: '', 
+                          mfgPartNumber: '', 
+                          description: '', 
+                          quantity: '', 
+                          location: '', 
+                          supplier: '', 
+                          package: '',
+                          reorderPoint: alertSettings.defaultReorderPoint 
+                        }])
+                      }}
+                    >
+                      Clear All
+                    </Button>
+                    <Button 
+                      onClick={async () => {
+                        // Validate required fields
+                        const requesterName = prompt("Enter your name for this batch submission:")
+                        if (!requesterName) return
+                        
+                        const validItems = batchEntryItems.filter(item => 
+                          item.partNumber.trim() && 
+                          item.description.trim() && 
+                          item.quantity.trim()
+                        )
+                        
+                        if (validItems.length === 0) {
+                          alert("Please fill in at least one complete item (Part Number, Description, and Quantity are required)")
+                          return
+                        }
+                        
+                        // Submit each item
+                        let successCount = 0
+                        for (const item of validItems) {
+                          try {
+                            const newItem = {
+                              "Part number": item.partNumber.trim(),
+                              "MFG Part number": item.mfgPartNumber.trim(),
+                              "Part description": item.description.trim(),
+                              QTY: parseInt(item.quantity) || 0,
+                              Location: item.location.trim(),
+                              Supplier: item.supplier.trim(),
+                              Package: item.package.trim(),
+                              reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
+                            }
+                            
+                            await addInventoryItem(newItem, requesterName)
+                            successCount++
+                          } catch (error) {
+                            console.error(`Failed to add item ${item.partNumber}:`, error)
+                          }
+                        }
+                        
+                        alert(`✅ Batch entry completed! ${successCount} of ${validItems.length} items submitted for approval.`)
+                        
+                        // Reset form
+                        setBatchEntryItems([{ 
+                          partNumber: '', 
+                          mfgPartNumber: '', 
+                          description: '', 
+                          quantity: '', 
+                          location: '', 
+                          supplier: '', 
+                          package: '',
+                          reorderPoint: alertSettings.defaultReorderPoint 
+                        }])
+                        
+                        // Close dialog
+                        const closeButton = document.querySelector('[data-state="open"] button[aria-label="Close"]') as HTMLButtonElement
+                        closeButton?.click()
+                      }}
+                    >
+                      Submit Batch ({batchEntryItems.filter(item => 
+                        item.partNumber.trim() && 
+                        item.description.trim() && 
+                        item.quantity.trim()
+                      ).length} items)
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <Button onClick={handleManualSync} variant="outline" disabled={syncing}>
             {syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
             {syncing ? "Syncing..." : "Sync to Database"}
