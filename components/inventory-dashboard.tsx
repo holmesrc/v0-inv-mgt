@@ -1187,8 +1187,10 @@ export default function InventoryDashboard() {
   const debouncedDuplicateCheck = useMemo(() => {
     let timeoutId: NodeJS.Timeout
     return (partNumber: string, mode: 'single' | 'batch', batchIndex?: number) => {
+      console.log("⏰ Debounced check called for:", partNumber) // Debug
       clearTimeout(timeoutId)
       timeoutId = setTimeout(() => {
+        console.log("⏰ Debounce timeout triggered, calling checkForDuplicatePart") // Debug
         checkForDuplicatePart(partNumber, mode, batchIndex)
       }, 500) // 500ms delay after user stops typing
     }
@@ -1837,9 +1839,12 @@ Please check your Slack configuration.`)
                         placeholder="Enter part number" 
                         required 
                         onChange={(e) => {
+                          console.log("🔍 Part number input changed:", e.target.value) // Debug
                           setAddItemFormModified(true)
                           const partNumber = e.target.value.trim()
+                          console.log("🔍 Trimmed part number:", partNumber) // Debug
                           if (partNumber.length >= 2) { // Start checking after 2 characters
+                            console.log("🔍 Triggering duplicate check for:", partNumber) // Debug
                             debouncedDuplicateCheck(partNumber, 'single')
                           }
                         }}
@@ -1879,24 +1884,40 @@ Please check your Slack configuration.`)
                       placeholder="Enter quantity" 
                       required 
                       onChange={(e) => {
+                        console.log("📦 Quantity changed:", e.target.value) // Debug
                         setAddItemFormModified(true)
                         const quantity = parseInt(e.target.value) || 0
-                        const packageTrigger = document.querySelector("#add-package-trigger") as HTMLElement
-                        const packageCustom = document.querySelector("#add-package-custom") as HTMLInputElement
+                        console.log("📦 Parsed quantity:", quantity) // Debug
                         
                         // Auto-select package type based on new quantity rules
                         const suggestedPackage = getSuggestedPackage(quantity)
+                        console.log("📦 Suggested package:", suggestedPackage) // Debug
                         
-                        if (suggestedPackage && packageTypes.includes(suggestedPackage)) {
-                          // Set the dropdown value
-                          packageTrigger?.setAttribute('data-value', suggestedPackage)
-                          const valueSpan = packageTrigger?.querySelector('[data-placeholder]')
-                          if (valueSpan) {
-                            valueSpan.textContent = suggestedPackage
+                        // Find the package select element and update it
+                        setTimeout(() => {
+                          const packageSelect = document.querySelector("#add-package-trigger") as HTMLElement
+                          console.log("📦 Package select element:", packageSelect) // Debug
+                          
+                          if (packageSelect && suggestedPackage && packageTypes.includes(suggestedPackage)) {
+                            console.log("📦 Updating package to:", suggestedPackage) // Debug
+                            
+                            // Update the select value
+                            packageSelect.setAttribute('data-value', suggestedPackage)
+                            
+                            // Update the display text
+                            const valueSpan = packageSelect.querySelector('[data-placeholder]') || packageSelect.querySelector('span')
+                            if (valueSpan) {
+                              valueSpan.textContent = suggestedPackage
+                              console.log("📦 Updated display text to:", suggestedPackage) // Debug
+                            }
+                            
+                            // Hide custom input if it was showing
+                            const packageCustom = document.querySelector("#add-package-custom") as HTMLInputElement
+                            if (packageCustom) {
+                              packageCustom.classList.add("hidden")
+                            }
                           }
-                          // Hide custom input if it was showing
-                          packageCustom?.classList.add("hidden")
-                        }
+                        }, 100) // Small delay to ensure DOM is ready
                       }}
                     />
                   </div>
