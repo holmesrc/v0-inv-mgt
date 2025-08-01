@@ -1454,16 +1454,97 @@ Please check your Slack configuration.`)
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Location</Label>
-                    <Input id="add-location" placeholder="Enter location" />
+                    <Select onValueChange={(value) => {
+                      const customInput = document.querySelector("#add-location-custom") as HTMLInputElement
+                      const trigger = document.querySelector("#add-location-trigger") as HTMLElement
+                      if (value === "__custom__") {
+                        customInput?.classList.remove("hidden")
+                        customInput?.focus()
+                      } else {
+                        customInput?.classList.add("hidden")
+                      }
+                      trigger?.setAttribute('data-value', value)
+                    }}>
+                      <SelectTrigger id="add-location-trigger">
+                        <SelectValue placeholder="Select or enter location" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {uniqueLocations.map((location) => (
+                          <SelectItem key={location} value={location}>
+                            {location}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__custom__">+ Enter custom location</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input 
+                      id="add-location-custom" 
+                      placeholder="Enter new location" 
+                      className="mt-2 hidden"
+                    />
                   </div>
                   <div>
                     <Label>Supplier</Label>
-                    <Input id="add-supplier" placeholder="Enter supplier" />
+                    <Select onValueChange={(value) => {
+                      const customInput = document.querySelector("#add-supplier-custom") as HTMLInputElement
+                      const trigger = document.querySelector("#add-supplier-trigger") as HTMLElement
+                      if (value === "__custom__") {
+                        customInput?.classList.remove("hidden")
+                        customInput?.focus()
+                      } else {
+                        customInput?.classList.add("hidden")
+                      }
+                      trigger?.setAttribute('data-value', value)
+                    }}>
+                      <SelectTrigger id="add-supplier-trigger">
+                        <SelectValue placeholder="Select or enter supplier" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {suppliers.map((supplier) => (
+                          <SelectItem key={supplier} value={supplier}>
+                            {supplier}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__custom__">+ Enter custom supplier</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input 
+                      id="add-supplier-custom" 
+                      placeholder="Enter new supplier" 
+                      className="mt-2 hidden"
+                    />
                   </div>
                 </div>
                 <div>
                   <Label>Package Type</Label>
-                  <Input id="add-package" placeholder="Enter package type" />
+                  <Select onValueChange={(value) => {
+                    const customInput = document.querySelector("#add-package-custom") as HTMLInputElement
+                    const trigger = document.querySelector("#add-package-trigger") as HTMLElement
+                    if (value === "__custom__") {
+                      customInput?.classList.remove("hidden")
+                      customInput?.focus()
+                    } else {
+                      customInput?.classList.add("hidden")
+                    }
+                    trigger?.setAttribute('data-value', value)
+                  }}>
+                    <SelectTrigger id="add-package-trigger">
+                      <SelectValue placeholder="Select or enter package type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {packageTypes.map((packageType) => (
+                        <SelectItem key={packageType} value={packageType}>
+                          {packageType}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="__custom__">+ Enter custom package</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input 
+                    id="add-package-custom" 
+                    placeholder="Enter new package type" 
+                    className="mt-2 hidden"
+                  />
                 </div>
               </div>
               <DialogFooter>
@@ -1476,9 +1557,27 @@ Please check your Slack configuration.`)
                     const descriptionInput = dialog?.querySelector("#add-description") as HTMLInputElement
                     const quantityInput = dialog?.querySelector("#add-quantity") as HTMLInputElement
                     const reorderPointInput = dialog?.querySelector("#add-reorder-point") as HTMLInputElement
-                    const locationInput = dialog?.querySelector("#add-location") as HTMLInputElement
-                    const supplierInput = dialog?.querySelector("#add-supplier") as HTMLInputElement
-                    const packageInput = dialog?.querySelector("#add-package") as HTMLInputElement
+                    
+                    // Handle location - check if dropdown or custom input
+                    const locationTrigger = dialog?.querySelector("#add-location-trigger") as HTMLElement
+                    const locationCustom = dialog?.querySelector("#add-location-custom") as HTMLInputElement
+                    const locationValue = locationTrigger?.getAttribute('data-value') === '__custom__' 
+                      ? locationCustom?.value?.trim() || ""
+                      : locationTrigger?.getAttribute('data-value') || ""
+                    
+                    // Handle supplier - check if dropdown or custom input  
+                    const supplierTrigger = dialog?.querySelector("#add-supplier-trigger") as HTMLElement
+                    const supplierCustom = dialog?.querySelector("#add-supplier-custom") as HTMLInputElement
+                    const supplierValue = supplierTrigger?.getAttribute('data-value') === '__custom__'
+                      ? supplierCustom?.value?.trim() || ""
+                      : supplierTrigger?.getAttribute('data-value') || ""
+                    
+                    // Handle package - check if dropdown or custom input
+                    const packageTrigger = dialog?.querySelector("#add-package-trigger") as HTMLElement
+                    const packageCustom = dialog?.querySelector("#add-package-custom") as HTMLInputElement
+                    const packageValue = packageTrigger?.getAttribute('data-value') === '__custom__'
+                      ? packageCustom?.value?.trim() || ""
+                      : packageTrigger?.getAttribute('data-value') || ""
 
                     if (
                       !requesterInput?.value?.trim() ||
@@ -1495,9 +1594,9 @@ Please check your Slack configuration.`)
                       "MFG Part number": mfgPartNumberInput?.value?.trim() || "",
                       "Part description": descriptionInput.value.trim(),
                       QTY: Number.parseInt(quantityInput.value) || 0,
-                      Location: locationInput?.value?.trim() || "",
-                      Supplier: supplierInput?.value?.trim() || "",
-                      Package: packageInput?.value?.trim() || "",
+                      Location: locationValue,
+                      Supplier: supplierValue,
+                      Package: packageValue,
                       reorderPoint: Number.parseInt(reorderPointInput?.value) || alertSettings.defaultReorderPoint,
                     }
 
