@@ -1092,38 +1092,74 @@ export default function InventoryDashboard() {
       let currentInventoryData: any[] = []
       
       try {
-        const response = await fetch("/api/inventory/load-from-db")
+        const response = await fetch("/api/inventory/load-from-db", {
+          method: "GET",
+          headers: { "Cache-Control": "no-cache" },
+        })
+        console.log("🗄️ Database response status:", response.status) // Debug
+        
         if (response.ok) {
           const data = await response.json()
-          if (data.success && data.items) {
-            currentInventoryData = data.items
+          console.log("🗄️ Database response data:", data) // Debug
+          
+          if (data.success && data.data && data.data.length > 0) {
+            currentInventoryData = data.data
             console.log(`📊 Fresh inventory data: ${currentInventoryData.length} items`) // Debug
+            console.log("📊 Sample fresh inventory item:", currentInventoryData[0]) // Debug
+          } else if (data.items && data.items.length > 0) {
+            // Try alternative data structure
+            currentInventoryData = data.items
+            console.log(`📊 Fresh inventory data (items): ${currentInventoryData.length} items`) // Debug
+            console.log("📊 Sample fresh inventory item:", currentInventoryData[0]) // Debug
+          } else {
+            console.log("🗄️ Database returned no data:", data) // Debug
           }
+        } else {
+          console.log("🗄️ Database request failed with status:", response.status) // Debug
+          const errorText = await response.text()
+          console.log("🗄️ Error response:", errorText) // Debug
         }
       } catch (error) {
-        console.error("Error loading fresh inventory:", error)
+        console.error("🗄️ Error loading fresh inventory:", error)
       }
 
       // Check current inventory data
-      const existingItem = currentInventoryData.find(
-        (item: any) => {
-          const itemPartNumber = item.part_number?.toLowerCase()
-          const searchPartNumber = partNumber.toLowerCase()
-          console.log(`🔍 Comparing "${itemPartNumber}" with "${searchPartNumber}"`) // Debug
-          return itemPartNumber === searchPartNumber
-        }
-      )
+      if (currentInventoryData.length > 0) {
+        console.log(`🔍 Searching through ${currentInventoryData.length} inventory items...`) // Debug
+        
+        const existingItem = currentInventoryData.find(
+          (item: any) => {
+            const itemPartNumber = (item.part_number || item["Part number"])?.toLowerCase()
+            const searchPartNumber = partNumber.toLowerCase()
+            console.log(`🔍 Comparing "${itemPartNumber}" with "${searchPartNumber}"`) // Debug
+            return itemPartNumber === searchPartNumber
+          }
+        )
 
-      if (existingItem) {
-        console.log(`✅ Found duplicate in current inventory:`, existingItem) // Debug log
-        setDuplicatePartInfo({
-          existingItem: existingItem,
-          mode,
-          batchIndex
-        })
-        setShowDuplicateDialog(true)
-        setCheckingDuplicate(false)
-        return true
+        if (existingItem) {
+          console.log(`✅ Found duplicate in current inventory:`, existingItem) // Debug log
+          setDuplicatePartInfo({
+            existingItem: {
+              part_number: existingItem.part_number || existingItem["Part number"],
+              part_description: existingItem.part_description || existingItem["Part description"],
+              quantity: existingItem.quantity || existingItem["QTY"],
+              location: existingItem.location || existingItem["Location"],
+              supplier: existingItem.supplier || existingItem["Supplier"],
+              package: existingItem.package || existingItem["Package"],
+              mfg_part_number: existingItem.mfg_part_number || existingItem["MFG Part number"],
+              reorder_point: existingItem.reorder_point || existingItem["Reorder Point"] || alertSettings.defaultReorderPoint
+            },
+            mode,
+            batchIndex
+          })
+          setShowDuplicateDialog(true)
+          setCheckingDuplicate(false)
+          return true
+        } else {
+          console.log(`🔍 No match found in ${currentInventoryData.length} inventory items`) // Debug
+        }
+      } else {
+        console.log("🔍 No inventory data available for checking") // Debug
       }
 
       // Check pending approvals
