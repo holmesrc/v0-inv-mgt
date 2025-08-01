@@ -1597,9 +1597,18 @@ Please check your Slack configuration.`)
           <p className="text-muted-foreground">Managing {inventory.length} inventory items</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Dialog>
+          <Dialog onOpenChange={(open) => {
+            if (!open && addItemFormModified) {
+              // User is trying to close the dialog with unsaved changes
+              const confirmClose = confirm("You have unsaved changes. Are you sure you want to cancel and lose your changes?")
+              if (!confirmClose) {
+                return // Prevent closing
+              }
+              setAddItemFormModified(false)
+            }
+          }}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => setAddItemFormModified(false)}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Item
               </Button>
@@ -1612,21 +1621,40 @@ Please check your Slack configuration.`)
               <div className="space-y-4">
                 <div>
                   <Label>Requester Name *</Label>
-                  <Input id="add-requester" placeholder="Enter your name" required />
+                  <Input 
+                    id="add-requester" 
+                    placeholder="Enter your name" 
+                    required 
+                    onChange={() => setAddItemFormModified(true)}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Part Number *</Label>
-                    <Input id="add-part-number" placeholder="Enter part number" required />
+                    <Input 
+                      id="add-part-number" 
+                      placeholder="Enter part number" 
+                      required 
+                      onChange={() => setAddItemFormModified(true)}
+                    />
                   </div>
                   <div>
                     <Label>MFG Part Number</Label>
-                    <Input id="add-mfg-part-number" placeholder="Enter MFG part number" />
+                    <Input 
+                      id="add-mfg-part-number" 
+                      placeholder="Enter MFG part number" 
+                      onChange={() => setAddItemFormModified(true)}
+                    />
                   </div>
                 </div>
                 <div>
                   <Label>Description *</Label>
-                  <Input id="add-description" placeholder="Enter description" required />
+                  <Input 
+                    id="add-description" 
+                    placeholder="Enter description" 
+                    required 
+                    onChange={() => setAddItemFormModified(true)}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -1638,6 +1666,7 @@ Please check your Slack configuration.`)
                       placeholder="Enter quantity" 
                       required 
                       onChange={(e) => {
+                        setAddItemFormModified(true)
                         const quantity = parseInt(e.target.value) || 0
                         const packageTrigger = document.querySelector("#add-package-trigger") as HTMLElement
                         const packageCustom = document.querySelector("#add-package-custom") as HTMLInputElement
@@ -1676,6 +1705,7 @@ Please check your Slack configuration.`)
                       type="number"
                       min="0"
                       defaultValue={alertSettings.defaultReorderPoint}
+                      onChange={() => setAddItemFormModified(true)}
                     />
                   </div>
                 </div>
@@ -1683,6 +1713,7 @@ Please check your Slack configuration.`)
                   <div>
                     <Label>Location</Label>
                     <Select onValueChange={(value) => {
+                      setAddItemFormModified(true)
                       const customInput = document.querySelector("#add-location-custom") as HTMLInputElement
                       const trigger = document.querySelector("#add-location-trigger") as HTMLElement
                       if (value === "__custom__") {
@@ -1716,11 +1747,13 @@ Please check your Slack configuration.`)
                       id="add-location-custom" 
                       placeholder="Enter new location" 
                       className="mt-2 hidden"
+                      onChange={() => setAddItemFormModified(true)}
                     />
                   </div>
                   <div>
                     <Label>Supplier</Label>
                     <Select onValueChange={(value) => {
+                      setAddItemFormModified(true)
                       const customInput = document.querySelector("#add-supplier-custom") as HTMLInputElement
                       const trigger = document.querySelector("#add-supplier-trigger") as HTMLElement
                       if (value === "__custom__") {
@@ -1747,12 +1780,14 @@ Please check your Slack configuration.`)
                       id="add-supplier-custom" 
                       placeholder="Enter new supplier" 
                       className="mt-2 hidden"
+                      onChange={() => setAddItemFormModified(true)}
                     />
                   </div>
                 </div>
                 <div>
                   <Label>Package Type</Label>
                   <Select onValueChange={(value) => {
+                    setAddItemFormModified(true)
                     const customInput = document.querySelector("#add-package-custom") as HTMLInputElement
                     const trigger = document.querySelector("#add-package-trigger") as HTMLElement
                     if (value === "__custom__") {
@@ -1779,6 +1814,7 @@ Please check your Slack configuration.`)
                     id="add-package-custom" 
                     placeholder="Enter new package type" 
                     className="mt-2 hidden"
+                    onChange={() => setAddItemFormModified(true)}
                   />
                 </div>
               </div>
@@ -1837,6 +1873,7 @@ Please check your Slack configuration.`)
 
                     try {
                       await addInventoryItem(newItem, requesterInput.value.trim())
+                      setAddItemFormModified(false) // Reset form modification flag
                       // Close dialog
                       const closeButton = document.querySelector(
                         '[data-state="open"] button[aria-label="Close"]',
