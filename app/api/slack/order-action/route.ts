@@ -26,82 +26,40 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Handle Approve - redirect to Slack workflow
+    // Handle Approve - direct redirect to Slack workflow
     if (action === 'approve') {
-      return new Response(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Opening Workflow</title>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <style>
-            body { 
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              max-width: 500px; 
-              margin: 50px auto; 
-              padding: 20px;
-              background: #f5f5f5;
-              text-align: center;
+      // Send approval notification to Slack first
+      const webhookUrl = process.env.SLACK_WEBHOOK_URL
+      if (webhookUrl) {
+        const approvalMessage = {
+          blocks: [
+            {
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text: `✅ *Order Approved*\n\n*Part:* ${partNumber}\n*Quantity:* ${quantity} units\n*Requester:* ${requester}\n*Approved by:* Procurement Team\n*Time:* ${new Date().toLocaleString()}\n\n*Status:* Opening workflow for processing...`
+              }
             }
-            .card {
-              background: white;
-              padding: 30px;
-              border-radius: 12px;
-              box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+          ],
+          attachments: [
+            {
+              color: "#36a64f",
+              blocks: []
             }
-            .emoji { font-size: 64px; margin-bottom: 20px; }
-            .title { color: #36a64f; margin-bottom: 20px; font-size: 24px; font-weight: 600; }
-            .info { background: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px 0; }
-            .part-info { font-family: monospace; background: #f8f9fa; padding: 15px; border-radius: 6px; margin: 15px 0; }
-            .button { 
-              background: #36a64f; 
-              color: white; 
-              padding: 12px 24px; 
-              border: none; 
-              border-radius: 6px; 
-              text-decoration: none;
-              display: inline-block;
-              margin: 10px;
-              font-weight: 500;
-            }
-            .button:hover { background: #2d8f3f; }
-          </style>
-          <script>
-            // Auto-redirect to Slack workflow
-            setTimeout(function() {
-              window.location.href = 'https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031';
-            }, 2000);
-          </script>
-        </head>
-        <body>
-          <div class="card">
-            <div class="emoji">✅</div>
-            <h1 class="title">Opening Purchase Workflow</h1>
-            
-            <div class="info">
-              <strong>Approved for Processing</strong><br>
-              Opening Slack workflow for manual completion...
-            </div>
-            
-            <div class="part-info">
-              <strong>Part to Order:</strong><br>
-              Part Number: ${partNumber}<br>
-              Quantity: ${quantity} units<br>
-              Requester: ${requester}
-            </div>
-            
-            <p>You'll need to manually enter this information in the workflow form.</p>
-            
-            <a href="https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031" class="button">
-              Open Workflow Now
-            </a>
-          </div>
-        </body>
-        </html>
-      `, {
-        headers: { 'Content-Type': 'text/html; charset=utf-8' }
-      })
+          ]
+        }
+
+        await fetch(webhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(approvalMessage)
+        })
+      }
+
+      // Redirect directly to Slack workflow
+      return Response.redirect('https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031', 302)
     }
 
     // Handle Request Changes - show change options
