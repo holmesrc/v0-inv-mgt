@@ -26,19 +26,59 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Handle Approve - direct redirect to Slack workflow
+    // Handle Approve - send workflow link in Slack message
     if (action === 'approve') {
-      // Send approval notification to Slack first
       const webhookUrl = process.env.SLACK_WEBHOOK_URL
       if (webhookUrl) {
         const approvalMessage = {
           blocks: [
             {
+              type: "header",
+              text: {
+                type: "plain_text",
+                text: "✅ Order Approved - Action Required",
+                emoji: true
+              }
+            },
+            {
               type: "section",
               text: {
                 type: "mrkdwn",
-                text: `✅ *Order Approved*\n\n*Part:* ${partNumber}\n*Quantity:* ${quantity} units\n*Requester:* ${requester}\n*Approved by:* Procurement Team\n*Time:* ${new Date().toLocaleString()}\n\n*Status:* Opening workflow for processing...`
+                text: `*Part:* ${partNumber}\n*Quantity:* ${quantity} units\n*Requester:* ${requester}\n*Approved by:* Procurement Team\n*Time:* ${new Date().toLocaleString()}`
               }
+            },
+            {
+              type: "divider"
+            },
+            {
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text: `*🎯 Next Step: Complete Purchase Workflow*\n\nClick the workflow link below to open the purchase request form in Slack:`
+              }
+            },
+            {
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text: `🔗 *Workflow Link:* https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031\n\n_Note: This link only works when clicked from within Slack._`
+              }
+            },
+            {
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text: `*📋 Information to Enter in Workflow:*\n• Part Number: \`${partNumber}\`\n• Quantity: ${quantity} units\n• Requester: ${requester}\n• Urgency: Based on current stock levels\n• Supplier: Check part details for preferred supplier`
+              }
+            },
+            {
+              type: "context",
+              elements: [
+                {
+                  type: "mrkdwn",
+                  text: `📅 Approved: ${new Date().toLocaleString()} | 🏷️ ${partNumber} | 📦 ${quantity} units | 👤 ${requester}`
+                }
+              ]
             }
           ],
           attachments: [
@@ -58,8 +98,75 @@ export async function GET(request: NextRequest) {
         })
       }
 
-      // Redirect directly to Slack workflow
-      return Response.redirect('https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031', 302)
+      // Return a confirmation page instead of redirecting
+      return new Response(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Order Approved</title>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              max-width: 500px; 
+              margin: 50px auto; 
+              padding: 20px;
+              background: #f5f5f5;
+              text-align: center;
+            }
+            .card {
+              background: white;
+              padding: 30px;
+              border-radius: 12px;
+              box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            }
+            .emoji { font-size: 64px; margin-bottom: 20px; }
+            .title { color: #36a64f; margin-bottom: 20px; font-size: 24px; font-weight: 600; }
+            .info { background: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px 0; }
+            .part-info { font-family: monospace; background: #f8f9fa; padding: 15px; border-radius: 6px; margin: 15px 0; text-align: left; }
+            .instructions { background: #fff3cd; padding: 15px; border-radius: 6px; margin: 15px 0; text-align: left; }
+            .auto-close { color: #6c757d; font-size: 14px; margin-top: 20px; }
+          </style>
+          <script>
+            setTimeout(function() {
+              window.close();
+            }, 5000);
+          </script>
+        </head>
+        <body>
+          <div class="card">
+            <div class="emoji">✅</div>
+            <h1 class="title">Order Approved</h1>
+            
+            <div class="info">
+              <strong>Approval sent to Slack channel</strong>
+            </div>
+            
+            <div class="part-info">
+              <strong>Approved Order:</strong><br>
+              Part Number: ${partNumber}<br>
+              Quantity: ${quantity} units<br>
+              Requester: ${requester}
+            </div>
+            
+            <div class="instructions">
+              <strong>📋 Next Steps:</strong><br>
+              1. Go to your Slack channel<br>
+              2. Find the approval message<br>
+              3. Click the workflow link in Slack<br>
+              4. Fill out the purchase request form
+            </div>
+            
+            <div class="auto-close">
+              This window will close automatically in 5 seconds
+            </div>
+          </div>
+        </body>
+        </html>
+      `, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' }
+      })
     }
 
     // Handle Request Changes - show change options
