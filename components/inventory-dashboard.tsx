@@ -1127,11 +1127,23 @@ export default function InventoryDashboard() {
           if (pendingResult.success && pendingResult.data) {
             console.log(`📋 Checking ${pendingResult.data.length} pending changes`) // Debug log
             
-            const pendingDuplicate = pendingResult.data.find((change: any) => 
-              change.status === "pending" && 
-              (change.item_data?.part_number?.toLowerCase() === partNumber.toLowerCase() ||
-               change.original_data?.part_number?.toLowerCase() === partNumber.toLowerCase())
-            )
+            // Debug: Show sample pending items
+            if (pendingResult.data.length > 0) {
+              console.log("📋 Sample pending change:", pendingResult.data[0])
+              console.log("📋 Sample pending part numbers:", pendingResult.data.slice(0, 3).map((change: any) => 
+                change.item_data?.part_number || change.original_data?.part_number || "NO_PART_NUMBER"
+              ))
+            }
+            
+            const pendingDuplicate = pendingResult.data.find((change: any) => {
+              const changePartNumber = change.item_data?.part_number || change.original_data?.part_number
+              const searchPartNumber = partNumber.toLowerCase()
+              const changePartNumberLower = changePartNumber?.toLowerCase()
+              
+              console.log(`📋 Comparing pending "${changePartNumberLower}" with "${searchPartNumber}"`) // Debug
+              
+              return change.status === "pending" && changePartNumberLower === searchPartNumber
+            })
 
             if (pendingDuplicate) {
               console.log(`⏳ Found duplicate in pending changes:`, pendingDuplicate) // Debug log
