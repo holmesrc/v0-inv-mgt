@@ -792,7 +792,7 @@ export default function InventoryDashboard() {
   const uniqueLocations = useMemo(() => {
     const uniqueLocations = Array.from(new Set(inventory.map((item) => item["Location"]).filter(Boolean)))
 
-    // Enhanced natural sorting for locations like H1-1, H1-2, H1-10, etc.
+    // Enhanced natural sorting for locations like H1-1, H1-2, H1-10, etc. - DESCENDING ORDER
     return uniqueLocations.sort((a, b) => {
       // Split by common separators (-, _, space)
       const aParts = a.split(/[-_\s]+/)
@@ -811,31 +811,31 @@ export default function InventoryDashboard() {
           const [, aPrefix, aNumber, aSuffix] = aMatch
           const [, bPrefix, bNumber, bSuffix] = bMatch
 
-          // First compare the letter prefix (H1 vs H2)
+          // First compare the letter prefix (H2 vs H1) - REVERSED for descending
           if (aPrefix !== bPrefix) {
-            return aPrefix.localeCompare(bPrefix)
+            return bPrefix.localeCompare(aPrefix)
           }
 
-          // Then compare the numeric part numerically (not alphabetically)
+          // Then compare the numeric part numerically - REVERSED for descending
           if (aNumber && bNumber) {
             const aNum = Number.parseInt(aNumber, 10)
             const bNum = Number.parseInt(bNumber, 10)
             if (aNum !== bNum) {
-              return aNum - bNum
+              return bNum - aNum // Reversed for descending
             }
           } else if (aNumber && !bNumber) {
-            return 1 // Numbers come after non-numbers
+            return -1 // Numbers come before non-numbers in descending
           } else if (!aNumber && bNumber) {
-            return -1 // Non-numbers come before numbers
+            return 1 // Non-numbers come after numbers in descending
           }
 
-          // Finally compare any suffix
+          // Finally compare any suffix - REVERSED for descending
           if (aSuffix !== bSuffix) {
-            return aSuffix.localeCompare(bSuffix)
+            return bSuffix.localeCompare(aSuffix)
           }
         } else {
-          // Fallback to string comparison if regex doesn't match
-          const comparison = aPart.toLowerCase().localeCompare(bPart.toLowerCase())
+          // Fallback to string comparison if regex doesn't match - REVERSED for descending
+          const comparison = bPart.toLowerCase().localeCompare(aPart.toLowerCase())
           if (comparison !== 0) {
             return comparison
           }
@@ -844,6 +844,196 @@ export default function InventoryDashboard() {
 
       return 0
     })
+  }, [inventory])
+
+  // Get all locations including pending changes and suggest next location
+  const locationSuggestion = useMemo(async () => {
+    try {
+      // Get current inventory locations
+      const currentLocations = inventory.map(item => item["Location"]).filter(Boolean)
+      
+      // Get pending changes locations
+      let pendingLocations: string[] = []
+      try {
+        const response = await fetch("/api/inventory/pending")
+        if (response.ok) {
+          const result = await response.json()
+          if (result.success) {
+            pendingLocations = result.data
+              .filter((change: any) => change.status === "pending")
+              .map((change: any) => change.item_data?.location || change.original_data?.location)
+              .filter(Boolean)
+          }
+        }
+      } catch (error) {
+        console.log("Could not fetch pending changes for location suggestion")
+      }
+
+      // Combine all locations
+      const allLocations = [...currentLocations, ...pendingLocations]
+      const uniqueAllLocations = Array.from(new Set(allLocations))
+
+      if (uniqueAllLocations.length === 0) {
+        return "H1-1" // Default first location
+      }
+
+      // Sort all locations using the same logic as uniqueLocations but descending
+      const sortedLocations = uniqueAllLocations.sort((a, b) => {
+        const aParts = a.split(/[-_\s]+/)
+        const bParts = b.split(/[-_\s]+/)
+
+        for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+          const aPart = aParts[i] || ""
+          const bPart = bParts[i] || ""
+
+          const aMatch = aPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
+          const bMatch = bPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
+
+          if (aMatch && bMatch) {
+            const [, aPrefix, aNumber, aSuffix] = aMatch
+            const [, bPrefix, bNumber, bSuffix] = bMatch
+
+            if (aPrefix !== bPrefix) {
+              return bPrefix.localeCompare(aPrefix) // Descending
+            }
+
+            if (aNumber && bNumber) {
+              const aNum = Number.parseInt(aNumber, 10)
+              const bNum = Number.parseInt(bNumber, 10)
+              if (aNum !== bNum) {
+                return bNum - aNum // Descending
+              }
+            }
+
+            if (aSuffix !== bSuffix) {
+              return bSuffix.localeCompare(aSuffix) // Descending
+            }
+          }
+        }
+        return 0
+      })
+
+      // Get the highest location (first in descending order)
+      const highestLocation = sortedLocations[0]
+      
+      // Suggest next location by incrementing the last numeric part
+      const parts = highestLocation.split(/[-_\s]+/)
+      const lastPart = parts[parts.length - 1]
+      const match = lastPart.match(/^([A-Za-z]*)(\d+)(.*)$/)
+      
+      if (match) {
+        const [, prefix, number, suffix] = match
+        const nextNumber = (parseInt(number, 10) + 1).toString()
+        const newLastPart = prefix + nextNumber + suffix
+        const suggestedLocation = [...parts.slice(0, -1), newLastPart].join('-')
+        return suggestedLocation
+      } else {
+        // If no numeric part found, append -1
+        return highestLocation + "-1"
+      }
+    } catch (error) {
+      console.error("Error generating location suggestion:", error)
+      return "H1-1" // Fallback
+    }
+  }, [inventory])
+
+  // Convert the async useMemo to a state-based approach
+  const [suggestedLocation, setSuggestedLocation] = useState<string>("H1-1")
+  
+  useEffect(() => {
+    const generateLocationSuggestion = async () => {
+      try {
+        // Get current inventory locations
+        const currentLocations = inventory.map(item => item["Location"]).filter(Boolean)
+        
+        // Get pending changes locations
+        let pendingLocations: string[] = []
+        try {
+          const response = await fetch("/api/inventory/pending")
+          if (response.ok) {
+            const result = await response.json()
+            if (result.success) {
+              pendingLocations = result.data
+                .filter((change: any) => change.status === "pending")
+                .map((change: any) => change.item_data?.location || change.original_data?.location)
+                .filter(Boolean)
+            }
+          }
+        } catch (error) {
+          console.log("Could not fetch pending changes for location suggestion")
+        }
+
+        // Combine all locations
+        const allLocations = [...currentLocations, ...pendingLocations]
+        const uniqueAllLocations = Array.from(new Set(allLocations))
+
+        if (uniqueAllLocations.length === 0) {
+          setSuggestedLocation("H1-1")
+          return
+        }
+
+        // Sort all locations descending
+        const sortedLocations = uniqueAllLocations.sort((a, b) => {
+          const aParts = a.split(/[-_\s]+/)
+          const bParts = b.split(/[-_\s]+/)
+
+          for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+            const aPart = aParts[i] || ""
+            const bPart = bParts[i] || ""
+
+            const aMatch = aPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
+            const bMatch = bPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
+
+            if (aMatch && bMatch) {
+              const [, aPrefix, aNumber, aSuffix] = aMatch
+              const [, bPrefix, bNumber, bSuffix] = bMatch
+
+              if (aPrefix !== bPrefix) {
+                return bPrefix.localeCompare(aPrefix)
+              }
+
+              if (aNumber && bNumber) {
+                const aNum = Number.parseInt(aNumber, 10)
+                const bNum = Number.parseInt(bNumber, 10)
+                if (aNum !== bNum) {
+                  return bNum - aNum
+                }
+              } else if (aNumber && !bNumber) {
+                return -1
+              } else if (!aNumber && bNumber) {
+                return 1
+              }
+
+              if (aSuffix !== bSuffix) {
+                return bSuffix.localeCompare(aSuffix)
+              }
+            }
+          }
+          return 0
+        })
+
+        // Get the highest location and suggest next
+        const highestLocation = sortedLocations[0]
+        const parts = highestLocation.split(/[-_\s]+/)
+        const lastPart = parts[parts.length - 1]
+        const match = lastPart.match(/^([A-Za-z]*)(\d+)(.*)$/)
+        
+        if (match) {
+          const [, prefix, number, suffix] = match
+          const nextNumber = (parseInt(number, 10) + 1).toString()
+          const newLastPart = prefix + nextNumber + suffix
+          const suggestedLocation = [...parts.slice(0, -1), newLastPart].join('-')
+          setSuggestedLocation(suggestedLocation)
+        } else {
+          setSuggestedLocation(highestLocation + "-1")
+        }
+      } catch (error) {
+        console.error("Error generating location suggestion:", error)
+        setSuggestedLocation("H1-1")
+      }
+    }
+
+    generateLocationSuggestion()
   }, [inventory])
 
   // Get low stock items
@@ -1469,11 +1659,18 @@ Please check your Slack configuration.`)
                         <SelectValue placeholder="Select or enter location" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value={suggestedLocation} className="bg-blue-50 border-blue-200">
+                          <div className="flex items-center gap-2">
+                            <span className="text-blue-600 font-medium">⭐ Suggested: {suggestedLocation}</span>
+                          </div>
+                        </SelectItem>
+                        <div className="border-t border-gray-200 my-1"></div>
                         {uniqueLocations.map((location) => (
                           <SelectItem key={location} value={location}>
                             {location}
                           </SelectItem>
                         ))}
+                        <div className="border-t border-gray-200 my-1"></div>
                         <SelectItem value="__custom__">+ Enter custom location</SelectItem>
                       </SelectContent>
                     </Select>
