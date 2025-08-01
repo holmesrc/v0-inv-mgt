@@ -88,6 +88,7 @@ export default function InventoryDashboard() {
     batchIndex?: number
   } | null>(null)
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false)
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false)
   const [batchEntryItems, setBatchEntryItems] = useState<any[]>([{ 
     partNumber: '', 
     mfgPartNumber: '', 
@@ -1074,29 +1075,81 @@ export default function InventoryDashboard() {
   const checkForDuplicatePart = async (partNumber: string, mode: 'single' | 'batch', batchIndex?: number) => {
     if (!partNumber.trim()) return false
 
+    console.log(`🔍 Checking for duplicate: "${partNumber}"`) // Debug log
+    console.log(`📊 Current inventory has ${inventory.length} items`) // Debug log
+    setCheckingDuplicate(true)
+
     try {
+      // First check current inventory state
+      const existingItem = inventory.find(
+        (item: any) => item["Part number"]?.toLowerCase() === partNumber.toLowerCase()
+      )
+
+      if (existingItem) {
+        console.log(`✅ Found duplicate in current inventory:`, existingItem) // Debug log
+        setDuplicatePartInfo({
+          existingItem: {
+            part_number: existingItem["Part number"],
+            part_description: existingItem["Part description"],
+            quantity: existingItem["QTY"],
+            location: existingItem["Location"],
+            supplier: existingItem["Supplier"],
+            package: existingItem["Package"],
+            mfg_part_number: existingItem["MFG Part number"],
+            reorder_point: existingItem["Reorder Point"] || alertSettings.defaultReorderPoint
+          },
+          mode,
+          batchIndex
+        })
+        setShowDuplicateDialog(true)
+        setCheckingDuplicate(false)
+        return true
+      }
+
+      // If not found in current inventory, check database
       const response = await fetch("/api/inventory/load-from-db")
       if (response.ok) {
         const data = await response.json()
-        const existingItem = data.items?.find(
+        console.log(`📊 Loaded ${data.items?.length || 0} items from database`) // Debug log
+        
+        const dbExistingItem = data.items?.find(
           (item: any) => item.part_number?.toLowerCase() === partNumber.toLowerCase()
         )
 
-        if (existingItem) {
+        if (dbExistingItem) {
+          console.log(`✅ Found duplicate in database:`, dbExistingItem) // Debug log
           setDuplicatePartInfo({
-            existingItem,
+            existingItem: dbExistingItem,
             mode,
             batchIndex
           })
           setShowDuplicateDialog(true)
+          setCheckingDuplicate(false)
           return true
+        } else {
+          console.log(`❌ No duplicate found for: "${partNumber}"`) // Debug log
         }
+      } else {
+        console.error("Failed to load inventory data:", response.status)
       }
     } catch (error) {
       console.error("Error checking for duplicates:", error)
     }
+    
+    setCheckingDuplicate(false)
     return false
   }
+
+  // Debounced duplicate check function
+  const debouncedDuplicateCheck = useMemo(() => {
+    let timeoutId: NodeJS.Timeout
+    return (partNumber: string, mode: 'single' | 'batch', batchIndex?: number) => {
+      clearTimeout(timeoutId)
+      timeoutId = setTimeout(() => {
+        checkForDuplicatePart(partNumber, mode, batchIndex)
+      }, 500) // 500ms delay after user stops typing
+    }
+  }, [])
 
   // Get low stock items
   const lowStockItems = useMemo(() => {
@@ -1733,18 +1786,25 @@ Please check your Slack configuration.`)
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Part Number *</Label>
-                    <Input 
-                      id="add-part-number" 
-                      placeholder="Enter part number" 
-                      required 
-                      onChange={(e) => setAddItemFormModified(true)}
-                      onBlur={async (e) => {
-                        const partNumber = e.target.value.trim()
-                        if (partNumber) {
-                          await checkForDuplicatePart(partNumber, 'single')
-                        }
-                      }}
-                    />
+                    <div className="relative">
+                      <Input 
+                        id="add-part-number" 
+                        placeholder="Enter part number" 
+                        required 
+                        onChange={(e) => {
+                          setAddItemFormModified(true)
+                          const partNumber = e.target.value.trim()
+                          if (partNumber.length >= 2) { // Start checking after 2 characters
+                            debouncedDuplicateCheck(partNumber, 'single')
+                          }
+                        }}
+                      />
+                      {checkingDuplicate && (
+                        <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <Label>MFG Part Number</Label>
@@ -1973,15 +2033,14 @@ Please check your Slack configuration.`)
                           <td className="p-1 border-r">
                             <Input
                               value={item.partNumber}
-                              onChange={async (e) => {
+                              onChange={(e) => {
                                 const newItems = [...batchEntryItems]
                                 newItems[index].partNumber = e.target.value
                                 setBatchEntryItems(newItems)
-                              }}
-                              onBlur={async (e) => {
+                                
                                 const partNumber = e.target.value.trim()
-                                if (partNumber) {
-                                  await checkForDuplicatePart(partNumber, 'batch', index)
+                                if (partNumber.length >= 2) { // Start checking after 2 characters
+                                  debouncedDuplicateCheck(partNumber, 'batch', index)
                                 }
                               }}
                               placeholder="Part number"
