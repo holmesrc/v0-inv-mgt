@@ -82,6 +82,12 @@ export default function InventoryDashboard() {
   const [editDialogOpen, setEditDialogOpen] = useState<Record<string, boolean>>({})
   const [addItemFormModified, setAddItemFormModified] = useState(false)
   const [addItemMode, setAddItemMode] = useState<'single' | 'batch'>('single')
+  const [duplicatePartInfo, setDuplicatePartInfo] = useState<{
+    existingItem: any
+    mode: 'single' | 'batch'
+    batchIndex?: number
+  } | null>(null)
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false)
   const [batchEntryItems, setBatchEntryItems] = useState<any[]>([{ 
     partNumber: '', 
     mfgPartNumber: '', 
@@ -789,14 +795,28 @@ export default function InventoryDashboard() {
     const allPackageTypes = inventory
       .map((item) => item["Package"])
       .filter((pkg) => pkg && typeof pkg === "string" && pkg.trim().length > 0)
-      .map((pkg) => pkg.trim().toUpperCase()) // Normalize to uppercase
+      .map((pkg) => pkg.trim()) // Keep original case
 
-    // Create a Set to remove duplicates, then convert back to array
-    const uniquePackageTypes = Array.from(new Set(allPackageTypes))
-
-    // Sort alphabetically for consistency
-    return uniquePackageTypes.sort()
+    // Add standard package types
+    const standardPackages = ["Exact", "Estimated", "Reel", "Kit"]
+    
+    // Combine and deduplicate
+    const combinedPackages = Array.from(new Set([...standardPackages, ...allPackageTypes]))
+    
+    return combinedPackages.sort()
   }, [inventory])
+
+  // Helper function to get suggested package based on quantity
+  const getSuggestedPackage = (quantity: number): string => {
+    if (quantity >= 1 && quantity <= 100) {
+      return "Exact"
+    } else if (quantity >= 101 && quantity <= 500) {
+      return "Estimated"
+    } else if (quantity > 500) {
+      return "Reel"
+    }
+    return "Exact" // Default
+  }
 
   const suppliers = useMemo(() => {
     const uniqueSuppliers = Array.from(new Set(inventory.map((item) => item["Supplier"]).filter(Boolean)))
@@ -1049,6 +1069,34 @@ export default function InventoryDashboard() {
 
     generateLocationSuggestion()
   }, [inventory])
+
+  // Function to check for duplicate part numbers
+  const checkForDuplicatePart = async (partNumber: string, mode: 'single' | 'batch', batchIndex?: number) => {
+    if (!partNumber.trim()) return false
+
+    try {
+      const response = await fetch("/api/inventory/load-from-db")
+      if (response.ok) {
+        const data = await response.json()
+        const existingItem = data.items?.find(
+          (item: any) => item.part_number?.toLowerCase() === partNumber.toLowerCase()
+        )
+
+        if (existingItem) {
+          setDuplicatePartInfo({
+            existingItem,
+            mode,
+            batchIndex
+          })
+          setShowDuplicateDialog(true)
+          return true
+        }
+      }
+    } catch (error) {
+      console.error("Error checking for duplicates:", error)
+    }
+    return false
+  }
 
   // Get low stock items
   const lowStockItems = useMemo(() => {
@@ -1689,7 +1737,13 @@ Please check your Slack configuration.`)
                       id="add-part-number" 
                       placeholder="Enter part number" 
                       required 
-                      onChange={() => setAddItemFormModified(true)}
+                      onChange={(e) => setAddItemFormModified(true)}
+                      onBlur={async (e) => {
+                        const partNumber = e.target.value.trim()
+                        if (partNumber) {
+                          await checkForDuplicatePart(partNumber, 'single')
+                        }
+                      }}
                     />
                   </div>
                   <div>
@@ -1725,19 +1779,8 @@ Please check your Slack configuration.`)
                         const packageTrigger = document.querySelector("#add-package-trigger") as HTMLElement
                         const packageCustom = document.querySelector("#add-package-custom") as HTMLInputElement
                         
-                        // Auto-select package type based on quantity
-                        let suggestedPackage = ""
-                        if (quantity === 1) {
-                          suggestedPackage = "Each"
-                        } else if (quantity > 1 && quantity <= 10) {
-                          suggestedPackage = "Small Pack"
-                        } else if (quantity > 10 && quantity <= 100) {
-                          suggestedPackage = "Medium Pack"
-                        } else if (quantity > 100 && quantity <= 1000) {
-                          suggestedPackage = "Large Pack"
-                        } else if (quantity > 1000) {
-                          suggestedPackage = "Bulk"
-                        }
+                        // Auto-select package type based on new quantity rules
+                        const suggestedPackage = getSuggestedPackage(quantity)
                         
                         if (suggestedPackage && packageTypes.includes(suggestedPackage)) {
                           // Set the dropdown value
@@ -1930,10 +1973,16 @@ Please check your Slack configuration.`)
                           <td className="p-1 border-r">
                             <Input
                               value={item.partNumber}
-                              onChange={(e) => {
+                              onChange={async (e) => {
                                 const newItems = [...batchEntryItems]
                                 newItems[index].partNumber = e.target.value
                                 setBatchEntryItems(newItems)
+                              }}
+                              onBlur={async (e) => {
+                                const partNumber = e.target.value.trim()
+                                if (partNumber) {
+                                  await checkForDuplicatePart(partNumber, 'batch', index)
+                                }
                               }}
                               placeholder="Part number"
                               className="h-8 text-xs"
@@ -1971,14 +2020,9 @@ Please check your Slack configuration.`)
                                 const newItems = [...batchEntryItems]
                                 newItems[index].quantity = e.target.value
                                 
-                                // Auto-suggest package type based on quantity
+                                // Auto-suggest package type based on new quantity rules
                                 const qty = parseInt(e.target.value) || 0
-                                let suggestedPackage = ""
-                                if (qty === 1) suggestedPackage = "Each"
-                                else if (qty <= 10) suggestedPackage = "Small Pack"
-                                else if (qty <= 100) suggestedPackage = "Medium Pack"
-                                else if (qty <= 1000) suggestedPackage = "Large Pack"
-                                else suggestedPackage = "Bulk"
+                                const suggestedPackage = getSuggestedPackage(qty)
                                 
                                 if (suggestedPackage && packageTypes.includes(suggestedPackage)) {
                                   newItems[index].package = suggestedPackage
@@ -2217,6 +2261,136 @@ Please check your Slack configuration.`)
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          {/* Duplicate Part Number Dialog */}
+          <Dialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
+            <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>Duplicate Part Number Found</DialogTitle>
+                <DialogDescription>
+                  This part number already exists in your inventory
+                </DialogDescription>
+              </DialogHeader>
+              
+              {duplicatePartInfo && (
+                <div className="space-y-4">
+                  <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                    <h4 className="font-medium text-yellow-800 mb-2">Existing Item Information:</h4>
+                    <div className="text-sm space-y-1">
+                      <div><strong>Part Number:</strong> {duplicatePartInfo.existingItem.part_number}</div>
+                      <div><strong>Description:</strong> {duplicatePartInfo.existingItem.part_description}</div>
+                      <div><strong>Current Quantity:</strong> {duplicatePartInfo.existingItem.quantity} units</div>
+                      <div><strong>Location:</strong> {duplicatePartInfo.existingItem.location}</div>
+                      <div><strong>Supplier:</strong> {duplicatePartInfo.existingItem.supplier}</div>
+                      <div><strong>Package:</strong> {duplicatePartInfo.existingItem.package}</div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <h4 className="font-medium text-blue-800 mb-2">Add to Existing Stock:</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <Label>Additional Quantity to Add</Label>
+                        <Input
+                          id="additional-quantity"
+                          type="number"
+                          min="1"
+                          placeholder="Enter additional quantity"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label>Your Name (Requester)</Label>
+                        <Input
+                          id="duplicate-requester"
+                          placeholder="Enter your name"
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowDuplicateDialog(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={async () => {
+                    if (!duplicatePartInfo) return
+                    
+                    const additionalQtyInput = document.querySelector("#additional-quantity") as HTMLInputElement
+                    const requesterInput = document.querySelector("#duplicate-requester") as HTMLInputElement
+                    
+                    const additionalQty = parseInt(additionalQtyInput?.value) || 0
+                    const requester = requesterInput?.value?.trim()
+                    
+                    if (!requester) {
+                      alert("Please enter your name")
+                      return
+                    }
+                    
+                    if (additionalQty <= 0) {
+                      alert("Please enter a valid additional quantity")
+                      return
+                    }
+                    
+                    try {
+                      const newQuantity = duplicatePartInfo.existingItem.quantity + additionalQty
+                      
+                      // Create updated item data
+                      const updatedItem = {
+                        "Part number": duplicatePartInfo.existingItem.part_number,
+                        "MFG Part number": duplicatePartInfo.existingItem.mfg_part_number || "",
+                        "Part description": duplicatePartInfo.existingItem.part_description,
+                        QTY: newQuantity,
+                        Location: duplicatePartInfo.existingItem.location,
+                        Supplier: duplicatePartInfo.existingItem.supplier,
+                        Package: duplicatePartInfo.existingItem.package,
+                        reorderPoint: duplicatePartInfo.existingItem.reorder_point || alertSettings.defaultReorderPoint,
+                      }
+                      
+                      // Submit as an update request
+                      await submitChangeForApproval("update", updatedItem, duplicatePartInfo.existingItem, requester)
+                      
+                      alert(`✅ Stock addition submitted for approval! ${duplicatePartInfo.existingItem.quantity} + ${additionalQty} = ${newQuantity} units`)
+                      
+                      setShowDuplicateDialog(false)
+                      setDuplicatePartInfo(null)
+                      
+                      // Clear the form field that triggered this
+                      if (duplicatePartInfo.mode === 'single') {
+                        const partNumberInput = document.querySelector("#add-part-number") as HTMLInputElement
+                        if (partNumberInput) partNumberInput.value = ""
+                      } else if (duplicatePartInfo.mode === 'batch' && duplicatePartInfo.batchIndex !== undefined) {
+                        const newItems = [...batchEntryItems]
+                        newItems[duplicatePartInfo.batchIndex].partNumber = ""
+                        setBatchEntryItems(newItems)
+                      }
+                      
+                    } catch (error) {
+                      console.error("Failed to submit stock addition:", error)
+                      alert("❌ Failed to submit stock addition")
+                    }
+                  }}
+                >
+                  Add to Stock
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    setShowDuplicateDialog(false)
+                    setDuplicatePartInfo(null)
+                    // Don't clear the form - let user continue with duplicate if they want
+                  }}
+                >
+                  Continue Anyway
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
           <Button onClick={handleDownloadExcel} variant="outline">
             <Download className="w-4 h-4 mr-2" />
             Download Excel
