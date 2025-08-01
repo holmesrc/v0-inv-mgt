@@ -30,6 +30,7 @@ import {
   RefreshCw,
   Database,
   Plus,
+  FileText,
 } from "lucide-react"
 import type { InventoryItem, PurchaseRequest, AlertSettings } from "@/types/inventory"
 import {
@@ -78,6 +79,7 @@ export default function InventoryDashboard() {
 
   // Add this with the other state declarations
   const [editDialogOpen, setEditDialogOpen] = useState<Record<string, boolean>>({})
+  const [addItemFormModified, setAddItemFormModified] = useState(false)
 
   // Load data from database on component mount
   useEffect(() => {
@@ -1629,7 +1631,43 @@ Please check your Slack configuration.`)
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Quantity *</Label>
-                    <Input id="add-quantity" type="number" min="0" placeholder="Enter quantity" required />
+                    <Input 
+                      id="add-quantity" 
+                      type="number" 
+                      min="0" 
+                      placeholder="Enter quantity" 
+                      required 
+                      onChange={(e) => {
+                        const quantity = parseInt(e.target.value) || 0
+                        const packageTrigger = document.querySelector("#add-package-trigger") as HTMLElement
+                        const packageCustom = document.querySelector("#add-package-custom") as HTMLInputElement
+                        
+                        // Auto-select package type based on quantity
+                        let suggestedPackage = ""
+                        if (quantity === 1) {
+                          suggestedPackage = "Each"
+                        } else if (quantity > 1 && quantity <= 10) {
+                          suggestedPackage = "Small Pack"
+                        } else if (quantity > 10 && quantity <= 100) {
+                          suggestedPackage = "Medium Pack"
+                        } else if (quantity > 100 && quantity <= 1000) {
+                          suggestedPackage = "Large Pack"
+                        } else if (quantity > 1000) {
+                          suggestedPackage = "Bulk"
+                        }
+                        
+                        if (suggestedPackage && packageTypes.includes(suggestedPackage)) {
+                          // Set the dropdown value
+                          packageTrigger?.setAttribute('data-value', suggestedPackage)
+                          const valueSpan = packageTrigger?.querySelector('[data-placeholder]')
+                          if (valueSpan) {
+                            valueSpan.textContent = suggestedPackage
+                          }
+                          // Hide custom input if it was showing
+                          packageCustom?.classList.add("hidden")
+                        }
+                      }}
+                    />
                   </div>
                   <div>
                     <Label>Reorder Point</Label>
@@ -1833,6 +1871,10 @@ Please check your Slack configuration.`)
               {slackConfigured ? "Send Full Alert" : "Send Full Alert (Not Configured)"}
             </Button>
           )}
+          <Button variant="outline" onClick={() => window.open('/pending-changes', '_blank')}>
+            <FileText className="w-4 h-4 mr-2" />
+            Pending Changes
+          </Button>
           <Button variant="outline" onClick={() => window.open('/low-stock', '_blank')}>
             <AlertTriangle className="w-4 h-4 mr-2" />
             Low Stock Page
