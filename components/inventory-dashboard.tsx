@@ -1078,12 +1078,24 @@ export default function InventoryDashboard() {
 
     console.log(`🔍 Checking for duplicate: "${partNumber}"`) // Debug log
     console.log(`📊 Current inventory has ${inventory.length} items`) // Debug log
+    
+    // Debug: Show first few inventory items to check structure
+    if (inventory.length > 0) {
+      console.log("📊 Sample inventory item:", inventory[0])
+      console.log("📊 Sample part numbers:", inventory.slice(0, 3).map(item => item["Part number"]))
+    }
+    
     setCheckingDuplicate(true)
 
     try {
       // First check current inventory state
       const existingItem = inventory.find(
-        (item: any) => item["Part number"]?.toLowerCase() === partNumber.toLowerCase()
+        (item: any) => {
+          const itemPartNumber = item["Part number"]?.toLowerCase()
+          const searchPartNumber = partNumber.toLowerCase()
+          console.log(`🔍 Comparing "${itemPartNumber}" with "${searchPartNumber}"`) // Debug
+          return itemPartNumber === searchPartNumber
+        }
       )
 
       if (existingItem) {
@@ -1154,6 +1166,12 @@ export default function InventoryDashboard() {
       if (response.ok) {
         const data = await response.json()
         console.log(`📊 Loaded ${data.items?.length || 0} items from database`) // Debug log
+        
+        // Debug: Show sample database items
+        if (data.items && data.items.length > 0) {
+          console.log("📊 Sample database item:", data.items[0])
+          console.log("📊 Sample database part numbers:", data.items.slice(0, 3).map((item: any) => item.part_number))
+        }
         
         const dbExistingItem = data.items?.find(
           (item: any) => item.part_number?.toLowerCase() === partNumber.toLowerCase()
