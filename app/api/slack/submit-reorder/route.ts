@@ -34,7 +34,12 @@ export async function POST(request: NextRequest) {
 
     const urgencyInfo = urgencyConfig[urgency as keyof typeof urgencyConfig] || urgencyConfig.Medium
 
-    // Create comprehensive Slack message with all information
+    // Base URL for action buttons
+    const baseUrl = process.env.VERCEL_URL 
+      ? `https://${process.env.VERCEL_URL}` 
+      : 'https://v0-inv-mgt.vercel.app'
+
+    // Create comprehensive Slack message with functional URL buttons
     const message = {
       blocks: [
         {
@@ -108,6 +113,13 @@ export async function POST(request: NextRequest) {
           }
         },
         {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: "*🎯 Take Action:* Click a button below to process this order"
+          }
+        },
+        {
           type: "actions",
           elements: [
             {
@@ -118,7 +130,7 @@ export async function POST(request: NextRequest) {
                 emoji: true
               },
               style: "primary",
-              value: `approve_${partNumber}_${quantity}`,
+              url: `${baseUrl}/api/slack/order-action?action=approve&part=${encodeURIComponent(partNumber)}&qty=${encodeURIComponent(quantity)}&user=SlackUser`,
               action_id: "approve_order"
             },
             {
@@ -128,7 +140,7 @@ export async function POST(request: NextRequest) {
                 text: "📝 Request Changes",
                 emoji: true
               },
-              value: `modify_${partNumber}_${quantity}`,
+              url: `${baseUrl}/api/slack/order-action?action=changes&part=${encodeURIComponent(partNumber)}&qty=${encodeURIComponent(quantity)}&user=SlackUser`,
               action_id: "request_changes"
             },
             {
@@ -139,7 +151,7 @@ export async function POST(request: NextRequest) {
                 emoji: true
               },
               style: "danger",
-              value: `deny_${partNumber}_${quantity}`,
+              url: `${baseUrl}/api/slack/order-action?action=deny&part=${encodeURIComponent(partNumber)}&qty=${encodeURIComponent(quantity)}&user=SlackUser`,
               action_id: "deny_order"
             }
           ]
