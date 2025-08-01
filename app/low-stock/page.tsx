@@ -176,8 +176,8 @@ export default function LowStockPage() {
             <div>
               <h3 className="font-medium text-red-800 mb-1">Low Stock Alert</h3>
               <p className="text-sm text-red-700">
-                All items below are at or below their reorder point and require attention. Use the "Reorder" button 
-                to send a Slack notification and open a pre-filled workflow for each item.
+                All items below are at or below their reorder point and require attention. Use the "Send to Slack" button 
+                to send a notification with a workflow link that you can click directly in Slack.
               </p>
             </div>
           </div>
@@ -187,7 +187,7 @@ export default function LowStockPage() {
       <Card>
         <CardHeader>
           <CardTitle>Low Stock Items</CardTitle>
-          <CardDescription>Items that need to be reordered - click "Reorder" for instant Slack workflow</CardDescription>
+          <CardDescription>Items that need to be reordered - click "Send to Slack" for workflow link</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -240,14 +240,18 @@ export default function LowStockPage() {
             <div>
               <h3 className="font-medium text-blue-800 mb-1">Reorder Process</h3>
               <p className="text-sm text-blue-700 mb-2">
-                Each "Reorder" button will:
+                Each "Send to Slack" button will:
               </p>
               <ul className="text-sm text-blue-700 space-y-1 ml-4">
                 <li>• Send a detailed notification to your Slack channel</li>
-                <li>• Open your Slack workflow with all part information pre-filled</li>
-                <li>• Eliminate manual data entry in the workflow form</li>
-                <li>• Provide fallback options if the primary method fails</li>
+                <li>• Include a clickable workflow link within Slack</li>
+                <li>• Provide all part information in the message</li>
+                <li>• Allow you to click the workflow link directly in Slack</li>
               </ul>
+              <p className="text-sm text-blue-700 mt-2">
+                <strong>Note:</strong> Workflow links only work within Slack, not in web browsers. 
+                After clicking "Send to Slack", go to your Slack channel and click the workflow link there.
+              </p>
             </div>
           </div>
         </CardContent>
