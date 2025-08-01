@@ -18,6 +18,36 @@ export async function POST(request: NextRequest) {
       notes
     } = await request.json()
 
+    // Create reorder request record
+    const reorderResponse = await fetch(`${request.nextUrl.origin}/api/reorder-requests`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        partNumber,
+        description,
+        currentQty,
+        reorderPoint,
+        supplier,
+        location,
+        quantity,
+        timeframe,
+        urgency,
+        requester,
+        notes
+      })
+    })
+
+    const reorderResult = await reorderResponse.json()
+    
+    if (!reorderResult.success) {
+      throw new Error('Failed to create reorder request record')
+    }
+
+    const requestId = reorderResult.requestId
+
+    // Send to Slack
     const webhookUrl = process.env.SLACK_WEBHOOK_URL
 
     if (!webhookUrl) {
@@ -34,19 +64,14 @@ export async function POST(request: NextRequest) {
 
     const urgencyInfo = urgencyConfig[urgency as keyof typeof urgencyConfig] || urgencyConfig.Medium
 
-    // Base URL for action buttons
-    const baseUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}` 
-      : 'https://v0-inv-mgt.vercel.app'
-
-    // Create comprehensive Slack message with functional URL buttons
+    // Create simplified Slack message without workflow buttons
     const message = {
       blocks: [
         {
           type: "header",
           text: {
             type: "plain_text",
-            text: "🛒 Purchase Request Submitted",
+            text: "🛒 New Reorder Request Submitted",
             emoji: true
           }
         },
@@ -54,7 +79,7 @@ export async function POST(request: NextRequest) {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `*${urgencyInfo.emoji} ${urgencyInfo.priority} PRIORITY*\n*Requested by:* ${requester}\n*Timeframe:* ${timeframe}`
+            text: `*${urgencyInfo.emoji} ${urgencyInfo.priority} PRIORITY*\n*Request ID:* \`${requestId}\`\n*Requested by:* ${requester}\n*Timeframe:* ${timeframe}`
           }
         },
         {
@@ -109,59 +134,22 @@ export async function POST(request: NextRequest) {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `*📊 Order Summary:*\n• Part: ${partNumber}\n• Quantity: ${quantity} units\n• Urgency: ${urgencyInfo.emoji} ${urgency}\n• Timeframe: ${timeframe}\n• Requester: ${requester}\n• Current Stock: ${currentQty}/${reorderPoint}`
+            text: `*📊 Request Summary:*\n• Request ID: \`${requestId}\`\n• Part: ${partNumber}\n• Quantity: ${quantity} units\n• Urgency: ${urgencyInfo.emoji} ${urgency}\n• Timeframe: ${timeframe}\n• Requester: ${requester}\n• Current Stock: ${currentQty}/${reorderPoint}`
           }
         },
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: "*🎯 Take Action:* Click a button below to process this order"
+            text: `*🎯 Next Steps:*\n• Review request details above\n• Update status via the Reorder Status page\n• Requester will be automatically notified of status changes`
           }
-        },
-        {
-          type: "actions",
-          elements: [
-            {
-              type: "button",
-              text: {
-                type: "plain_text",
-                text: "✅ Approve Order",
-                emoji: true
-              },
-              style: "primary",
-              url: `${baseUrl}/api/slack/order-action?action=approve&part=${encodeURIComponent(partNumber)}&qty=${encodeURIComponent(quantity)}&requester=${encodeURIComponent(requester)}`,
-              action_id: "approve_order"
-            },
-            {
-              type: "button",
-              text: {
-                type: "plain_text",
-                text: "📝 Request Changes",
-                emoji: true
-              },
-              url: `${baseUrl}/api/slack/order-action?action=changes&part=${encodeURIComponent(partNumber)}&qty=${encodeURIComponent(quantity)}&requester=${encodeURIComponent(requester)}`,
-              action_id: "request_changes"
-            },
-            {
-              type: "button",
-              text: {
-                type: "plain_text",
-                text: "❌ Deny Order",
-                emoji: true
-              },
-              style: "danger",
-              url: `${baseUrl}/api/slack/order-action?action=deny&part=${encodeURIComponent(partNumber)}&qty=${encodeURIComponent(quantity)}&requester=${encodeURIComponent(requester)}`,
-              action_id: "deny_order"
-            }
-          ]
         },
         {
           type: "context",
           elements: [
             {
               type: "mrkdwn",
-              text: `📅 Submitted: ${new Date().toLocaleString()} | 🏷️ ${partNumber} | 📦 ${quantity} units | ${urgencyInfo.emoji} ${urgency}`
+              text: `📅 Submitted: ${new Date().toLocaleString()} | 🏷️ ${partNumber} | 📦 ${quantity} units | ${urgencyInfo.emoji} ${urgency} | 🆔 ${requestId}`
             }
           ]
         }
@@ -187,11 +175,12 @@ export async function POST(request: NextRequest) {
       throw new Error(`Slack API error: ${response.status}`)
     }
 
-    console.log(`✅ Purchase request submitted for ${partNumber}: ${quantity} units, ${urgency} priority`)
+    console.log(`✅ Reorder request submitted: ${requestId} for ${partNumber}: ${quantity} units, ${urgency} priority`)
 
     return NextResponse.json({
       success: true,
-      message: `Purchase request submitted successfully`,
+      message: `Reorder request submitted successfully`,
+      requestId,
       orderDetails: {
         partNumber,
         quantity,
@@ -203,9 +192,9 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('❌ Purchase request submission error:', error)
+    console.error('❌ Reorder request submission error:', error)
     return NextResponse.json({
-      error: 'Failed to submit purchase request',
+      error: 'Failed to submit reorder request',
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 })
   }

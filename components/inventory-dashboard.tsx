@@ -1537,6 +1537,18 @@ Please check your Slack configuration.`)
               {slackConfigured ? "Send Full Alert" : "Send Full Alert (Not Configured)"}
             </Button>
           )}
+          <Button variant="outline" onClick={() => window.open('/low-stock', '_blank')}>
+            <AlertTriangle className="w-4 h-4 mr-2" />
+            Low Stock Page
+          </Button>
+          <Button variant="outline" onClick={() => window.open('/reorder-status', '_blank')}>
+            <ShoppingCart className="w-4 h-4 mr-2" />
+            Reorder Status
+          </Button>
+          <Button variant="outline" onClick={() => window.open('/endpoints', '_blank')}>
+            <Info className="w-4 h-4 mr-2" />
+            All Endpoints
+          </Button>
           <Dialog>
             <DialogTrigger asChild>
               <Button variant="outline">
