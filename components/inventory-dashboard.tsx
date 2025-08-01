@@ -101,8 +101,15 @@ export default function InventoryDashboard() {
     reorderPoint: alertSettings.defaultReorderPoint 
   }])
 
-  // Load data from database on component mount
+  // Debug: Log inventory changes
   useEffect(() => {
+    console.log(`📊 Inventory state updated: ${inventory.length} items`) // Debug
+    if (inventory.length > 0) {
+      console.log("📊 Sample inventory items:", inventory.slice(0, 2)) // Debug
+    }
+  }, [inventory])
+  useEffect(() => {
+    console.log("🚀 Component mounted, starting data load...") // Debug
     loadInventoryFromDatabase()
     loadSettingsFromDatabase()
     checkSlackConfiguration()
