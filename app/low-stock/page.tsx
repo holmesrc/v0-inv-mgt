@@ -5,8 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ShoppingCart, AlertTriangle, Upload } from "lucide-react"
+import { ShoppingCart, AlertTriangle, Upload, RefreshCw } from "lucide-react"
 import Link from "next/link"
+import { ReorderButton } from "@/components/reorder-button"
 
 export default function LowStockPage() {
   const [lowStockItems, setLowStockItems] = useState<any[]>([])
@@ -122,9 +123,15 @@ export default function LowStockPage() {
             <h1 className="text-3xl font-bold">Low Stock Items</h1>
             <p className="text-muted-foreground">No items below reorder point</p>
           </div>
-          <Link href="/">
-            <Button>Back to Dashboard</Button>
-          </Link>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={loadLowStockItems}>
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refresh
+            </Button>
+            <Link href="/">
+              <Button>Back to Dashboard</Button>
+            </Link>
+          </div>
         </div>
 
         <Card className="border-green-200 bg-green-50">
@@ -151,9 +158,15 @@ export default function LowStockPage() {
           <h1 className="text-3xl font-bold">Low Stock Items</h1>
           <p className="text-muted-foreground">{lowStockItems.length} items below reorder point</p>
         </div>
-        <Link href="/">
-          <Button>Back to Dashboard</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={loadLowStockItems}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
+          <Link href="/">
+            <Button>Back to Dashboard</Button>
+          </Link>
+        </div>
       </div>
 
       <Card className="border-red-200 bg-red-50">
@@ -163,8 +176,8 @@ export default function LowStockPage() {
             <div>
               <h3 className="font-medium text-red-800 mb-1">Low Stock Alert</h3>
               <p className="text-sm text-red-700">
-                All items below are at or below their reorder point and require attention. Use the "Create Purchase
-                Request" button to reorder items.
+                All items below are at or below their reorder point and require attention. Use the "Reorder" button 
+                to send a Slack notification and open a pre-filled workflow for each item.
               </p>
             </div>
           </div>
@@ -174,7 +187,7 @@ export default function LowStockPage() {
       <Card>
         <CardHeader>
           <CardTitle>Low Stock Items</CardTitle>
-          <CardDescription>Items that need to be reordered</CardDescription>
+          <CardDescription>Items that need to be reordered - click "Reorder" for instant Slack workflow</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -195,42 +208,48 @@ export default function LowStockPage() {
                   <TableCell className="font-medium">{item["Part number"]}</TableCell>
                   <TableCell>{item["Part description"]}</TableCell>
                   <TableCell>
-                    <Badge variant="destructive">{item.QTY}</Badge>
+                    <Badge variant={item.QTY <= 0 ? "destructive" : "secondary"}>
+                      {item.QTY}
+                    </Badge>
                   </TableCell>
                   <TableCell>{item.reorderPoint || 10}</TableCell>
-                  <TableCell>{item.Supplier}</TableCell>
-                  <TableCell>{item.Location}</TableCell>
+                  <TableCell>{item.Supplier || 'TBD'}</TableCell>
+                  <TableCell>{item.Location || 'Unknown'}</TableCell>
                   <TableCell>
-                    <div className="space-y-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          // Copy the workflow link to clipboard and show instructions
-                          navigator.clipboard
-                            .writeText("https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031")
-                            .then(() => {
-                              alert(
-                                `📋 Workflow link copied to clipboard!\n\nTo create a purchase request for ${item["Part number"]}:\n\n1. Go to your Slack workspace\n2. Paste the link in any channel or DM\n3. Click the link in Slack to open the workflow\n\nAlternatively, search for "Purchase Request" in Slack's workflow section.`,
-                              )
-                            })
-                            .catch(() => {
-                              alert(
-                                `To create a purchase request for ${item["Part number"]}:\n\n1. Go to your Slack workspace\n2. Search for "Purchase Request" in workflows\n3. Or use this link in Slack: https://slack.com/shortcuts/Ft07D5F2JPPW/61b58ca025323cfb63963bcc8321c031\n\nNote: Workflow links only work within Slack, not in web browsers.`,
-                              )
-                            })
-                        }}
-                      >
-                        <ShoppingCart className="w-4 h-4 mr-2" />
-                        Create Purchase Request
-                      </Button>
-                      <p className="text-xs text-muted-foreground">Click to copy workflow link for Slack</p>
-                    </div>
+                    <ReorderButton
+                      partNumber={item["Part number"]}
+                      description={item["Part description"]}
+                      currentQty={item.QTY}
+                      reorderPoint={item.reorderPoint || 10}
+                      supplier={item.Supplier}
+                      location={item.Location}
+                    />
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      {/* Summary Card */}
+      <Card className="border-blue-200 bg-blue-50">
+        <CardContent className="pt-4">
+          <div className="flex items-start gap-2">
+            <ShoppingCart className="w-5 h-5 text-blue-600 mt-0.5" />
+            <div>
+              <h3 className="font-medium text-blue-800 mb-1">Reorder Process</h3>
+              <p className="text-sm text-blue-700 mb-2">
+                Each "Reorder" button will:
+              </p>
+              <ul className="text-sm text-blue-700 space-y-1 ml-4">
+                <li>• Send a detailed notification to your Slack channel</li>
+                <li>• Open your Slack workflow with all part information pre-filled</li>
+                <li>• Eliminate manual data entry in the workflow form</li>
+                <li>• Provide fallback options if the primary method fails</li>
+              </ul>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
