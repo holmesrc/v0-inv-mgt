@@ -81,7 +81,6 @@ export default function InventoryDashboard() {
   // Add this with the other state declarations
   const [editDialogOpen, setEditDialogOpen] = useState<Record<string, boolean>>({})
   const [addItemFormModified, setAddItemFormModified] = useState(false)
-  const [addItemMode, setAddItemMode] = useState<'single' | 'batch'>('single')
   const [addItemDialogOpen, setAddItemDialogOpen] = useState(false)
   const [duplicatePartInfo, setDuplicatePartInfo] = useState<{
     existingItem: any
@@ -1027,22 +1026,18 @@ export default function InventoryDashboard() {
 
         // Get current batch entry locations (if in batch mode)
         let batchLocations: string[] = []
-        if (addItemMode === 'batch') {
           batchLocations = batchEntryItems
             .map(item => item.location)
             .filter(Boolean)
             .map(loc => loc.trim())
           console.log("📍 Current batch locations:", batchLocations.length) // Debug
-        }
 
         // Get current single entry location (if in single mode and has value)
         let currentFormLocation: string[] = []
-        if (addItemMode === 'single') {
           const locationInput = document.querySelector("#add-location") as HTMLSelectElement
           if (locationInput && locationInput.value && locationInput.value !== suggestedLocation) {
             currentFormLocation = [locationInput.value.trim()]
             console.log("📍 Current form location:", currentFormLocation) // Debug
-          }
         }
 
         // Combine all locations
@@ -1180,22 +1175,18 @@ export default function InventoryDashboard() {
 
         // Get current batch entry locations (if in batch mode)
         let batchLocations: string[] = []
-        if (addItemMode === 'batch') {
           batchLocations = batchEntryItems
             .map(item => item.location)
             .filter(Boolean)
             .map(loc => loc.trim())
           console.log("📍 Current batch locations:", batchLocations.length) // Debug
-        }
 
         // Get current single entry location (if in single mode and has value)
         let currentFormLocation: string[] = []
-        if (addItemMode === 'single') {
           const locationInput = document.querySelector("#add-location") as HTMLSelectElement
           if (locationInput && locationInput.value && locationInput.value !== suggestedLocation) {
             currentFormLocation = [locationInput.value.trim()]
             console.log("📍 Current form location:", currentFormLocation) // Debug
-          }
         }
 
         // Combine all locations
@@ -1283,7 +1274,7 @@ export default function InventoryDashboard() {
     }
 
     generateLocationSuggestion()
-  }, [inventory, batchEntryItems, addItemMode])
+  }, [inventory, batchEntryItems])
 
   // Function to check for duplicate part numbers
   const checkForDuplicatePart = async (partNumber: string, mode: 'single' | 'batch', batchIndex?: number) => {
@@ -2017,7 +2008,6 @@ Please check your Slack configuration.`)
             <DialogTrigger asChild>
               <Button onClick={() => {
                 setAddItemFormModified(false)
-                setAddItemMode('single')
                 setAddItemDialogOpen(true)
                 setBatchEntryItems([{ 
                   partNumber: '', 
