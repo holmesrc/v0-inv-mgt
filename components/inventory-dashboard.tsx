@@ -1277,7 +1277,7 @@ export default function InventoryDashboard() {
   }, [inventory, batchEntryItems])
 
   // Function to check for duplicate part numbers
-  const checkForDuplicatePart = async (partNumber: string, mode: 'single' | 'batch', batchIndex?: number) => {
+  const checkForDuplicatePart = async (partNumber: string, batchIndex?: number) => {
     if (!partNumber.trim()) return false
 
     console.log(`🔍 Checking for duplicate: "${partNumber}"`) // Debug log
@@ -1425,12 +1425,12 @@ export default function InventoryDashboard() {
   // Debounced duplicate check function
   const debouncedDuplicateCheck = useMemo(() => {
     let timeoutId: NodeJS.Timeout
-    return (partNumber: string, mode: 'single' | 'batch', batchIndex?: number) => {
+    return (partNumber: string, batchIndex?: number) => {
       console.log("⏰ Debounced check called for:", partNumber) // Debug
       clearTimeout(timeoutId)
       timeoutId = setTimeout(() => {
         console.log("⏰ Debounce timeout triggered, calling checkForDuplicatePart") // Debug
-        checkForDuplicatePart(partNumber, mode, batchIndex)
+        checkForDuplicatePart(partNumber, batchIndex)
       }, 500) // 500ms delay after user stops typing
     }
   }, [])
@@ -2056,7 +2056,7 @@ Please check your Slack configuration.`)
                           console.log("🔍 Trimmed part number:", partNumber) // Debug
                           if (partNumber.length >= 2) { // Start checking after 2 characters
                             console.log("🔍 Triggering duplicate check for:", partNumber) // Debug
-                            debouncedDuplicateCheck(partNumber, 'single')
+                            debouncedDuplicateCheck(partNumber)
                           }
                         }}
                       />
