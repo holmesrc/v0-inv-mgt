@@ -14,6 +14,29 @@ export const DEFAULT_TIMEZONE_CONFIG: TimezoneConfig = {
 }
 
 /**
+ * Check if the current time is the correct time to run the alert
+ * (9:00 AM Eastern Time on Monday, accounting for DST)
+ */
+export function isCorrectAlertTime(): boolean {
+  const now = new Date()
+  const easternTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }))
+  
+  // Check if it's Monday (1 = Monday)
+  const isMonday = easternTime.getDay() === 1
+  
+  // Check if it's 9:00 AM Eastern (hour 9)
+  const isNineAM = easternTime.getHours() === 9
+  
+  // Allow a 5-minute window (9:00-9:05 AM) to account for cron timing variations
+  const isCorrectMinute = easternTime.getMinutes() < 5
+  
+  console.log(`🕘 Time check: ${easternTime.toLocaleString()} Eastern`)
+  console.log(`📅 Is Monday: ${isMonday}, Is 9 AM: ${isNineAM}, Within window: ${isCorrectMinute}`)
+  
+  return isMonday && isNineAM && isCorrectMinute
+}
+
+/**
  * Get the current DST status and UTC offset for Eastern Time
  */
 export function getEasternTimeInfo() {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { sendFullLowStockAlert } from "@/lib/slack"
-import { getScheduleDescription } from "@/lib/timezone"
+import { getScheduleDescription, isCorrectAlertTime } from "@/lib/timezone"
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,7 +11,23 @@ export async function GET(request: NextRequest) {
     }
 
     const scheduleInfo = getScheduleDescription('America/New_York')
-    console.log(`🕘 Running scheduled inventory alert check at ${scheduleInfo.currentTime}`)
+    console.log(`🕘 Cron triggered at ${scheduleInfo.currentTime}`)
+
+    // Check if this is the correct time to run (9:00 AM Eastern, accounting for DST)
+    const shouldRun = isCorrectAlertTime()
+    
+    if (!shouldRun) {
+      console.log(`⏰ Not the correct time to run alert. Current: ${scheduleInfo.currentTime}`)
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Cron triggered but not correct time for alert',
+        timestamp: scheduleInfo.currentTime,
+        timezone: 'America/New_York',
+        isDST: scheduleInfo.isDST
+      })
+    }
+
+    console.log(`✅ Correct time detected for alert: ${scheduleInfo.currentTime}`)
 
     // Construct base URL more reliably
     const host = request.headers.get('host')
@@ -106,6 +122,7 @@ export async function GET(request: NextRequest) {
         itemsCount: lowStockItems.length,
         timestamp: scheduleInfo.currentTime,
         timezone: 'America/New_York',
+        isDST: scheduleInfo.isDST,
         items: lowStockItems.map((item: any) => ({
           partNumber: item["Part number"],
           description: item["Part description"],
