@@ -100,6 +100,7 @@ export default function InventoryDashboard() {
     existingItem: any
     batchIndex?: number
   } | null>(null)
+  const [batchMode, setBatchMode] = useState(false)
 
   // Form state for adding new items
   const [newItem, setNewItem] = useState({
@@ -782,7 +783,7 @@ export default function InventoryDashboard() {
     }
   }
 
-  const handleAddToBatch = async () => {
+  const handleBatchUpload = async () => {
     // Validate required fields
     if (!newItem.requester.trim()) {
       setShowRequesterWarning(true)
@@ -830,7 +831,7 @@ export default function InventoryDashboard() {
 
     setBatchEntryItems(prev => [...prev, batchItem])
 
-    // Clear form but keep requester
+    // Clear form but keep requester and enter batch mode
     const requesterName = newItem.requester
     setNewItem({
       partNumber: "",
@@ -844,12 +845,13 @@ export default function InventoryDashboard() {
       requester: requesterName, // Keep requester for next item
     })
 
-    // Reset form state
+    // Reset form state but enter batch mode
     setShowCustomLocationInput(false)
     setCustomLocationValue("")
     setShowCustomPackageInput(false)
     setCustomPackageValue("")
     setShowRequesterWarning(false)
+    setBatchMode(true) // Enter batch mode
     
     // Refresh location suggestion for next item
     await generateLocationSuggestion()
@@ -868,35 +870,46 @@ export default function InventoryDashboard() {
         return
       }
 
-      // Submit each item in the batch
-      let successCount = 0
-      for (const item of batchEntryItems) {
-        try {
-          const itemData = {
-            "Part number": item.partNumber,
-            "MFG Part number": item.mfgPartNumber || "",
-            "Part description": item.description,
-            QTY: parseInt(item.quantity) || 0,
-            Location: item.location,
-            Supplier: item.supplier,
-            Package: item.package,
-            reorderPoint: item.reorderPoint,
-          }
+      // Submit the entire batch as a single batch request
+      const response = await fetch("/api/inventory/batch-add", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          batch_items: batchEntryItems.map(item => ({
+            part_number: item.partNumber,
+            mfg_part_number: item.mfgPartNumber || "",
+            part_description: item.description,
+            quantity: parseInt(item.quantity) || 0,
+            location: item.location,
+            supplier: item.supplier,
+            package: item.package,
+            reorder_point: item.reorderPoint,
+          })),
+          requester: requesterName,
+        }),
+      })
 
-          await addInventoryItem(itemData, requesterName)
-          successCount++
-        } catch (error) {
-          console.error(`Failed to submit item ${item.partNumber}:`, error)
-        }
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
       }
 
-      alert(`✅ Batch submitted! ${successCount} of ${batchEntryItems.length} items submitted for approval.`)
+      const result = await response.json()
+      if (!result.success) {
+        throw new Error(result.error || "Unknown error occurred")
+      }
+
+      alert(`✅ Batch submitted! ${batchEntryItems.length} items submitted for batch approval.`)
 
       // Clear batch and close dialog
       setBatchEntryItems([])
+      setBatchMode(false)
       setAddItemDialogOpen(false)
       
-      // Refresh location suggestion
+      // Refresh data
+      await loadInventoryFromDatabase()
+      await loadPendingChanges()
       await generateLocationSuggestion()
     } catch (error) {
       console.error("Failed to submit batch:", error)
@@ -927,6 +940,8 @@ export default function InventoryDashboard() {
       setCustomPackageValue("")
       setAddItemFormModified(false)
       setShowRequesterWarning(false)
+      setBatchMode(false)
+      setBatchEntryItems([])
       
       // Reset form data
       setNewItem({
@@ -1700,7 +1715,7 @@ export default function InventoryDashboard() {
           </div>
 
           {/* Batch Items Display */}
-          {batchEntryItems.length > 0 && (
+          {batchMode && batchEntryItems.length > 0 && (
             <div className="mt-6 space-y-4 border-t pt-4">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-medium">Batch Items ({batchEntryItems.length})</h3>
@@ -1709,6 +1724,7 @@ export default function InventoryDashboard() {
                   variant="outline"
                   onClick={() => {
                     setBatchEntryItems([])
+                    setBatchMode(false)
                     setAddItemFormModified(false)
                   }}
                 >
@@ -1744,6 +1760,10 @@ export default function InventoryDashboard() {
                               onClick={() => {
                                 setBatchEntryItems(prev => prev.filter((_, i) => i !== index))
                                 setAddItemFormModified(true)
+                                // Exit batch mode if no items left
+                                if (batchEntryItems.length === 1) {
+                                  setBatchMode(false)
+                                }
                               }}
                               className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
                             >
@@ -1765,27 +1785,42 @@ export default function InventoryDashboard() {
                 Cancel
               </Button>
               <div className="flex gap-2">
-                <Button 
-                  variant="outline"
-                  onClick={handleAddToBatch}
-                  disabled={!newItem.partNumber || !newItem.description || !newItem.quantity || !newItem.requester}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add to Batch
-                </Button>
-                <Button 
-                  onClick={handleAddItem}
-                  disabled={!newItem.partNumber || !newItem.description || !newItem.quantity || !newItem.requester}
-                >
-                  Add Single Item
-                </Button>
-                {batchEntryItems.length > 0 && (
-                  <Button 
-                    onClick={handleSubmitBatch}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    Submit Batch ({batchEntryItems.length})
-                  </Button>
+                {!batchMode ? (
+                  // Normal mode - show both single item and batch upload options
+                  <>
+                    <Button 
+                      onClick={handleAddItem}
+                      disabled={!newItem.partNumber || !newItem.description || !newItem.quantity || !newItem.requester}
+                    >
+                      Add Item
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      onClick={handleBatchUpload}
+                      disabled={!newItem.partNumber || !newItem.description || !newItem.quantity || !newItem.requester}
+                    >
+                      Batch Upload
+                    </Button>
+                  </>
+                ) : (
+                  // Batch mode - show add to batch and submit batch options
+                  <>
+                    <Button 
+                      variant="outline"
+                      onClick={handleBatchUpload}
+                      disabled={!newItem.partNumber || !newItem.description || !newItem.quantity || !newItem.requester}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add to Batch
+                    </Button>
+                    <Button 
+                      onClick={handleSubmitBatch}
+                      disabled={batchEntryItems.length === 0}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      Submit Batch ({batchEntryItems.length})
+                    </Button>
+                  </>
                 )}
               </div>
             </div>
@@ -1857,7 +1892,7 @@ export default function InventoryDashboard() {
 
                   setBatchEntryItems(prev => [...prev, batchItem])
 
-                  // Clear form but keep requester
+                  // Clear form but keep requester and stay in batch mode
                   const requesterName = newItem.requester
                   setNewItem({
                     partNumber: "",
@@ -1871,6 +1906,7 @@ export default function InventoryDashboard() {
                     requester: requesterName,
                   })
 
+                  setBatchMode(true) // Ensure we stay in batch mode
                   setShowDuplicateDialog(false)
                   setDuplicatePartInfo(null)
                 }
