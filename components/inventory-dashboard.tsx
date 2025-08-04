@@ -1347,7 +1347,14 @@ export default function InventoryDashboard() {
         item.Supplier.toLowerCase().includes(searchTerm.toLowerCase())
 
       const matchesCategory = categoryFilter === "all" || 
-        (categoryFilter === "low" && item.QTY <= (item.reorderPoint || alertSettings.defaultReorderPoint || 10))
+        (categoryFilter === "low" && (() => {
+          const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint || 10
+          return item.QTY <= reorderPoint
+        })()) ||
+        (categoryFilter === "approaching" && (() => {
+          const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint || 10
+          return item.QTY > reorderPoint && item.QTY <= reorderPoint * 1.5
+        })())
 
       return matchesSearch && matchesCategory
     })
@@ -1390,17 +1397,19 @@ export default function InventoryDashboard() {
   }, [inventory, searchTerm, categoryFilter, sortBy, sortOrder, alertSettings.defaultReorderPoint])
 
   const lowStockItems = useMemo(() => {
-    return inventory.filter((item) => 
-      item.QTY <= (item.reorderPoint || alertSettings.defaultReorderPoint || 10)
-    )
+    return inventory.filter((item) => {
+      const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint || 10
+      return item.QTY <= reorderPoint // Only items at or below reorder point
+    })
   }, [inventory, alertSettings.defaultReorderPoint])
 
   const getStockStatus = (item: InventoryItem) => {
     const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint || 10
+    
     if (item.QTY <= reorderPoint) {
       return { status: "low", color: "destructive" as const }
     } else if (item.QTY <= reorderPoint * 1.5) {
-      return { status: "medium", color: "secondary" as const }
+      return { status: "approaching", color: "secondary" as const }
     } else {
       return { status: "good", color: "default" as const }
     }
@@ -1536,6 +1545,7 @@ export default function InventoryDashboard() {
           <SelectContent>
             <SelectItem value="all">All Items</SelectItem>
             <SelectItem value="low">Low Stock Only</SelectItem>
+            <SelectItem value="approaching">Approaching Low Stock</SelectItem>
           </SelectContent>
         </Select>
         <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
@@ -1610,9 +1620,19 @@ export default function InventoryDashboard() {
                       <td className="border border-gray-300 p-2">{item.Supplier}</td>
                       <td className="border border-gray-300 p-2">{item.Package}</td>
                       <td className="border border-gray-300 p-2">
-                        <Badge variant={stockStatus.color}>
-                          {stockStatus.status}
-                        </Badge>
+                        {stockStatus.status === "low" && (
+                          <Badge variant="destructive">
+                            Low Stock
+                          </Badge>
+                        )}
+                        {stockStatus.status === "approaching" && (
+                          <Badge variant="secondary">
+                            Approaching Low
+                          </Badge>
+                        )}
+                        {stockStatus.status === "good" && (
+                          <span className="text-gray-400 text-sm">-</span>
+                        )}
                       </td>
                       <td className="border border-gray-300 p-2">
                         <div className="flex gap-1 flex-wrap">
