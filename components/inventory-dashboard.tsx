@@ -82,6 +82,8 @@ export default function InventoryDashboard() {
   const [suggestedLocation, setSuggestedLocation] = useState<string>("H1-1")
   const [showCustomLocationInput, setShowCustomLocationInput] = useState(false)
   const [customLocationValue, setCustomLocationValue] = useState("")
+  const [addItemFormModified, setAddItemFormModified] = useState(false)
+  const [showRequesterWarning, setShowRequesterWarning] = useState(false)
 
   // Form state for adding new items
   const [newItem, setNewItem] = useState({
@@ -93,6 +95,7 @@ export default function InventoryDashboard() {
     supplier: "",
     package: "",
     reorderPoint: "",
+    requester: "",
   })
 
   useEffect(() => {
@@ -678,10 +681,13 @@ export default function InventoryDashboard() {
   }
 
   const handleAddItem = async () => {
-    try {
-      const requesterName = prompt("Enter your name for approval tracking:")
-      if (!requesterName) return
+    // Validate requester field
+    if (!newItem.requester.trim()) {
+      setShowRequesterWarning(true)
+      return
+    }
 
+    try {
       const itemData = {
         "Part number": newItem.partNumber,
         "MFG Part number": newItem.mfgPartNumber || "",
@@ -693,7 +699,7 @@ export default function InventoryDashboard() {
         reorderPoint: parseInt(newItem.reorderPoint) || alertSettings.defaultReorderPoint,
       }
 
-      await addInventoryItem(itemData, requesterName)
+      await addInventoryItem(itemData, newItem.requester.trim())
       
       // Reset form
       setNewItem({
@@ -705,11 +711,14 @@ export default function InventoryDashboard() {
         supplier: "",
         package: "",
         reorderPoint: "",
+        requester: "",
       })
       
-      // Reset location form state
+      // Reset form state
       setShowCustomLocationInput(false)
       setCustomLocationValue("")
+      setAddItemFormModified(false)
+      setShowRequesterWarning(false)
       
       setAddItemDialogOpen(false)
       alert("Item submitted for approval!")
@@ -723,11 +732,49 @@ export default function InventoryDashboard() {
   }
 
   const handleAddItemDialogOpen = (open: boolean) => {
+    if (!open && addItemFormModified) {
+      // Check if user is trying to close with unsaved changes
+      const hasContent = Object.values(newItem).some(value => value.trim() !== "")
+      if (hasContent) {
+        const confirmClose = window.confirm(
+          "You have unsaved changes. Are you sure you want to close without submitting?"
+        )
+        if (!confirmClose) {
+          return // Don't close the dialog
+        }
+      }
+    }
+
     setAddItemDialogOpen(open)
     if (!open) {
-      // Reset location form state when closing
+      // Reset all form state when closing
       setShowCustomLocationInput(false)
       setCustomLocationValue("")
+      setAddItemFormModified(false)
+      setShowRequesterWarning(false)
+      
+      // Reset form data
+      setNewItem({
+        partNumber: "",
+        mfgPartNumber: "",
+        description: "",
+        quantity: "",
+        location: "",
+        supplier: "",
+        package: "",
+        reorderPoint: "",
+        requester: "",
+      })
+    }
+  }
+
+  const handleFormFieldChange = (field: string, value: string) => {
+    setNewItem(prev => ({ ...prev, [field]: value }))
+    setAddItemFormModified(true)
+    
+    // Clear requester warning when user starts typing in requester field
+    if (field === 'requester' && showRequesterWarning) {
+      setShowRequesterWarning(false)
     }
   }
 
@@ -1221,13 +1268,37 @@ export default function InventoryDashboard() {
               Add a new item to the inventory
             </DialogDescription>
           </DialogHeader>
+          
+          {/* Requester Warning */}
+          {showRequesterWarning && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Requester name is required for submission. Please enter your name.
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <div className="space-y-4">
+            <div>
+              <Label htmlFor="requester">Requester Name *</Label>
+              <Input
+                id="requester"
+                value={newItem.requester}
+                onChange={(e) => handleFormFieldChange('requester', e.target.value)}
+                placeholder="Enter your name"
+                className={showRequesterWarning ? "border-red-500" : ""}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Your name for approval tracking
+              </p>
+            </div>
             <div>
               <Label htmlFor="part-number">Part Number *</Label>
               <Input
                 id="part-number"
                 value={newItem.partNumber}
-                onChange={(e) => setNewItem(prev => ({ ...prev, partNumber: e.target.value }))}
+                onChange={(e) => handleFormFieldChange('partNumber', e.target.value)}
                 placeholder="Enter part number"
               />
             </div>
@@ -1236,7 +1307,7 @@ export default function InventoryDashboard() {
               <Input
                 id="mfg-part-number"
                 value={newItem.mfgPartNumber}
-                onChange={(e) => setNewItem(prev => ({ ...prev, mfgPartNumber: e.target.value }))}
+                onChange={(e) => handleFormFieldChange('mfgPartNumber', e.target.value)}
                 placeholder="Enter manufacturer part number"
               />
             </div>
@@ -1245,7 +1316,7 @@ export default function InventoryDashboard() {
               <Input
                 id="description"
                 value={newItem.description}
-                onChange={(e) => setNewItem(prev => ({ ...prev, description: e.target.value }))}
+                onChange={(e) => handleFormFieldChange('description', e.target.value)}
                 placeholder="Enter description"
               />
             </div>
@@ -1255,7 +1326,7 @@ export default function InventoryDashboard() {
                 id="quantity"
                 type="number"
                 value={newItem.quantity}
-                onChange={(e) => setNewItem(prev => ({ ...prev, quantity: e.target.value }))}
+                onChange={(e) => handleFormFieldChange('quantity', e.target.value)}
                 placeholder="Enter quantity"
               />
             </div>
@@ -1266,14 +1337,17 @@ export default function InventoryDashboard() {
                   <Input
                     id="location"
                     value={customLocationValue}
-                    onChange={(e) => setCustomLocationValue(e.target.value)}
+                    onChange={(e) => {
+                      setCustomLocationValue(e.target.value)
+                      setAddItemFormModified(true)
+                    }}
                     placeholder="Enter custom location"
                   />
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => {
-                      setNewItem(prev => ({ ...prev, location: customLocationValue }))
+                      handleFormFieldChange('location', customLocationValue)
                       setShowCustomLocationInput(false)
                       setCustomLocationValue("")
                     }}
@@ -1299,7 +1373,7 @@ export default function InventoryDashboard() {
                     if (value === "custom") {
                       setShowCustomLocationInput(true)
                     } else {
-                      setNewItem(prev => ({ ...prev, location: value }))
+                      handleFormFieldChange('location', value)
                     }
                   }}
                 >
@@ -1334,7 +1408,7 @@ export default function InventoryDashboard() {
               <Input
                 id="supplier"
                 value={newItem.supplier}
-                onChange={(e) => setNewItem(prev => ({ ...prev, supplier: e.target.value }))}
+                onChange={(e) => handleFormFieldChange('supplier', e.target.value)}
                 placeholder="Enter supplier"
               />
             </div>
@@ -1343,7 +1417,7 @@ export default function InventoryDashboard() {
               <Input
                 id="package"
                 value={newItem.package}
-                onChange={(e) => setNewItem(prev => ({ ...prev, package: e.target.value }))}
+                onChange={(e) => handleFormFieldChange('package', e.target.value)}
                 placeholder="Enter package type"
               />
             </div>
@@ -1353,7 +1427,7 @@ export default function InventoryDashboard() {
                 id="reorder-point"
                 type="number"
                 value={newItem.reorderPoint}
-                onChange={(e) => setNewItem(prev => ({ ...prev, reorderPoint: e.target.value }))}
+                onChange={(e) => handleFormFieldChange('reorderPoint', e.target.value)}
                 placeholder={`Default: ${alertSettings.defaultReorderPoint}`}
               />
             </div>
@@ -1364,7 +1438,7 @@ export default function InventoryDashboard() {
             </Button>
             <Button 
               onClick={handleAddItem}
-              disabled={!newItem.partNumber || !newItem.description || !newItem.quantity}
+              disabled={!newItem.partNumber || !newItem.description || !newItem.quantity || !newItem.requester}
             >
               Add Item
             </Button>
