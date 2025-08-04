@@ -2263,9 +2263,225 @@ Please check your Slack configuration.`)
                 </div>
               </div>
               )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-4 border-t">
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    // Clear the form
+                    const inputs = ['#add-part-number', '#add-mfg-part-number', '#add-description', '#add-quantity', '#add-reorder-point']
+                    inputs.forEach(selector => {
+                      const input = document.querySelector(selector) as HTMLInputElement
+                      if (input) input.value = ''
+                    })
+                    setAddItemFormModified(false)
+                  }}
+                >
+                  Clear Form
+                </Button>
+                
+                <Button 
+                  onClick={() => {
+                    // Get form values
+                    const requesterInput = document.querySelector("#add-requester") as HTMLInputElement
+                    const partNumberInput = document.querySelector("#add-part-number") as HTMLInputElement
+                    const mfgPartNumberInput = document.querySelector("#add-mfg-part-number") as HTMLInputElement
+                    const descriptionInput = document.querySelector("#add-description") as HTMLInputElement
+                    const quantityInput = document.querySelector("#add-quantity") as HTMLInputElement
+                    const reorderPointInput = document.querySelector("#add-reorder-point") as HTMLInputElement
+
+                    // Handle location
+                    const locationTrigger = document.querySelector("#add-location-trigger") as HTMLElement
+                    const locationCustom = document.querySelector("#add-location-custom") as HTMLInputElement
+                    const locationValue = locationTrigger?.getAttribute('data-value') === '__custom__'
+                      ? locationCustom?.value?.trim() || ""
+                      : locationTrigger?.getAttribute('data-value') || suggestedLocation
+
+                    // Handle supplier
+                    const supplierTrigger = document.querySelector("#add-supplier-trigger") as HTMLElement
+                    const supplierCustom = document.querySelector("#add-supplier-custom") as HTMLInputElement
+                    const supplierValue = supplierTrigger?.getAttribute('data-value') === '__custom__'
+                      ? supplierCustom?.value?.trim() || ""
+                      : supplierTrigger?.getAttribute('data-value') || ""
+
+                    // Handle package
+                    const packageTrigger = document.querySelector("#add-package-trigger") as HTMLElement
+                    const packageCustom = document.querySelector("#add-package-custom") as HTMLInputElement
+                    const packageValue = packageTrigger?.getAttribute('data-value') === '__custom__'
+                      ? packageCustom?.value?.trim() || ""
+                      : packageTrigger?.getAttribute('data-value') || ""
+
+                    if (
+                      !requesterInput?.value?.trim() ||
+                      !partNumberInput?.value?.trim() ||
+                      !descriptionInput?.value?.trim() ||
+                      !quantityInput?.value?.trim()
+                    ) {
+                      alert("Please fill in all required fields")
+                      return
+                    }
+
+                    const newBatchItem = {
+                      partNumber: partNumberInput.value.trim(),
+                      mfgPartNumber: mfgPartNumberInput?.value?.trim() || "",
+                      description: descriptionInput.value.trim(),
+                      quantity: quantityInput.value.trim(),
+                      location: locationValue,
+                      supplier: supplierValue,
+                      package: packageValue,
+                      reorderPoint: Number.parseInt(reorderPointInput?.value) || alertSettings.defaultReorderPoint,
+                      requester: requesterInput.value.trim()
+                    }
+
+                    // Add to batch
+                    setBatchEntryItems(prev => [...prev, newBatchItem])
+                    
+                    // Clear form for next item (but keep requester)
+                    const requesterValue = requesterInput.value
+                    const inputs = ['#add-part-number', '#add-mfg-part-number', '#add-description', '#add-quantity', '#add-reorder-point']
+                    inputs.forEach(selector => {
+                      const input = document.querySelector(selector) as HTMLInputElement
+                      if (input) input.value = ''
+                    })
+                    
+                    // Keep requester name
+                    requesterInput.value = requesterValue
+                    
+                    setAddItemFormModified(false)
+                  }}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add to Batch
+                </Button>
+              </div>
+
+              {/* Batch Items Display */}
+              {batchEntryItems.length > 0 && (
+                <div className="mt-6 space-y-4 border-t pt-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-medium">Batch Items ({batchEntryItems.length})</h3>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => {
+                        setBatchEntryItems([])
+                        setAddItemFormModified(false)
+                      }}
+                    >
+                      Clear Batch
+                    </Button>
+                  </div>
+
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="max-h-60 overflow-y-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 sticky top-0">
+                          <tr>
+                            <th className="text-left p-2 border-r">Part Number</th>
+                            <th className="text-left p-2 border-r">Description</th>
+                            <th className="text-left p-2 border-r">Qty</th>
+                            <th className="text-left p-2 border-r">Location</th>
+                            <th className="text-left p-2 border-r">Supplier</th>
+                            <th className="text-left p-2">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {batchEntryItems.map((item, index) => (
+                            <tr key={index} className="border-t hover:bg-gray-50">
+                              <td className="p-2 border-r font-mono text-xs">{item.partNumber}</td>
+                              <td className="p-2 border-r">{item.description}</td>
+                              <td className="p-2 border-r">{item.quantity}</td>
+                              <td className="p-2 border-r">{item.location}</td>
+                              <td className="p-2 border-r">{item.supplier}</td>
+                              <td className="p-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setBatchEntryItems(prev => prev.filter((_, i) => i !== index))
+                                    setAddItemFormModified(true)
+                                  }}
+                                  className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                                >
+                                  ×
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
               
               <DialogFooter>
-              </DialogFooter>
+                <div className="flex gap-2 w-full">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setBatchEntryItems([])
+                      
+                      // Clear all form fields
+                      const inputs = ['#add-requester', '#add-part-number', '#add-mfg-part-number', '#add-description', '#add-quantity', '#add-reorder-point']
+                      inputs.forEach(selector => {
+                        const input = document.querySelector(selector) as HTMLInputElement
+                        if (input) input.value = ''
+                      })
+                      
+                      setAddItemFormModified(false)
+                    }}
+                  >
+                    Clear All
+                  </Button>
+                  <Button 
+                    className="flex-1"
+                    onClick={async () => {
+                      if (batchEntryItems.length === 0) {
+                        alert("No items in batch to submit")
+                        return
+                      }
+
+                      const requesterName = batchEntryItems[0]?.requester
+                      if (!requesterName) {
+                        alert("Requester name is missing")
+                        return
+                      }
+
+                      // Submit each item in the batch
+                      let successCount = 0
+                      for (const item of batchEntryItems) {
+                        try {
+                          const newItem = {
+                            "Part number": item.partNumber,
+                            "MFG Part number": item.mfgPartNumber,
+                            "Part description": item.description,
+                            QTY: parseInt(item.quantity) || 0,
+                            Location: item.location,
+                            Supplier: item.supplier,
+                            Package: item.package,
+                            reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint,
+                          }
+                          
+                          await addInventoryItem(newItem, requesterName)
+                          successCount++
+                        } catch (error) {
+                          console.error(`Failed to add item ${item.partNumber}:`, error)
+                        }
+                      }
+                      
+                      alert(`✅ Batch submitted! ${successCount} of ${batchEntryItems.length} items submitted for approval.`)
+                      
+                      // Clear batch and close dialog
+                      setBatchEntryItems([])
+                      setAddItemFormModified(false)
+                      setAddItemDialogOpen(false)
+                    }}
+                  >
+                    Submit Batch ({batchEntryItems.length})
+                  </Button>
+                </div>
               </DialogFooter>
             </DialogContent>
           </Dialog>
