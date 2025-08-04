@@ -49,6 +49,7 @@ import ProtectedUploadButton from "./protected-upload-button"
 import PendingChangesDisplay from "./pending-changes-display"
 
 export default function InventoryDashboard() {
+  {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [packageNote, setPackageNote] = useState<string>("")
   const [searchTerm, setSearchTerm] = useState("")
@@ -2580,4 +2581,3 @@ Please check your Slack configuration.`)
       </div>
     )
   }
-}
