@@ -100,9 +100,6 @@ export default function InventoryDashboard() {
     reorderPoint: alertSettings.defaultReorderPoint 
   }])
 
-  // Add opening brace to balance the structure
-  {
-
   // Debug: Log inventory changes
   useEffect(() => {
     console.log(`📊 Inventory state updated: ${inventory.length} items`) // Debug
