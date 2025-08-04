@@ -108,6 +108,68 @@ export default function InventoryDashboard() {
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false)
   const [editingQuantity, setEditingQuantity] = useState<Record<string, string>>({})
 
+  // Smart search normalization for electrical components
+  const normalizeSearchTerm = (text: string): string => {
+    if (!text) return ""
+    
+    return text
+      .toLowerCase()
+      .trim()
+      // Normalize resistance units
+      .replace(/\s*ω\s*/g, " ohm ")
+      .replace(/\s*ohms?\s*/g, " ohm ")
+      .replace(/\s*Ω\s*/g, " ohm ")
+      // Normalize capacitance units
+      .replace(/\s*μf\s*/g, " uf ")
+      .replace(/\s*µf\s*/g, " uf ")
+      .replace(/\s*microf\s*/g, " uf ")
+      .replace(/\s*pf\s*/g, " pf ")
+      .replace(/\s*nf\s*/g, " nf ")
+      // Normalize voltage units
+      .replace(/\s*volts?\s*/g, " v ")
+      .replace(/\s*vdc\s*/g, " v ")
+      .replace(/\s*vac\s*/g, " v ")
+      // Normalize current units
+      .replace(/\s*amps?\s*/g, " a ")
+      .replace(/\s*amperes?\s*/g, " a ")
+      .replace(/\s*ma\s*/g, " ma ")
+      .replace(/\s*milliamps?\s*/g, " ma ")
+      // Normalize frequency units
+      .replace(/\s*hz\s*/g, " hz ")
+      .replace(/\s*khz\s*/g, " khz ")
+      .replace(/\s*mhz\s*/g, " mhz ")
+      .replace(/\s*ghz\s*/g, " ghz ")
+      // Normalize power units
+      .replace(/\s*watts?\s*/g, " w ")
+      .replace(/\s*milliwatts?\s*/g, " mw ")
+      // Clean up multiple spaces
+      .replace(/\s+/g, " ")
+      .trim()
+  }
+
+  const smartSearch = (item: InventoryItem, searchTerm: string): boolean => {
+    if (!searchTerm.trim()) return true
+    
+    const normalizedSearchTerm = normalizeSearchTerm(searchTerm)
+    
+    // Fields to search in
+    const searchFields = [
+      item["Part number"],
+      item["Part description"], 
+      item.Location,
+      item.Supplier,
+      item.Package,
+      item["MFG Part number"] || ""
+    ]
+    
+    // Normalize all search fields and check for matches
+    return searchFields.some(field => {
+      if (!field) return false
+      const normalizedField = normalizeSearchTerm(field.toString())
+      return normalizedField.includes(normalizedSearchTerm)
+    })
+  }
+
   // Form state for adding new items
   const [newItem, setNewItem] = useState({
     partNumber: "",
@@ -990,11 +1052,11 @@ export default function InventoryDashboard() {
   }
 
   const checkForComprehensiveDuplicate = async (partNumber: string) => {
-    const lowerPartNumber = partNumber.toLowerCase()
+    const normalizedPartNumber = normalizeSearchTerm(partNumber)
 
     // Check inventory first
     const inventoryDuplicate = inventory.find(
-      item => item["Part number"].toLowerCase() === lowerPartNumber
+      item => normalizeSearchTerm(item["Part number"]) === normalizedPartNumber
     )
 
     if (inventoryDuplicate) {
@@ -1014,7 +1076,7 @@ export default function InventoryDashboard() {
             const changePartNumber = change.item_data?.part_number || 
                                    change.item_data?.["Part number"] ||
                                    change.item_data?.partNumber
-            return changePartNumber && changePartNumber.toLowerCase() === lowerPartNumber
+            return changePartNumber && normalizeSearchTerm(changePartNumber) === normalizedPartNumber
           })
 
           if (pendingDuplicate) {
@@ -1030,7 +1092,9 @@ export default function InventoryDashboard() {
     }
 
     // Check batch items
-    const batchDuplicateIndex = checkForDuplicateInBatch(partNumber)
+    const batchDuplicateIndex = batchEntryItems.findIndex(
+      item => normalizeSearchTerm(item.partNumber) === normalizedPartNumber
+    )
     if (batchDuplicateIndex !== -1) {
       return {
         source: 'batch' as const,
@@ -1340,11 +1404,8 @@ export default function InventoryDashboard() {
 
   const filteredInventory = useMemo(() => {
     const filtered = inventory.filter((item) => {
-      const matchesSearch = 
-        item["Part number"].toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item["Part description"].toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.Location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.Supplier.toLowerCase().includes(searchTerm.toLowerCase())
+      // Use smart search instead of basic string matching
+      const matchesSearch = smartSearch(item, searchTerm)
 
       const matchesCategory = categoryFilter === "all" || 
         (categoryFilter === "low" && (() => {
@@ -1560,7 +1621,7 @@ export default function InventoryDashboard() {
       <div className="flex gap-4">
         <div className="flex-1">
           <Input
-            placeholder="Search by part number, description, location, or supplier..."
+            placeholder="Search parts (supports electrical units: 1 OHM = 1Ω, 10uF = 10μF, etc.)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full"
