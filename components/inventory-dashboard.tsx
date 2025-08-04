@@ -1662,24 +1662,29 @@ export default function InventoryDashboard() {
           <CardTitle>Inventory Items</CardTitle>
           <CardDescription>
             Showing {filteredInventory.length} of {inventory.length} items
+            {filteredInventory.length > 15 && (
+              <span className="text-blue-600 ml-2">• Scroll to see more items</span>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse border border-gray-300">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="border border-gray-300 p-2 text-left">Part Number</th>
-                  <th className="border border-gray-300 p-2 text-left">Description</th>
-                  <th className="border border-gray-300 p-2 text-left">Quantity</th>
-                  <th className="border border-gray-300 p-2 text-left">Location</th>
-                  <th className="border border-gray-300 p-2 text-left">Supplier</th>
-                  <th className="border border-gray-300 p-2 text-left">Package</th>
-                  <th className="border border-gray-300 p-2 text-left">Status</th>
-                  <th className="border border-gray-300 p-2 text-left">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+          <div className="border rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <div className="max-h-[600px] overflow-y-auto">
+                <table className="w-full border-collapse">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr>
+                      <th className="border border-gray-300 p-2 text-left">Part Number</th>
+                      <th className="border border-gray-300 p-2 text-left">Description</th>
+                      <th className="border border-gray-300 p-2 text-left">Quantity</th>
+                      <th className="border border-gray-300 p-2 text-left">Location</th>
+                      <th className="border border-gray-300 p-2 text-left">Supplier</th>
+                      <th className="border border-gray-300 p-2 text-left">Package</th>
+                      <th className="border border-gray-300 p-2 text-left">Status</th>
+                      <th className="border border-gray-300 p-2 text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                 {filteredInventory.map((item) => {
                   const stockStatus = getStockStatus(item)
                   const displayQuantity = getDisplayQuantity(item)
@@ -1895,7 +1900,9 @@ export default function InventoryDashboard() {
                   )
                 })}
               </tbody>
-            </table>
+                </table>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
