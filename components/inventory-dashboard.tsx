@@ -1026,18 +1026,18 @@ export default function InventoryDashboard() {
 
         // Get current batch entry locations (if in batch mode)
         let batchLocations: string[] = []
-          batchLocations = batchEntryItems
-            .map(item => item.location)
-            .filter(Boolean)
-            .map(loc => loc.trim())
-          console.log("📍 Current batch locations:", batchLocations.length) // Debug
+        batchLocations = batchEntryItems
+          .map(item => item.location)
+          .filter(Boolean)
+          .map(loc => loc.trim())
+        console.log("📍 Current batch locations:", batchLocations.length) // Debug
 
         // Get current single entry location (if in single mode and has value)
         let currentFormLocation: string[] = []
-          const locationInput = document.querySelector("#add-location") as HTMLSelectElement
-          if (locationInput && locationInput.value && locationInput.value !== suggestedLocation) {
-            currentFormLocation = [locationInput.value.trim()]
-            console.log("📍 Current form location:", currentFormLocation) // Debug
+        const locationInput = document.querySelector("#add-location") as HTMLSelectElement
+        if (locationInput && locationInput.value && locationInput.value !== suggestedLocation) {
+          currentFormLocation = [locationInput.value.trim()]
+          console.log("📍 Current form location:", currentFormLocation) // Debug
         }
 
         // Combine all locations
@@ -1175,18 +1175,18 @@ export default function InventoryDashboard() {
 
         // Get current batch entry locations (if in batch mode)
         let batchLocations: string[] = []
-          batchLocations = batchEntryItems
-            .map(item => item.location)
-            .filter(Boolean)
-            .map(loc => loc.trim())
-          console.log("📍 Current batch locations:", batchLocations.length) // Debug
+        batchLocations = batchEntryItems
+          .map(item => item.location)
+          .filter(Boolean)
+          .map(loc => loc.trim())
+        console.log("📍 Current batch locations:", batchLocations.length) // Debug
 
         // Get current single entry location (if in single mode and has value)
         let currentFormLocation: string[] = []
-          const locationInput = document.querySelector("#add-location") as HTMLSelectElement
-          if (locationInput && locationInput.value && locationInput.value !== suggestedLocation) {
-            currentFormLocation = [locationInput.value.trim()]
-            console.log("📍 Current form location:", currentFormLocation) // Debug
+        const locationInput = document.querySelector("#add-location") as HTMLSelectElement
+        if (locationInput && locationInput.value && locationInput.value !== suggestedLocation) {
+          currentFormLocation = [locationInput.value.trim()]
+          console.log("📍 Current form location:", currentFormLocation) // Debug
         }
 
         // Combine all locations
