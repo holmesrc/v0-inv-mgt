@@ -101,6 +101,7 @@ export default function InventoryDashboard() {
     batchIndex?: number
   } | null>(null)
   const [batchMode, setBatchMode] = useState(false)
+  const [editingBatchQuantity, setEditingBatchQuantity] = useState<Record<number, string>>({})
 
   // Form state for adding new items
   const [newItem, setNewItem] = useState({
@@ -125,7 +126,7 @@ export default function InventoryDashboard() {
   // Location suggestion logic
   useEffect(() => {
     generateLocationSuggestion()
-  }, [inventory, pendingChanges])
+  }, [inventory, pendingChanges, batchEntryItems]) // Add batchEntryItems to dependencies
 
   const generateLocationSuggestion = async () => {
     try {
@@ -170,10 +171,19 @@ export default function InventoryDashboard() {
         console.log("📍 Could not fetch pending changes for location suggestion:", error)
       }
 
+      // Get all batch locations from current batch items
+      const batchLocations = batchEntryItems
+        .map(item => item.location)
+        .filter(Boolean)
+        .map(loc => loc.trim())
+
+      console.log("📍 Current batch locations:", batchLocations)
+
       // Combine all locations
       const allLocations = [
         ...currentLocations, 
-        ...pendingLocations
+        ...pendingLocations,
+        ...batchLocations // Include batch locations
       ]
       const uniqueAllLocations = Array.from(new Set(allLocations)).filter(Boolean)
 
@@ -794,7 +804,60 @@ export default function InventoryDashboard() {
       return
     }
 
-    // Check for duplicate part number
+    // Check for duplicate in current batch first
+    const batchDuplicateIndex = checkForDuplicateInBatch(newItem.partNumber)
+    if (batchDuplicateIndex !== -1) {
+      const existingBatchItem = batchEntryItems[batchDuplicateIndex]
+      const currentQty = parseInt(existingBatchItem.quantity) || 0
+      const additionalQty = parseInt(newItem.quantity) || 0
+      const newTotalQty = currentQty + additionalQty
+
+      const confirmUpdate = window.confirm(
+        `Part ${newItem.partNumber} is already in the batch with quantity ${currentQty}.\n\n` +
+        `Do you want to add ${additionalQty} more (total: ${newTotalQty})?`
+      )
+
+      if (confirmUpdate) {
+        // Update the existing batch item quantity
+        setBatchEntryItems(prev => 
+          prev.map((item, i) => 
+            i === batchDuplicateIndex 
+              ? { ...item, quantity: newTotalQty.toString() }
+              : item
+          )
+        )
+
+        // Clear form but keep requester and stay in batch mode
+        const requesterName = newItem.requester
+        setNewItem({
+          partNumber: "",
+          mfgPartNumber: "",
+          description: "",
+          quantity: "",
+          location: "",
+          supplier: "",
+          package: "",
+          reorderPoint: "",
+          requester: requesterName,
+        })
+
+        // Reset form state
+        setShowCustomLocationInput(false)
+        setCustomLocationValue("")
+        setShowCustomPackageInput(false)
+        setCustomPackageValue("")
+        setShowRequesterWarning(false)
+        setBatchMode(true)
+        
+        // Refresh location suggestion for next item
+        await generateLocationSuggestion()
+        return
+      } else {
+        return // User cancelled, don't add to batch
+      }
+    }
+
+    // Check for duplicate part number in main inventory
     const existingItem = inventory.find(
       (item) => item["Part number"].toLowerCase() === newItem.partNumber.toLowerCase()
     )
@@ -917,6 +980,43 @@ export default function InventoryDashboard() {
     }
   }
 
+  const handleBatchQuantityEdit = (index: number, newQuantity: string) => {
+    setEditingBatchQuantity(prev => ({
+      ...prev,
+      [index]: newQuantity
+    }))
+  }
+
+  const handleBatchQuantityUpdate = (index: number) => {
+    const newQuantity = editingBatchQuantity[index]
+    if (newQuantity && !isNaN(parseInt(newQuantity)) && parseInt(newQuantity) > 0) {
+      setBatchEntryItems(prev => 
+        prev.map((item, i) => 
+          i === index ? { ...item, quantity: newQuantity } : item
+        )
+      )
+      setEditingBatchQuantity(prev => {
+        const updated = { ...prev }
+        delete updated[index]
+        return updated
+      })
+    }
+  }
+
+  const handleBatchQuantityCancel = (index: number) => {
+    setEditingBatchQuantity(prev => {
+      const updated = { ...prev }
+      delete updated[index]
+      return updated
+    })
+  }
+
+  const checkForDuplicateInBatch = (partNumber: string): number => {
+    return batchEntryItems.findIndex(
+      item => item.partNumber.toLowerCase() === partNumber.toLowerCase()
+    )
+  }
+
   const handleAddItemDialogOpen = (open: boolean) => {
     if (!open && addItemFormModified) {
       // Check if user is trying to close with unsaved changes
@@ -942,6 +1042,7 @@ export default function InventoryDashboard() {
       setShowRequesterWarning(false)
       setBatchMode(false)
       setBatchEntryItems([])
+      setEditingBatchQuantity({})
       
       // Reset form data
       setNewItem({
@@ -1725,6 +1826,7 @@ export default function InventoryDashboard() {
                   onClick={() => {
                     setBatchEntryItems([])
                     setBatchMode(false)
+                    setEditingBatchQuantity({})
                     setAddItemFormModified(false)
                   }}
                 >
@@ -1750,7 +1852,52 @@ export default function InventoryDashboard() {
                         <tr key={index} className="border-t hover:bg-gray-50">
                           <td className="p-2 border-r font-mono text-xs">{item.partNumber}</td>
                           <td className="p-2 border-r">{item.description}</td>
-                          <td className="p-2 border-r">{item.quantity}</td>
+                          <td className="p-2 border-r">
+                            {editingBatchQuantity[index] !== undefined ? (
+                              <div className="flex gap-1 items-center">
+                                <Input
+                                  type="number"
+                                  value={editingBatchQuantity[index]}
+                                  onChange={(e) => handleBatchQuantityEdit(index, e.target.value)}
+                                  className="h-6 w-16 px-1 text-xs"
+                                  onKeyPress={(e) => {
+                                    if (e.key === 'Enter') {
+                                      handleBatchQuantityUpdate(index)
+                                    } else if (e.key === 'Escape') {
+                                      handleBatchQuantityCancel(index)
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleBatchQuantityUpdate(index)}
+                                  className="h-6 w-6 p-0"
+                                >
+                                  <Check className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleBatchQuantityCancel(index)}
+                                  className="h-6 w-6 p-0"
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-1 items-center">
+                                <span>{item.quantity}</span>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleBatchQuantityEdit(index, item.quantity)}
+                                  className="h-6 w-6 p-0 text-blue-600 hover:text-blue-700"
+                                >
+                                  <Edit className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            )}
+                          </td>
                           <td className="p-2 border-r">{item.location}</td>
                           <td className="p-2 border-r">{item.package}</td>
                           <td className="p-2">
@@ -1760,6 +1907,12 @@ export default function InventoryDashboard() {
                               onClick={() => {
                                 setBatchEntryItems(prev => prev.filter((_, i) => i !== index))
                                 setAddItemFormModified(true)
+                                // Clear any editing state for this item
+                                setEditingBatchQuantity(prev => {
+                                  const updated = { ...prev }
+                                  delete updated[index]
+                                  return updated
+                                })
                                 // Exit batch mode if no items left
                                 if (batchEntryItems.length === 1) {
                                   setBatchMode(false)
