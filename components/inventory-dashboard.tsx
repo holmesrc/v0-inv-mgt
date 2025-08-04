@@ -1662,9 +1662,6 @@ export default function InventoryDashboard() {
           <CardTitle>Inventory Items</CardTitle>
           <CardDescription>
             Showing {filteredInventory.length} of {inventory.length} items
-            {filteredInventory.length > 15 && (
-              <span className="text-blue-600 ml-2">• Scroll to see more items</span>
-            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
