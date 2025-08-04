@@ -1654,7 +1654,7 @@ export default function InventoryDashboard() {
 
       {/* Add Item Dialog */}
       <Dialog open={addItemDialogOpen} onOpenChange={handleAddItemDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className={`${batchMode && batchEntryItems.length > 0 ? 'max-w-5xl max-h-[90vh]' : 'max-w-md'} overflow-hidden flex flex-col`}>
           <DialogHeader>
             <DialogTitle>Add New Item</DialogTitle>
             <DialogDescription>
@@ -1662,15 +1662,16 @@ export default function InventoryDashboard() {
             </DialogDescription>
           </DialogHeader>
           
-          {/* Requester Warning */}
-          {showRequesterWarning && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                Requester name is required for submission. Please enter your name.
-              </AlertDescription>
-            </Alert>
-          )}
+          <div className="flex-1 overflow-y-auto">
+            {/* Requester Warning */}
+            {showRequesterWarning && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Requester name is required for submission. Please enter your name.
+                </AlertDescription>
+              </Alert>
+            )}
           
           <div className="space-y-4">
             <div>
@@ -1937,23 +1938,23 @@ export default function InventoryDashboard() {
               </div>
 
               <div className="border rounded-lg overflow-hidden">
-                <div className="max-h-60 overflow-y-auto">
+                <div className="max-h-80 overflow-y-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 sticky top-0">
                       <tr>
-                        <th className="text-left p-2 border-r">Part Number</th>
-                        <th className="text-left p-2 border-r">Description</th>
-                        <th className="text-left p-2 border-r">Qty</th>
-                        <th className="text-left p-2 border-r">Location</th>
-                        <th className="text-left p-2 border-r">Package</th>
-                        <th className="text-left p-2">Actions</th>
+                        <th className="text-left p-2 border-r min-w-[120px]">Part Number</th>
+                        <th className="text-left p-2 border-r min-w-[150px]">Description</th>
+                        <th className="text-left p-2 border-r min-w-[80px]">Qty</th>
+                        <th className="text-left p-2 border-r min-w-[100px]">Location</th>
+                        <th className="text-left p-2 border-r min-w-[100px]">Package</th>
+                        <th className="text-left p-2 min-w-[80px]">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {batchEntryItems.map((item, index) => (
                         <tr key={index} className="border-t hover:bg-gray-50">
-                          <td className="p-2 border-r font-mono text-xs">{item.partNumber}</td>
-                          <td className="p-2 border-r">{item.description}</td>
+                          <td className="p-2 border-r font-mono text-xs break-all">{item.partNumber}</td>
+                          <td className="p-2 border-r text-xs break-words">{item.description}</td>
                           <td className="p-2 border-r">
                             {editingBatchQuantity[index] !== undefined ? (
                               <div className="flex gap-1 items-center">
@@ -1988,7 +1989,7 @@ export default function InventoryDashboard() {
                               </div>
                             ) : (
                               <div className="flex gap-1 items-center">
-                                <span>{item.quantity}</span>
+                                <span className="text-xs">{item.quantity}</span>
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -2000,8 +2001,8 @@ export default function InventoryDashboard() {
                               </div>
                             )}
                           </td>
-                          <td className="p-2 border-r">{item.location}</td>
-                          <td className="p-2 border-r">{item.package}</td>
+                          <td className="p-2 border-r text-xs break-all">{item.location}</td>
+                          <td className="p-2 border-r text-xs break-all">{item.package}</td>
                           <td className="p-2">
                             <Button
                               size="sm"
@@ -2033,8 +2034,9 @@ export default function InventoryDashboard() {
               </div>
             </div>
           )}
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0 border-t pt-4 mt-4">
             <div className="flex justify-between w-full">
               <Button variant="outline" onClick={() => handleAddItemDialogOpen(false)}>
                 Cancel
