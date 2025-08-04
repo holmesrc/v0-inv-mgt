@@ -108,6 +108,35 @@ export default function InventoryDashboard() {
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false)
   const [editingQuantity, setEditingQuantity] = useState<Record<string, string>>({})
 
+  // Natural sort function for locations like H1-1, H1-2, etc.
+  const naturalLocationSort = (str1: string, str2: string) => {
+    const regex = /([A-Z]+)(\d+)-(\d+)/
+    const match1 = str1.match(regex)
+    const match2 = str2.match(regex)
+    
+    if (!match1 || !match2) {
+      // Fallback to regular string comparison if pattern doesn't match
+      return str1.localeCompare(str2)
+    }
+    
+    const [, prefix1, shelf1, pos1] = match1
+    const [, prefix2, shelf2, pos2] = match2
+    
+    // First compare prefixes (H, A, B, etc.)
+    if (prefix1 !== prefix2) {
+      return prefix1.localeCompare(prefix2)
+    }
+    
+    // Then compare shelf numbers numerically
+    const shelfDiff = parseInt(shelf1) - parseInt(shelf2)
+    if (shelfDiff !== 0) {
+      return shelfDiff
+    }
+    
+    // Finally compare position numbers numerically
+    return parseInt(pos1) - parseInt(pos2)
+  }
+
   // Smart search normalization for electrical components
   const normalizeSearchTerm = (text: string): string => {
     if (!text) return ""
@@ -1456,9 +1485,16 @@ export default function InventoryDashboard() {
       }
 
       if (typeof aValue === "string" && typeof bValue === "string") {
-        return sortOrder === "asc" 
-          ? aValue.localeCompare(bValue)
-          : bValue.localeCompare(aValue)
+        // Use natural sorting for location field
+        if (sortBy === "location") {
+          const naturalCompare = naturalLocationSort(aValue, bValue)
+          return sortOrder === "asc" ? naturalCompare : -naturalCompare
+        } else {
+          // Use regular string comparison for other fields
+          return sortOrder === "asc" 
+            ? aValue.localeCompare(bValue)
+            : bValue.localeCompare(aValue)
+        }
       } else {
         return sortOrder === "asc" 
           ? (aValue as number) - (bValue as number)
