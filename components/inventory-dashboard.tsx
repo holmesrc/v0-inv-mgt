@@ -1428,8 +1428,11 @@ export default function InventoryDashboard() {
                 type="number"
                 value={newItem.reorderPoint}
                 onChange={(e) => handleFormFieldChange('reorderPoint', e.target.value)}
-                placeholder={`Default: ${alertSettings.defaultReorderPoint}`}
+                placeholder={`Leave empty for default (${alertSettings.defaultReorderPoint})`}
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                Default reorder point is {alertSettings.defaultReorderPoint} if not specified
+              </p>
             </div>
           </div>
           <DialogFooter>
