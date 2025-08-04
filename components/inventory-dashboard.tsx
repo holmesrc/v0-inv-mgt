@@ -345,11 +345,18 @@ export default function InventoryDashboard() {
       if (response.ok) {
         const result = await response.json()
         if (result.success && result.data) {
-          setAlertSettings(result.data)
+          // Merge with defaults to ensure all properties exist
+          setAlertSettings(prev => ({
+            defaultReorderPoint: result.data.defaultReorderPoint ?? prev.defaultReorderPoint,
+            lowStockThreshold: result.data.lowStockThreshold ?? prev.lowStockThreshold,
+            enableSlackNotifications: result.data.enableSlackNotifications ?? prev.enableSlackNotifications,
+            slackWebhookUrl: result.data.slackWebhookUrl ?? prev.slackWebhookUrl,
+          }))
         }
       }
     } catch (error) {
       console.error("Error loading settings:", error)
+      // Keep default settings if loading fails
     }
   }
 
@@ -572,7 +579,7 @@ export default function InventoryDashboard() {
         item.Location,
         item.Supplier,
         item.Package,
-        item.reorderPoint || alertSettings.defaultReorderPoint
+        item.reorderPoint || alertSettings.defaultReorderPoint || 10
       ])
     ].map(row => row.join(",")).join("\n")
 
@@ -696,7 +703,7 @@ export default function InventoryDashboard() {
         Location: newItem.location,
         Supplier: newItem.supplier,
         Package: newItem.package,
-        reorderPoint: parseInt(newItem.reorderPoint) || alertSettings.defaultReorderPoint,
+        reorderPoint: parseInt(newItem.reorderPoint) || alertSettings.defaultReorderPoint || 10,
       }
 
       await addInventoryItem(itemData, newItem.requester.trim())
@@ -844,7 +851,7 @@ export default function InventoryDashboard() {
         item.Supplier.toLowerCase().includes(searchTerm.toLowerCase())
 
       const matchesCategory = categoryFilter === "all" || 
-        (categoryFilter === "low" && item.QTY <= (item.reorderPoint || alertSettings.defaultReorderPoint))
+        (categoryFilter === "low" && item.QTY <= (item.reorderPoint || alertSettings.defaultReorderPoint || 10))
 
       return matchesSearch && matchesCategory
     })
@@ -888,12 +895,12 @@ export default function InventoryDashboard() {
 
   const lowStockItems = useMemo(() => {
     return inventory.filter((item) => 
-      item.QTY <= (item.reorderPoint || alertSettings.defaultReorderPoint)
+      item.QTY <= (item.reorderPoint || alertSettings.defaultReorderPoint || 10)
     )
   }, [inventory, alertSettings.defaultReorderPoint])
 
   const getStockStatus = (item: InventoryItem) => {
-    const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint
+    const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint || 10
     if (item.QTY <= reorderPoint) {
       return { status: "low", color: "destructive" as const }
     } else if (item.QTY <= reorderPoint * 1.5) {
@@ -1428,10 +1435,10 @@ export default function InventoryDashboard() {
                 type="number"
                 value={newItem.reorderPoint}
                 onChange={(e) => handleFormFieldChange('reorderPoint', e.target.value)}
-                placeholder={`Leave empty for default (${alertSettings.defaultReorderPoint})`}
+                placeholder={`Leave empty for default (${alertSettings.defaultReorderPoint || 10})`}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Default reorder point is {alertSettings.defaultReorderPoint} if not specified
+                Default reorder point is {alertSettings.defaultReorderPoint || 10} if not specified
               </p>
             </div>
           </div>
@@ -1554,7 +1561,7 @@ export default function InventoryDashboard() {
                 <Label>Reorder Point</Label>
                 <Input
                   type="number"
-                  defaultValue={item.reorderPoint || alertSettings.defaultReorderPoint}
+                  defaultValue={item.reorderPoint || alertSettings.defaultReorderPoint || 10}
                   onBlur={(e) => {
                     const newReorderPoint = parseInt(e.target.value)
                     if (!isNaN(newReorderPoint)) {
