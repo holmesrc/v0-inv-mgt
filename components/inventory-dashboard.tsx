@@ -79,6 +79,7 @@ export default function InventoryDashboard() {
   const [showSettings, setShowSettings] = useState(false)
   const [customQuantityInput, setCustomQuantityInput] = useState<Record<string, string>>({})
   const [showCustomInput, setShowCustomInput] = useState<Record<string, boolean>>({})
+  const [suggestedLocation, setSuggestedLocation] = useState<string>("H1-1")
 
   // Form state for adding new items
   const [newItem, setNewItem] = useState({
@@ -98,6 +99,185 @@ export default function InventoryDashboard() {
     loadPendingChanges()
     checkSlackConfiguration()
   }, [])
+
+  // Location suggestion logic
+  useEffect(() => {
+    generateLocationSuggestion()
+  }, [inventory, pendingChanges])
+
+  const generateLocationSuggestion = async () => {
+    try {
+      // Get all current locations from inventory
+      const currentLocations = inventory
+        .map(item => item.Location)
+        .filter(Boolean)
+        .map(loc => loc.trim())
+
+      // Get all pending locations from pending changes
+      let pendingLocations: string[] = []
+      try {
+        const response = await fetch("/api/inventory/pending")
+        if (response.ok) {
+          const result = await response.json()
+          if (result.success && Array.isArray(result.data)) {
+            pendingLocations = result.data
+              .map((change: any) => {
+                if (change.change_type === "add" && change.item_data?.location) {
+                  return change.item_data.location
+                }
+                return null
+              })
+              .filter(Boolean)
+              .map((loc: string) => loc.trim())
+          }
+        }
+      } catch (error) {
+        console.log("Could not fetch pending changes for location suggestion:", error)
+      }
+
+      // Combine all locations
+      const allLocations = [
+        ...currentLocations, 
+        ...pendingLocations
+      ]
+      const uniqueAllLocations = Array.from(new Set(allLocations)).filter(Boolean)
+
+      console.log("📍 Total unique locations found:", uniqueAllLocations.length)
+      console.log("📍 Sample locations:", uniqueAllLocations.slice(0, 5))
+
+      if (uniqueAllLocations.length === 0) {
+        setSuggestedLocation("H1-1")
+        return
+      }
+
+      // Natural sort function for locations like H1-1, H1-2, etc.
+      const naturalLocationSort = (str1: string, str2: string) => {
+        const regex = /([A-Z]+)(\d+)-(\d+)/
+        const match1 = str1.match(regex)
+        const match2 = str2.match(regex)
+        
+        if (!match1 || !match2) {
+          return str1.localeCompare(str2)
+        }
+        
+        const [, prefix1, shelf1, pos1] = match1
+        const [, prefix2, shelf2, pos2] = match2
+        
+        if (prefix1 !== prefix2) {
+          return prefix1.localeCompare(prefix2)
+        }
+        
+        const shelfDiff = parseInt(shelf1) - parseInt(shelf2)
+        if (shelfDiff !== 0) {
+          return shelfDiff
+        }
+        
+        return parseInt(pos1) - parseInt(pos2)
+      }
+
+      // Sort locations naturally
+      const sortedLocations = uniqueAllLocations.sort((a, b) => {
+        return naturalLocationSort(a, b)
+      })
+
+      console.log("📍 Sorted locations:", sortedLocations.slice(0, 10))
+
+      // Find the highest location and suggest the next one
+      const lastLocation = sortedLocations[sortedLocations.length - 1]
+      console.log("📍 Last location found:", lastLocation)
+
+      const nextLocation = getNextLocation(lastLocation)
+      console.log("📍 Suggested next location:", nextLocation)
+      
+      setSuggestedLocation(nextLocation)
+    } catch (error) {
+      console.error("Error generating location suggestion:", error)
+      setSuggestedLocation("H1-1")
+    }
+  }
+
+  const getNextLocation = (currentLocation: string): string => {
+    const regex = /([A-Z]+)(\d+)-(\d+)/
+    const match = currentLocation.match(regex)
+    
+    if (!match) {
+      return "H1-1"
+    }
+    
+    const [, prefix, shelf, position] = match
+    const shelfNum = parseInt(shelf)
+    const posNum = parseInt(position)
+    
+    // Increment position first
+    const nextPos = posNum + 1
+    
+    // For now, assume positions can go up to 20 per shelf
+    if (nextPos <= 20) {
+      return `${prefix}${shelfNum}-${nextPos}`
+    } else {
+      // Move to next shelf, position 1
+      return `${prefix}${shelfNum + 1}-1`
+    }
+  }
+
+  const refreshLocationSuggestion = async () => {
+    await generateLocationSuggestion()
+  }
+
+  // Get unique locations for analysis
+  const uniqueLocations = useMemo(() => {
+    const locations = inventory.map(item => item.Location).filter(Boolean)
+    const uniqueLocations = Array.from(new Set(locations))
+    return uniqueLocations.sort((a, b) => {
+      const regex = /([A-Z]+)(\d+)-(\d+)/
+      const matchA = a.match(regex)
+      const matchB = b.match(regex)
+      
+      if (!matchA || !matchB) {
+        return a.localeCompare(b)
+      }
+      
+      const [, prefixA, shelfA, posA] = matchA
+      const [, prefixB, shelfB, posB] = matchB
+      
+      if (prefixA !== prefixB) {
+        return prefixA.localeCompare(prefixB)
+      }
+      
+      const shelfDiff = parseInt(shelfA) - parseInt(shelfB)
+      if (shelfDiff !== 0) {
+        return shelfDiff
+      }
+      
+      return parseInt(posA) - parseInt(posB)
+    })
+  }, [inventory])
+
+  // Get location statistics
+  const locationStats = useMemo(() => {
+    const stats = {
+      totalLocations: uniqueLocations.length,
+      shelves: new Set<string>(),
+      maxShelf: 0,
+      maxPosition: 0
+    }
+
+    uniqueLocations.forEach(location => {
+      const regex = /([A-Z]+)(\d+)-(\d+)/
+      const match = location.match(regex)
+      if (match) {
+        const [, prefix, shelf, position] = match
+        const shelfNum = parseInt(shelf)
+        const posNum = parseInt(position)
+        
+        stats.shelves.add(`${prefix}${shelf}`)
+        stats.maxShelf = Math.max(stats.maxShelf, shelfNum)
+        stats.maxPosition = Math.max(stats.maxPosition, posNum)
+      }
+    })
+
+    return stats
+  }, [uniqueLocations])
 
   const checkSlackConfiguration = async () => {
     try {
@@ -727,7 +907,7 @@ export default function InventoryDashboard() {
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Items</CardTitle>
@@ -753,6 +933,24 @@ export default function InventoryDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">{pendingChanges.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Next Location</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{suggestedLocation}</div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={refreshLocationSuggestion}
+              className="mt-1 h-6 px-2 text-xs"
+            >
+              <RefreshCw className="h-3 w-3 mr-1" />
+              Refresh
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -1049,12 +1247,28 @@ export default function InventoryDashboard() {
             </div>
             <div>
               <Label htmlFor="location">Location</Label>
-              <Input
-                id="location"
-                value={newItem.location}
-                onChange={(e) => setNewItem(prev => ({ ...prev, location: e.target.value }))}
-                placeholder="Enter location"
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="location"
+                  value={newItem.location}
+                  onChange={(e) => setNewItem(prev => ({ ...prev, location: e.target.value }))}
+                  placeholder="Enter location"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setNewItem(prev => ({ ...prev, location: suggestedLocation }))
+                    refreshLocationSuggestion()
+                  }}
+                  className="whitespace-nowrap"
+                >
+                  Use {suggestedLocation}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Suggested next location: {suggestedLocation}
+              </p>
             </div>
             <div>
               <Label htmlFor="supplier">Supplier</Label>
