@@ -73,36 +73,27 @@ export default function InventoryDashboard() {
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([])
   const [showPendingChanges, setShowPendingChanges] = useState(false)
   const [slackConfigured, setSlackConfigured] = useState(false)
-  const [checkingDuplicate, setCheckingDuplicate] = useState(false)
-  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false)
-  const [suggestedLocation, setSuggestedLocation] = useState<string>("H1-1")
   const [editDialogOpen, setEditDialogOpen] = useState<Record<string, boolean>>({})
-  const [addItemFormModified, setAddItemFormModified] = useState(false)
   const [addItemDialogOpen, setAddItemDialogOpen] = useState(false)
-  const [duplicatePartInfo, setDuplicatePartInfo] = useState<{
-    partNumber: string
-    mfgPartNumber?: string
-    description: string
-    newQuantity: number
-    location: string
-    supplier: string
-    package: string
-    reorderPoint?: number
-    existingItem: any
-  } | null>(null)
+  const [tempQuantityChanges, setTempQuantityChanges] = useState<Record<string, number>>({})
 
-  // Debug: Log inventory changes
-  useEffect(() => {
-    console.log(`📊 Inventory state updated: ${inventory.length} items`)
-    if (inventory.length > 0) {
-      console.log("📊 Sample inventory items:", inventory.slice(0, 2))
-    }
-  }, [inventory])
+  // Form state for adding new items
+  const [newItem, setNewItem] = useState({
+    partNumber: "",
+    mfgPartNumber: "",
+    description: "",
+    quantity: "",
+    location: "",
+    supplier: "",
+    package: "",
+    reorderPoint: "",
+  })
 
   useEffect(() => {
     loadInventoryFromDatabase()
     loadSettingsFromDatabase()
     loadPendingChanges()
+    checkSlackConfiguration()
   }, [])
 
   const checkSlackConfiguration = async () => {
@@ -127,16 +118,13 @@ export default function InventoryDashboard() {
       if (response.ok) {
         const result = await response.json()
         if (result.success && Array.isArray(result.data)) {
-          console.log(`📊 Loaded ${result.data.length} items from database`)
           setInventory(result.data)
           setShowUpload(result.data.length === 0)
         } else {
-          console.error("Invalid data format from API:", result)
           setInventory([])
           setShowUpload(true)
         }
       } else {
-        console.error("Failed to load inventory:", response.status)
         setInventory([])
         setShowUpload(true)
       }
@@ -182,11 +170,6 @@ export default function InventoryDashboard() {
       setSyncing(true)
       setError(null)
 
-      const invalidItems = inventoryData.filter((item) => !item["Part number"])
-      if (invalidItems.length > 0) {
-        throw new Error(`Found ${invalidItems.length} items without part numbers`)
-      }
-
       const response = await fetch("/api/inventory", {
         method: "POST",
         headers: {
@@ -209,13 +192,11 @@ export default function InventoryDashboard() {
         throw new Error(result.error || "Unknown error occurred")
       }
 
-      console.log("✅ Inventory saved successfully")
       await loadInventoryFromDatabase()
       await loadPendingChanges()
       setPackageNote("")
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error"
-      console.error("❌ Save failed:", errorMessage)
       setError(`Failed to save inventory: ${errorMessage}`)
       throw error
     } finally {
@@ -241,54 +222,13 @@ export default function InventoryDashboard() {
       if (!result.success) {
         throw new Error(result.error || "Unknown error occurred")
       }
-
-      console.log("✅ Settings saved successfully")
     } catch (error) {
-      console.error("❌ Settings save failed:", error)
+      console.error("Settings save failed:", error)
       throw error
     }
   }
 
-  // Simple duplicate check function
-  const checkForDuplicatePart = async (partNumber: string) => {
-    if (!partNumber.trim()) return false
-
-    setCheckingDuplicate(true)
-    try {
-      // Check existing inventory
-      const existingItem = inventory.find(
-        (item) => item["Part number"].toLowerCase() === partNumber.toLowerCase()
-      )
-
-      if (existingItem) {
-        return existingItem
-      }
-
-      // Check pending changes
-      const response = await fetch("/api/inventory/pending")
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success && Array.isArray(result.data)) {
-          const pendingDuplicate = result.data.find((change: any) =>
-            change.item_data?.part_number?.toLowerCase() === partNumber.toLowerCase()
-          )
-          if (pendingDuplicate) {
-            return pendingDuplicate.item_data
-          }
-        }
-      }
-
-      return false
-    } catch (error) {
-      console.error("Error checking for duplicates:", error)
-      return false
-    } finally {
-      setCheckingDuplicate(false)
-    }
-  }
-
-  // Add single inventory item
-  const addInventoryItem = async (newItem: Omit<InventoryItem, "id" | "lastUpdated">, requester: string) => {
+  const addInventoryItem = async (newItemData: Omit<InventoryItem, "id" | "lastUpdated">, requester: string) => {
     try {
       const response = await fetch("/api/inventory/add", {
         method: "POST",
@@ -296,7 +236,7 @@ export default function InventoryDashboard() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          item: newItem,
+          item: newItemData,
           requester: requester,
         }),
       })
@@ -310,16 +250,75 @@ export default function InventoryDashboard() {
         throw new Error(result.error || "Unknown error occurred")
       }
 
-      console.log("✅ Item added successfully")
       await loadInventoryFromDatabase()
       await loadPendingChanges()
     } catch (error) {
-      console.error("❌ Add item failed:", error)
+      console.error("Add item failed:", error)
       throw error
     }
   }
 
-  // Handle data loaded from file upload
+  const updateItemQuantity = async (itemId: string, newQuantity: number, requester: string) => {
+    try {
+      const response = await fetch("/api/inventory/update-quantity", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          itemId,
+          newQuantity,
+          requester,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const result = await response.json()
+      if (!result.success) {
+        throw new Error(result.error || "Unknown error occurred")
+      }
+
+      await loadInventoryFromDatabase()
+      await loadPendingChanges()
+    } catch (error) {
+      console.error("Update quantity failed:", error)
+      throw error
+    }
+  }
+
+  const deleteInventoryItem = async (itemId: string, requester: string) => {
+    try {
+      const response = await fetch("/api/inventory/delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          itemId,
+          requester,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const result = await response.json()
+      if (!result.success) {
+        throw new Error(result.error || "Unknown error occurred")
+      }
+
+      await loadInventoryFromDatabase()
+      await loadPendingChanges()
+    } catch (error) {
+      console.error("Delete item failed:", error)
+      throw error
+    }
+  }
+
   const handleDataLoaded = async (data: any[], note: string) => {
     try {
       await saveInventoryToDatabase(data, note, "uploaded_file")
@@ -329,7 +328,6 @@ export default function InventoryDashboard() {
     }
   }
 
-  // Handle settings update
   const handleSettingsUpdate = async (newSettings: AlertSettings) => {
     setAlertSettings(newSettings)
     try {
@@ -337,6 +335,169 @@ export default function InventoryDashboard() {
     } catch (error) {
       console.error("Failed to save settings:", error)
       setError("Settings updated locally but failed to sync to database")
+    }
+  }
+
+  const handleAddItem = async () => {
+    try {
+      const requesterName = prompt("Enter your name for approval tracking:")
+      if (!requesterName) return
+
+      const itemData = {
+        "Part number": newItem.partNumber,
+        "MFG Part number": newItem.mfgPartNumber || "",
+        "Part description": newItem.description,
+        QTY: parseInt(newItem.quantity) || 0,
+        Location: newItem.location,
+        Supplier: newItem.supplier,
+        Package: newItem.package,
+        reorderPoint: parseInt(newItem.reorderPoint) || alertSettings.defaultReorderPoint,
+      }
+
+      await addInventoryItem(itemData, requesterName)
+      
+      // Reset form
+      setNewItem({
+        partNumber: "",
+        mfgPartNumber: "",
+        description: "",
+        quantity: "",
+        location: "",
+        supplier: "",
+        package: "",
+        reorderPoint: "",
+      })
+      
+      setAddItemDialogOpen(false)
+      alert("Item submitted for approval!")
+    } catch (error) {
+      console.error("Failed to add item:", error)
+      alert("Failed to add item. Please try again.")
+    }
+  }
+
+  const handleTempQuantityChange = (itemId: string, delta: number) => {
+    setTempQuantityChanges(prev => ({
+      ...prev,
+      [itemId]: (prev[itemId] || 0) + delta
+    }))
+  }
+
+  const confirmQuantityChange = async (itemId: string) => {
+    const delta = tempQuantityChanges[itemId]
+    if (!delta) return
+
+    try {
+      const requesterName = prompt("Enter your name for approval tracking:")
+      if (!requesterName) return
+
+      const item = inventory.find(i => i.id === itemId)
+      if (!item) return
+
+      const newQuantity = item.QTY + delta
+      if (newQuantity < 0) {
+        alert("Quantity cannot be negative")
+        return
+      }
+
+      await updateItemQuantity(itemId, newQuantity, requesterName)
+      
+      // Clear temp changes
+      setTempQuantityChanges(prev => {
+        const newChanges = { ...prev }
+        delete newChanges[itemId]
+        return newChanges
+      })
+      
+      alert("Quantity change submitted for approval!")
+    } catch (error) {
+      console.error("Failed to update quantity:", error)
+      alert("Failed to update quantity. Please try again.")
+    }
+  }
+
+  const cancelTempChanges = (itemId: string) => {
+    setTempQuantityChanges(prev => {
+      const newChanges = { ...prev }
+      delete newChanges[itemId]
+      return newChanges
+    })
+  }
+
+  const getDisplayQuantity = (item: InventoryItem) => {
+    const tempChange = tempQuantityChanges[item.id] || 0
+    return item.QTY + tempChange
+  }
+
+  const hasTempChanges = (itemId: string) => {
+    return tempQuantityChanges[itemId] !== undefined && tempQuantityChanges[itemId] !== 0
+  }
+
+  const filteredInventory = useMemo(() => {
+    const filtered = inventory.filter((item) => {
+      const matchesSearch = 
+        item["Part number"].toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item["Part description"].toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.Location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.Supplier.toLowerCase().includes(searchTerm.toLowerCase())
+
+      const matchesCategory = categoryFilter === "all" || 
+        (categoryFilter === "low" && item.QTY <= (item.reorderPoint || alertSettings.defaultReorderPoint))
+
+      return matchesSearch && matchesCategory
+    })
+
+    // Sort the filtered results
+    filtered.sort((a, b) => {
+      let aValue: string | number
+      let bValue: string | number
+
+      switch (sortBy) {
+        case "part_number":
+          aValue = a["Part number"]
+          bValue = b["Part number"]
+          break
+        case "location":
+          aValue = a.Location
+          bValue = b.Location
+          break
+        case "quantity":
+          aValue = a.QTY
+          bValue = b.QTY
+          break
+        default:
+          aValue = a["Part number"]
+          bValue = b["Part number"]
+      }
+
+      if (typeof aValue === "string" && typeof bValue === "string") {
+        return sortOrder === "asc" 
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue)
+      } else {
+        return sortOrder === "asc" 
+          ? (aValue as number) - (bValue as number)
+          : (bValue as number) - (aValue as number)
+      }
+    })
+
+    return filtered
+  }, [inventory, searchTerm, categoryFilter, sortBy, sortOrder, alertSettings.defaultReorderPoint])
+
+  const lowStockItems = useMemo(() => {
+    return inventory.filter((item) => 
+      item.QTY <= (item.reorderPoint || alertSettings.defaultReorderPoint)
+    )
+  }, [inventory, alertSettings.defaultReorderPoint])
+
+  const getStockStatus = (item: InventoryItem) => {
+    const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint
+    if (item.QTY <= reorderPoint) {
+      return { status: "low", color: "destructive" as const }
+    } else if (item.QTY <= reorderPoint * 1.5) {
+      return { status: "medium", color: "secondary" as const }
+    } else {
+      return { status: "good", color: "default" as const }
     }
   }
 
@@ -370,6 +531,9 @@ export default function InventoryDashboard() {
             <Plus className="h-4 w-4" />
             Add Item
           </Button>
+          <Button variant="outline" onClick={() => setShowPendingChanges(true)}>
+            Pending Changes ({pendingChanges.length})
+          </Button>
         </div>
       </div>
 
@@ -381,93 +545,296 @@ export default function InventoryDashboard() {
         </Alert>
       )}
 
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{inventory.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Low Stock Items</CardTitle>
+            <TrendingDown className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{lowStockItems.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending Changes</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">{pendingChanges.length}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search and Filter */}
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <Input
+            placeholder="Search by part number, description, location, or supplier..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full"
+          />
+        </div>
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Filter by category" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Items</SelectItem>
+            <SelectItem value="low">Low Stock Only</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="part_number">Part Number</SelectItem>
+            <SelectItem value="location">Location</SelectItem>
+            <SelectItem value="quantity">Quantity</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          variant="outline"
+          onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+        >
+          <ArrowUpDown className="h-4 w-4" />
+          {sortOrder === "asc" ? "Ascending" : "Descending"}
+        </Button>
+      </div>
+
+      {/* Inventory Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Inventory Items</CardTitle>
+          <CardDescription>
+            Showing {filteredInventory.length} of {inventory.length} items
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse border border-gray-300">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="border border-gray-300 p-2 text-left">Part Number</th>
+                  <th className="border border-gray-300 p-2 text-left">Description</th>
+                  <th className="border border-gray-300 p-2 text-left">Quantity</th>
+                  <th className="border border-gray-300 p-2 text-left">Location</th>
+                  <th className="border border-gray-300 p-2 text-left">Supplier</th>
+                  <th className="border border-gray-300 p-2 text-left">Package</th>
+                  <th className="border border-gray-300 p-2 text-left">Status</th>
+                  <th className="border border-gray-300 p-2 text-left">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredInventory.map((item) => {
+                  const stockStatus = getStockStatus(item)
+                  const displayQuantity = getDisplayQuantity(item)
+                  const hasChanges = hasTempChanges(item.id)
+                  
+                  return (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                      <td className="border border-gray-300 p-2 font-mono text-sm">
+                        {item["Part number"]}
+                      </td>
+                      <td className="border border-gray-300 p-2">
+                        {item["Part description"]}
+                      </td>
+                      <td className="border border-gray-300 p-2">
+                        <div className="flex items-center gap-2">
+                          <span className={hasChanges ? "line-through text-gray-500" : ""}>
+                            {item.QTY}
+                          </span>
+                          {hasChanges && (
+                            <span className="font-bold text-blue-600">
+                              → {displayQuantity}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="border border-gray-300 p-2">{item.Location}</td>
+                      <td className="border border-gray-300 p-2">{item.Supplier}</td>
+                      <td className="border border-gray-300 p-2">{item.Package}</td>
+                      <td className="border border-gray-300 p-2">
+                        <Badge variant={stockStatus.color}>
+                          {stockStatus.status}
+                        </Badge>
+                      </td>
+                      <td className="border border-gray-300 p-2">
+                        <div className="flex gap-1">
+                          {hasChanges ? (
+                            <>
+                              <Button
+                                size="sm"
+                                onClick={() => confirmQuantityChange(item.id)}
+                                className="h-6 px-2"
+                              >
+                                <Check className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => cancelTempChanges(item.id)}
+                                className="h-6 px-2"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleTempQuantityChange(item.id, 1)}
+                                className="h-6 px-2"
+                              >
+                                +1
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleTempQuantityChange(item.id, -1)}
+                                className="h-6 px-2"
+                              >
+                                -1
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  const requesterName = prompt("Enter your name for approval tracking:")
+                                  if (requesterName) {
+                                    deleteInventoryItem(item.id, requesterName)
+                                      .then(() => alert("Item deletion submitted for approval!"))
+                                      .catch(() => alert("Failed to delete item. Please try again."))
+                                  }
+                                }}
+                                className="h-6 px-2"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Add Item Dialog */}
       <Dialog open={addItemDialogOpen} onOpenChange={setAddItemDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Add New Item</DialogTitle>
             <DialogDescription>
-              Add a single item to inventory
+              Add a new item to the inventory
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
               <Label htmlFor="part-number">Part Number *</Label>
-              <Input id="part-number" placeholder="Enter part number" />
+              <Input
+                id="part-number"
+                value={newItem.partNumber}
+                onChange={(e) => setNewItem(prev => ({ ...prev, partNumber: e.target.value }))}
+                placeholder="Enter part number"
+              />
+            </div>
+            <div>
+              <Label htmlFor="mfg-part-number">MFG Part Number</Label>
+              <Input
+                id="mfg-part-number"
+                value={newItem.mfgPartNumber}
+                onChange={(e) => setNewItem(prev => ({ ...prev, mfgPartNumber: e.target.value }))}
+                placeholder="Enter manufacturer part number"
+              />
             </div>
             <div>
               <Label htmlFor="description">Description *</Label>
-              <Input id="description" placeholder="Enter description" />
+              <Input
+                id="description"
+                value={newItem.description}
+                onChange={(e) => setNewItem(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Enter description"
+              />
             </div>
             <div>
               <Label htmlFor="quantity">Quantity *</Label>
-              <Input id="quantity" type="number" placeholder="Enter quantity" />
+              <Input
+                id="quantity"
+                type="number"
+                value={newItem.quantity}
+                onChange={(e) => setNewItem(prev => ({ ...prev, quantity: e.target.value }))}
+                placeholder="Enter quantity"
+              />
             </div>
             <div>
               <Label htmlFor="location">Location</Label>
-              <Input id="location" placeholder="Enter location" />
+              <Input
+                id="location"
+                value={newItem.location}
+                onChange={(e) => setNewItem(prev => ({ ...prev, location: e.target.value }))}
+                placeholder="Enter location"
+              />
             </div>
             <div>
               <Label htmlFor="supplier">Supplier</Label>
-              <Input id="supplier" placeholder="Enter supplier" />
+              <Input
+                id="supplier"
+                value={newItem.supplier}
+                onChange={(e) => setNewItem(prev => ({ ...prev, supplier: e.target.value }))}
+                placeholder="Enter supplier"
+              />
             </div>
             <div>
               <Label htmlFor="package">Package</Label>
-              <Input id="package" placeholder="Enter package type" />
+              <Input
+                id="package"
+                value={newItem.package}
+                onChange={(e) => setNewItem(prev => ({ ...prev, package: e.target.value }))}
+                placeholder="Enter package type"
+              />
+            </div>
+            <div>
+              <Label htmlFor="reorder-point">Reorder Point</Label>
+              <Input
+                id="reorder-point"
+                type="number"
+                value={newItem.reorderPoint}
+                onChange={(e) => setNewItem(prev => ({ ...prev, reorderPoint: e.target.value }))}
+                placeholder={`Default: ${alertSettings.defaultReorderPoint}`}
+              />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddItemDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={() => {
-              // Handle form submission
-              console.log("Add item clicked")
-              setAddItemDialogOpen(false)
-            }}>
+            <Button 
+              onClick={handleAddItem}
+              disabled={!newItem.partNumber || !newItem.description || !newItem.quantity}
+            >
               Add Item
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Duplicate Dialog */}
-      <Dialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Duplicate Part Found</DialogTitle>
-            <DialogDescription>
-              This part number already exists in the inventory.
-            </DialogDescription>
-          </DialogHeader>
-          {duplicatePartInfo && (
-            <div className="space-y-2">
-              <div><strong>Existing Item:</strong></div>
-              <div><strong>Part Number:</strong> {duplicatePartInfo.existingItem.part_number}</div>
-              <div><strong>Description:</strong> {duplicatePartInfo.existingItem.part_description}</div>
-              <div><strong>Quantity:</strong> {duplicatePartInfo.existingItem.quantity} units</div>
-              <div><strong>Location:</strong> {duplicatePartInfo.existingItem.location}</div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDuplicateDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={() => {
-              // Handle continue anyway
-              setShowDuplicateDialog(false)
-            }}>
-              Continue Anyway
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Main Content */}
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">Simplified inventory dashboard - single item uploads only</p>
-        <p className="text-sm text-muted-foreground mt-2">Batch functionality removed for now</p>
-      </div>
     </div>
   )
 }
