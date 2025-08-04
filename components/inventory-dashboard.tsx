@@ -104,6 +104,8 @@ export default function InventoryDashboard() {
   } | null>(null)
   const [batchMode, setBatchMode] = useState(false)
   const [editingBatchQuantity, setEditingBatchQuantity] = useState<Record<number, string>>({})
+  const [duplicateCheckTimeout, setDuplicateCheckTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false)
 
   // Form state for adding new items
   const [newItem, setNewItem] = useState({
@@ -1039,6 +1041,48 @@ export default function InventoryDashboard() {
     return null
   }
 
+  const handleRealTimeDuplicateCheck = async (partNumber: string) => {
+    if (!partNumber.trim() || partNumber.length < 2) {
+      return // Don't check very short part numbers
+    }
+
+    // Clear existing timeout
+    if (duplicateCheckTimeout) {
+      clearTimeout(duplicateCheckTimeout)
+    }
+
+    // Set new timeout for debounced checking
+    const timeout = setTimeout(async () => {
+      setIsCheckingDuplicate(true)
+      try {
+        const duplicateCheck = await checkForComprehensiveDuplicate(partNumber)
+        
+        if (duplicateCheck) {
+          setDuplicatePartInfo({
+            partNumber: partNumber,
+            mfgPartNumber: newItem.mfgPartNumber,
+            description: newItem.description,
+            newQuantity: parseInt(newItem.quantity) || 0,
+            location: newItem.location,
+            supplier: newItem.supplier,
+            package: newItem.package,
+            reorderPoint: parseInt(newItem.reorderPoint) || alertSettings.defaultReorderPoint || 10,
+            existingItem: duplicateCheck.data,
+            duplicateSource: duplicateCheck.source,
+            duplicateData: duplicateCheck
+          })
+          setShowDuplicateDialog(true)
+        }
+      } catch (error) {
+        console.error("Error in real-time duplicate check:", error)
+      } finally {
+        setIsCheckingDuplicate(false)
+      }
+    }, 800) // 800ms delay after user stops typing
+
+    setDuplicateCheckTimeout(timeout)
+  }
+
   const handleAddStockToExisting = async (duplicateInfo: any, additionalQuantity: number) => {
     try {
       if (duplicateInfo.source === 'inventory') {
@@ -1135,6 +1179,12 @@ export default function InventoryDashboard() {
 
     setAddItemDialogOpen(open)
     if (!open) {
+      // Clear duplicate check timeout
+      if (duplicateCheckTimeout) {
+        clearTimeout(duplicateCheckTimeout)
+        setDuplicateCheckTimeout(null)
+      }
+      
       // Reset all form state when closing
       setShowCustomLocationInput(false)
       setCustomLocationValue("")
@@ -1145,6 +1195,7 @@ export default function InventoryDashboard() {
       setBatchMode(false)
       setBatchEntryItems([])
       setEditingBatchQuantity({})
+      setIsCheckingDuplicate(false)
       
       // Reset form data
       setNewItem({
@@ -1168,6 +1219,11 @@ export default function InventoryDashboard() {
     // Clear requester warning when user starts typing in requester field
     if (field === 'requester' && showRequesterWarning) {
       setShowRequesterWarning(false)
+    }
+
+    // Trigger real-time duplicate check for part number
+    if (field === 'partNumber') {
+      handleRealTimeDuplicateCheck(value)
     }
   }
 
@@ -1654,18 +1710,18 @@ export default function InventoryDashboard() {
 
       {/* Add Item Dialog */}
       <Dialog open={addItemDialogOpen} onOpenChange={handleAddItemDialogOpen}>
-        <DialogContent className={`${batchMode && batchEntryItems.length > 0 ? 'max-w-5xl max-h-[90vh]' : 'max-w-md'} overflow-hidden flex flex-col`}>
-          <DialogHeader>
+        <DialogContent className={`${batchMode && batchEntryItems.length > 0 ? 'max-w-6xl' : 'max-w-lg'} max-h-[95vh] flex flex-col`}>
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Add New Item</DialogTitle>
             <DialogDescription>
               Add a new item to the inventory
             </DialogDescription>
           </DialogHeader>
           
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto space-y-4 pr-2">
             {/* Requester Warning */}
             {showRequesterWarning && (
-              <Alert variant="destructive" className="mb-4">
+              <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
                   Requester name is required for submission. Please enter your name.
@@ -1689,12 +1745,25 @@ export default function InventoryDashboard() {
             </div>
             <div>
               <Label htmlFor="part-number">Part Number *</Label>
-              <Input
-                id="part-number"
-                value={newItem.partNumber}
-                onChange={(e) => handleFormFieldChange('partNumber', e.target.value)}
-                placeholder="Enter part number"
-              />
+              <div className="relative">
+                <Input
+                  id="part-number"
+                  value={newItem.partNumber}
+                  onChange={(e) => handleFormFieldChange('partNumber', e.target.value)}
+                  placeholder="Enter part number"
+                  className={isCheckingDuplicate ? "pr-8" : ""}
+                />
+                {isCheckingDuplicate && (
+                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                    <RefreshCw className="h-4 w-4 animate-spin text-gray-400" />
+                  </div>
+                )}
+              </div>
+              {isCheckingDuplicate && (
+                <p className="text-xs text-blue-600 mt-1">
+                  Checking for duplicates...
+                </p>
+              )}
             </div>
             <div>
               <Label htmlFor="mfg-part-number">MFG Part Number</Label>
@@ -1920,7 +1989,7 @@ export default function InventoryDashboard() {
 
           {/* Batch Items Display */}
           {batchMode && batchEntryItems.length > 0 && (
-            <div className="mt-6 space-y-4 border-t pt-4">
+            <div className="space-y-4 border-t pt-4 mt-4">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-medium">Batch Items ({batchEntryItems.length})</h3>
                 <Button 
@@ -1937,99 +2006,101 @@ export default function InventoryDashboard() {
                 </Button>
               </div>
 
-              <div className="border rounded-lg overflow-hidden">
-                <div className="max-h-80 overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 sticky top-0">
-                      <tr>
-                        <th className="text-left p-2 border-r min-w-[120px]">Part Number</th>
-                        <th className="text-left p-2 border-r min-w-[150px]">Description</th>
-                        <th className="text-left p-2 border-r min-w-[80px]">Qty</th>
-                        <th className="text-left p-2 border-r min-w-[100px]">Location</th>
-                        <th className="text-left p-2 border-r min-w-[100px]">Package</th>
-                        <th className="text-left p-2 min-w-[80px]">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {batchEntryItems.map((item, index) => (
-                        <tr key={index} className="border-t hover:bg-gray-50">
-                          <td className="p-2 border-r font-mono text-xs break-all">{item.partNumber}</td>
-                          <td className="p-2 border-r text-xs break-words">{item.description}</td>
-                          <td className="p-2 border-r">
-                            {editingBatchQuantity[index] !== undefined ? (
-                              <div className="flex gap-1 items-center">
-                                <Input
-                                  type="number"
-                                  value={editingBatchQuantity[index]}
-                                  onChange={(e) => handleBatchQuantityEdit(index, e.target.value)}
-                                  className="h-6 w-16 px-1 text-xs"
-                                  onKeyPress={(e) => {
-                                    if (e.key === 'Enter') {
-                                      handleBatchQuantityUpdate(index)
-                                    } else if (e.key === 'Escape') {
-                                      handleBatchQuantityCancel(index)
-                                    }
-                                  }}
-                                />
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleBatchQuantityUpdate(index)}
-                                  className="h-6 w-6 p-0"
-                                >
-                                  <Check className="h-3 w-3" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleBatchQuantityCancel(index)}
-                                  className="h-6 w-6 p-0"
-                                >
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <div className="flex gap-1 items-center">
-                                <span className="text-xs">{item.quantity}</span>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleBatchQuantityEdit(index, item.quantity)}
-                                  className="h-6 w-6 p-0 text-blue-600 hover:text-blue-700"
-                                >
-                                  <Edit className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            )}
-                          </td>
-                          <td className="p-2 border-r text-xs break-all">{item.location}</td>
-                          <td className="p-2 border-r text-xs break-all">{item.package}</td>
-                          <td className="p-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => {
-                                setBatchEntryItems(prev => prev.filter((_, i) => i !== index))
-                                setAddItemFormModified(true)
-                                // Clear any editing state for this item
-                                setEditingBatchQuantity(prev => {
-                                  const updated = { ...prev }
-                                  delete updated[index]
-                                  return updated
-                                })
-                                // Exit batch mode if no items left
-                                if (batchEntryItems.length === 1) {
-                                  setBatchMode(false)
-                                }
-                              }}
-                              className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
-                            >
-                              ×
-                            </Button>
-                          </td>
+              <div className="border rounded-lg overflow-hidden bg-white">
+                <div className="overflow-x-auto">
+                  <div className="max-h-96 overflow-y-auto">
+                    <table className="w-full text-sm border-collapse">
+                      <thead className="bg-gray-50 sticky top-0 z-10">
+                        <tr>
+                          <th className="text-left p-3 border-r border-gray-200 font-medium min-w-[140px]">Part Number</th>
+                          <th className="text-left p-3 border-r border-gray-200 font-medium min-w-[180px]">Description</th>
+                          <th className="text-left p-3 border-r border-gray-200 font-medium min-w-[100px]">Qty</th>
+                          <th className="text-left p-3 border-r border-gray-200 font-medium min-w-[120px]">Location</th>
+                          <th className="text-left p-3 border-r border-gray-200 font-medium min-w-[120px]">Package</th>
+                          <th className="text-left p-3 font-medium min-w-[100px]">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {batchEntryItems.map((item, index) => (
+                          <tr key={index} className="border-t border-gray-200 hover:bg-gray-50">
+                            <td className="p-3 border-r border-gray-200 font-mono text-xs break-all">{item.partNumber}</td>
+                            <td className="p-3 border-r border-gray-200 text-xs break-words max-w-[200px]">{item.description}</td>
+                            <td className="p-3 border-r border-gray-200">
+                              {editingBatchQuantity[index] !== undefined ? (
+                                <div className="flex gap-1 items-center">
+                                  <Input
+                                    type="number"
+                                    value={editingBatchQuantity[index]}
+                                    onChange={(e) => handleBatchQuantityEdit(index, e.target.value)}
+                                    className="h-7 w-20 px-2 text-xs"
+                                    onKeyPress={(e) => {
+                                      if (e.key === 'Enter') {
+                                        handleBatchQuantityUpdate(index)
+                                      } else if (e.key === 'Escape') {
+                                        handleBatchQuantityCancel(index)
+                                      }
+                                    }}
+                                  />
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleBatchQuantityUpdate(index)}
+                                    className="h-7 w-7 p-0"
+                                  >
+                                    <Check className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleBatchQuantityCancel(index)}
+                                    className="h-7 w-7 p-0"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="flex gap-1 items-center">
+                                  <span className="text-sm font-medium">{item.quantity}</span>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleBatchQuantityEdit(index, item.quantity)}
+                                    className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700"
+                                  >
+                                    <Edit className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-3 border-r border-gray-200 text-xs break-all">{item.location}</td>
+                            <td className="p-3 border-r border-gray-200 text-xs break-all">{item.package}</td>
+                            <td className="p-3">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setBatchEntryItems(prev => prev.filter((_, i) => i !== index))
+                                  setAddItemFormModified(true)
+                                  // Clear any editing state for this item
+                                  setEditingBatchQuantity(prev => {
+                                    const updated = { ...prev }
+                                    delete updated[index]
+                                    return updated
+                                  })
+                                  // Exit batch mode if no items left
+                                  if (batchEntryItems.length === 1) {
+                                    setBatchMode(false)
+                                  }
+                                }}
+                                className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                ×
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
