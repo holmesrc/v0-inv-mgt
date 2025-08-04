@@ -107,6 +107,9 @@ export default function InventoryDashboard() {
   const [duplicateCheckTimeout, setDuplicateCheckTimeout] = useState<NodeJS.Timeout | null>(null)
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false)
   const [editingQuantity, setEditingQuantity] = useState<Record<string, string>>({})
+  const [suppliers, setSuppliers] = useState<string[]>([])
+  const [showCustomSupplierInput, setShowCustomSupplierInput] = useState(false)
+  const [customSupplierValue, setCustomSupplierValue] = useState("")
 
   // Natural sort function for locations like H1-1, H1-2, etc.
   const naturalLocationSort = (str1: string, str2: string) => {
@@ -218,6 +221,18 @@ export default function InventoryDashboard() {
     loadPendingChanges()
     checkSlackConfiguration()
   }, [])
+
+  // Extract unique suppliers from inventory
+  useEffect(() => {
+    const uniqueSuppliers = Array.from(new Set(
+      inventory
+        .map(item => item.Supplier)
+        .filter(supplier => supplier && supplier.trim() !== "")
+        .map(supplier => supplier.trim())
+    )).sort()
+    
+    setSuppliers(uniqueSuppliers)
+  }, [inventory])
 
   // Location suggestion logic
   useEffect(() => {
@@ -896,6 +911,8 @@ export default function InventoryDashboard() {
       setCustomLocationValue("")
       setShowCustomPackageInput(false)
       setCustomPackageValue("")
+      setShowCustomSupplierInput(false)
+      setCustomSupplierValue("")
       setAddItemFormModified(false)
       setShowRequesterWarning(false)
       
@@ -976,6 +993,8 @@ export default function InventoryDashboard() {
     setCustomLocationValue("")
     setShowCustomPackageInput(false)
     setCustomPackageValue("")
+    setShowCustomSupplierInput(false)
+    setCustomSupplierValue("")
     setShowRequesterWarning(false)
     setBatchMode(true) // Enter batch mode
     
@@ -1337,6 +1356,8 @@ export default function InventoryDashboard() {
       setCustomLocationValue("")
       setShowCustomPackageInput(false)
       setCustomPackageValue("")
+      setShowCustomSupplierInput(false)
+      setCustomSupplierValue("")
       setAddItemFormModified(false)
       setShowRequesterWarning(false)
       setBatchMode(false)
@@ -2120,12 +2141,68 @@ export default function InventoryDashboard() {
             </div>
             <div>
               <Label htmlFor="supplier">Supplier</Label>
-              <Input
-                id="supplier"
-                value={newItem.supplier}
-                onChange={(e) => handleFormFieldChange('supplier', e.target.value)}
-                placeholder="Enter supplier"
-              />
+              {showCustomSupplierInput ? (
+                <div className="flex gap-2">
+                  <Input
+                    id="supplier"
+                    value={customSupplierValue}
+                    onChange={(e) => setCustomSupplierValue(e.target.value)}
+                    placeholder="Enter new supplier"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handleFormFieldChange('supplier', customSupplierValue)
+                        setShowCustomSupplierInput(false)
+                        setCustomSupplierValue("")
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      handleFormFieldChange('supplier', customSupplierValue)
+                      setShowCustomSupplierInput(false)
+                      setCustomSupplierValue("")
+                    }}
+                  >
+                    Add
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setShowCustomSupplierInput(false)
+                      setCustomSupplierValue("")
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Select 
+                  value={newItem.supplier} 
+                  onValueChange={(value) => {
+                    if (value === "custom") {
+                      setShowCustomSupplierInput(true)
+                    } else {
+                      handleFormFieldChange('supplier', value)
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select supplier" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {suppliers.map((supplier) => (
+                      <SelectItem key={supplier} value={supplier}>
+                        {supplier}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">+ Add Custom Supplier</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             <div>
               <Label htmlFor="package">Package</Label>
