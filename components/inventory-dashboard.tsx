@@ -58,7 +58,7 @@ export default function InventoryDashboard() {
   const [packageNote, setPackageNote] = useState<string>("")
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
-  const [sortBy, setSortBy] = useState<"part_number" | "location" | "quantity">("part_number")
+  const [sortBy, setSortBy] = useState<"part_number" | "description" | "location" | "supplier" | "package" | "quantity">("part_number")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
@@ -1430,9 +1430,21 @@ export default function InventoryDashboard() {
           aValue = a["Part number"]
           bValue = b["Part number"]
           break
+        case "description":
+          aValue = a["Part description"]
+          bValue = b["Part description"]
+          break
         case "location":
           aValue = a.Location
           bValue = b.Location
+          break
+        case "supplier":
+          aValue = a.Supplier
+          bValue = b.Supplier
+          break
+        case "package":
+          aValue = a.Package
+          bValue = b.Package
           break
         case "quantity":
           aValue = a.QTY
@@ -1643,7 +1655,10 @@ export default function InventoryDashboard() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="part_number">Part Number</SelectItem>
+            <SelectItem value="description">Description</SelectItem>
             <SelectItem value="location">Location</SelectItem>
+            <SelectItem value="supplier">Supplier</SelectItem>
+            <SelectItem value="package">Package</SelectItem>
             <SelectItem value="quantity">Quantity</SelectItem>
           </SelectContent>
         </Select>
