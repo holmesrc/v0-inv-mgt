@@ -84,6 +84,8 @@ export default function InventoryDashboard() {
   const [customLocationValue, setCustomLocationValue] = useState("")
   const [addItemFormModified, setAddItemFormModified] = useState(false)
   const [showRequesterWarning, setShowRequesterWarning] = useState(false)
+  const [showCustomPackageInput, setShowCustomPackageInput] = useState(false)
+  const [customPackageValue, setCustomPackageValue] = useState("")
 
   // Form state for adding new items
   const [newItem, setNewItem] = useState({
@@ -241,6 +243,32 @@ export default function InventoryDashboard() {
 
   const refreshLocationSuggestion = async () => {
     await generateLocationSuggestion()
+  }
+
+  // Package type logic based on quantity
+  const getPackageTypeFromQuantity = (quantity: number): string => {
+    if (quantity >= 1 && quantity <= 100) {
+      return "Exact"
+    } else if (quantity >= 101 && quantity <= 500) {
+      return "Estimated"
+    } else if (quantity > 500) {
+      return "Reel"
+    }
+    return "Exact" // Default fallback
+  }
+
+  const handleQuantityChange = (value: string) => {
+    handleFormFieldChange('quantity', value)
+    
+    // Auto-update package type based on quantity
+    const qty = parseInt(value)
+    if (!isNaN(qty) && qty > 0) {
+      const suggestedPackage = getPackageTypeFromQuantity(qty)
+      // Only auto-update if user hasn't manually selected a package type
+      if (!newItem.package || newItem.package === "Exact" || newItem.package === "Estimated" || newItem.package === "Reel") {
+        handleFormFieldChange('package', suggestedPackage)
+      }
+    }
   }
 
   // Get unique locations for analysis
@@ -724,6 +752,8 @@ export default function InventoryDashboard() {
       // Reset form state
       setShowCustomLocationInput(false)
       setCustomLocationValue("")
+      setShowCustomPackageInput(false)
+      setCustomPackageValue("")
       setAddItemFormModified(false)
       setShowRequesterWarning(false)
       
@@ -757,6 +787,8 @@ export default function InventoryDashboard() {
       // Reset all form state when closing
       setShowCustomLocationInput(false)
       setCustomLocationValue("")
+      setShowCustomPackageInput(false)
+      setCustomPackageValue("")
       setAddItemFormModified(false)
       setShowRequesterWarning(false)
       
@@ -1333,9 +1365,14 @@ export default function InventoryDashboard() {
                 id="quantity"
                 type="number"
                 value={newItem.quantity}
-                onChange={(e) => handleFormFieldChange('quantity', e.target.value)}
+                onChange={(e) => handleQuantityChange(e.target.value)}
                 placeholder="Enter quantity"
               />
+              {newItem.quantity && !isNaN(parseInt(newItem.quantity)) && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Suggested package: {getPackageTypeFromQuantity(parseInt(newItem.quantity))}
+                </p>
+              )}
             </div>
             <div>
               <Label htmlFor="location">Location</Label>
@@ -1421,12 +1458,95 @@ export default function InventoryDashboard() {
             </div>
             <div>
               <Label htmlFor="package">Package</Label>
-              <Input
-                id="package"
-                value={newItem.package}
-                onChange={(e) => handleFormFieldChange('package', e.target.value)}
-                placeholder="Enter package type"
-              />
+              {showCustomPackageInput ? (
+                <div className="flex gap-2">
+                  <Input
+                    id="package"
+                    value={customPackageValue}
+                    onChange={(e) => {
+                      setCustomPackageValue(e.target.value)
+                      setAddItemFormModified(true)
+                    }}
+                    placeholder="Enter custom package type"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      handleFormFieldChange('package', customPackageValue)
+                      setShowCustomPackageInput(false)
+                      setCustomPackageValue("")
+                    }}
+                    disabled={!customPackageValue.trim()}
+                  >
+                    Use
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowCustomPackageInput(false)
+                      setCustomPackageValue("")
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Select
+                  value={newItem.package}
+                  onValueChange={(value) => {
+                    if (value === "custom") {
+                      setShowCustomPackageInput(true)
+                    } else {
+                      handleFormFieldChange('package', value)
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select package type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Exact">
+                      📦 Exact (1-100 pieces)
+                    </SelectItem>
+                    <SelectItem value="Estimated">
+                      📊 Estimated (101-500 pieces)
+                    </SelectItem>
+                    <SelectItem value="Reel">
+                      🎞️ Reel (500+ pieces)
+                    </SelectItem>
+                    <Separator />
+                    <SelectItem value="Kit">
+                      🧰 Kit
+                    </SelectItem>
+                    <Separator />
+                    <SelectItem value="custom">
+                      ✏️ Custom Package...
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+              {newItem.package && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Selected: {newItem.package}
+                </p>
+              )}
+              {newItem.quantity && !isNaN(parseInt(newItem.quantity)) && newItem.package && (
+                <div className="text-xs mt-1">
+                  {(() => {
+                    const qty = parseInt(newItem.quantity)
+                    const suggested = getPackageTypeFromQuantity(qty)
+                    if (newItem.package === suggested) {
+                      return <span className="text-green-600">✅ Package matches quantity range</span>
+                    } else if (newItem.package === "Kit" || (newItem.package !== "Exact" && newItem.package !== "Estimated" && newItem.package !== "Reel")) {
+                      return <span className="text-blue-600">ℹ️ Custom package selected</span>
+                    } else {
+                      return <span className="text-orange-600">⚠️ Consider {suggested} for {qty} pieces</span>
+                    }
+                  })()}
+                </div>
+              )}
             </div>
             <div>
               <Label htmlFor="reorder-point">Reorder Point</Label>
