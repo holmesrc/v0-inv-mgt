@@ -2534,3 +2534,50 @@ Please check your Slack configuration.`)
               )}
               
               <DialogFooter>
+                <Button variant="outline" onClick={() => setShowDuplicateDialog(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    const dialog = document.querySelector('[role="dialog"]')
+                    const requesterInput = dialog?.querySelector("#duplicate-requester") as HTMLInputElement
+                    const additionalQtyInput = dialog?.querySelector("#duplicate-additional-qty") as HTMLInputElement
+
+                    if (!requesterInput?.value?.trim()) {
+                      alert("Please enter your name")
+                      return
+                    }
+
+                    const additionalQty = parseInt(additionalQtyInput?.value) || 0
+                    const totalQty = duplicatePartInfo!.newQuantity + additionalQty
+
+                    const newItem = {
+                      "Part number": duplicatePartInfo!.partNumber,
+                      "MFG Part number": duplicatePartInfo!.mfgPartNumber || "",
+                      "Part description": duplicatePartInfo!.description,
+                      QTY: totalQty,
+                      Location: duplicatePartInfo!.location,
+                      Supplier: duplicatePartInfo!.supplier,
+                      Package: duplicatePartInfo!.package,
+                      reorderPoint: duplicatePartInfo!.reorderPoint,
+                    }
+
+                    try {
+                      await addInventoryItem(newItem, requesterInput.value.trim())
+                      setShowDuplicateDialog(false)
+                      setAddItemDialogOpen(false)
+                    } catch (error) {
+                      console.error("Failed to add item:", error)
+                    }
+                  }}
+                >
+                  Continue Anyway
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+    )
+  }
+}
