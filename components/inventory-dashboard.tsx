@@ -115,6 +115,8 @@ export default function InventoryDashboard() {
         .filter(Boolean)
         .map(loc => loc.trim())
 
+      console.log("📍 Current inventory locations:", currentLocations)
+
       // Get all pending locations from pending changes
       let pendingLocations: string[] = []
       try {
@@ -122,19 +124,30 @@ export default function InventoryDashboard() {
         if (response.ok) {
           const result = await response.json()
           if (result.success && Array.isArray(result.data)) {
+            console.log("📍 Raw pending changes:", result.data)
+            
             pendingLocations = result.data
               .map((change: any) => {
-                if (change.change_type === "add" && change.item_data?.location) {
+                // Check multiple possible change types and data structures
+                if (change.item_data?.location) {
                   return change.item_data.location
+                } else if (change.item_data?.Location) {
+                  return change.item_data.Location
+                } else if (change.location) {
+                  return change.location
+                } else if (change.Location) {
+                  return change.Location
                 }
                 return null
               })
               .filter(Boolean)
               .map((loc: string) => loc.trim())
+              
+            console.log("📍 Extracted pending locations:", pendingLocations)
           }
         }
       } catch (error) {
-        console.log("Could not fetch pending changes for location suggestion:", error)
+        console.log("📍 Could not fetch pending changes for location suggestion:", error)
       }
 
       // Combine all locations
@@ -144,10 +157,11 @@ export default function InventoryDashboard() {
       ]
       const uniqueAllLocations = Array.from(new Set(allLocations)).filter(Boolean)
 
+      console.log("📍 All combined locations:", uniqueAllLocations)
       console.log("📍 Total unique locations found:", uniqueAllLocations.length)
-      console.log("📍 Sample locations:", uniqueAllLocations.slice(0, 5))
 
       if (uniqueAllLocations.length === 0) {
+        console.log("📍 No locations found, defaulting to H1-1")
         setSuggestedLocation("H1-1")
         return
       }
@@ -182,18 +196,18 @@ export default function InventoryDashboard() {
         return naturalLocationSort(a, b)
       })
 
-      console.log("📍 Sorted locations:", sortedLocations.slice(0, 10))
+      console.log("📍 Sorted locations:", sortedLocations)
 
       // Find the highest location and suggest the next one
       const lastLocation = sortedLocations[sortedLocations.length - 1]
-      console.log("📍 Last location found:", lastLocation)
+      console.log("📍 Last/highest location found:", lastLocation)
 
       const nextLocation = getNextLocation(lastLocation)
       console.log("📍 Suggested next location:", nextLocation)
       
       setSuggestedLocation(nextLocation)
     } catch (error) {
-      console.error("Error generating location suggestion:", error)
+      console.error("📍 Error generating location suggestion:", error)
       setSuggestedLocation("H1-1")
     }
   }
@@ -203,6 +217,7 @@ export default function InventoryDashboard() {
     const match = currentLocation.match(regex)
     
     if (!match) {
+      console.log("📍 Location doesn't match expected pattern, defaulting to H1-1")
       return "H1-1"
     }
     
@@ -210,16 +225,15 @@ export default function InventoryDashboard() {
     const shelfNum = parseInt(shelf)
     const posNum = parseInt(position)
     
-    // Increment position first
-    const nextPos = posNum + 1
+    console.log(`📍 Parsing location: ${currentLocation} -> Prefix: ${prefix}, Shelf: ${shelfNum}, Position: ${posNum}`)
     
-    // For now, assume positions can go up to 20 per shelf
-    if (nextPos <= 20) {
-      return `${prefix}${shelfNum}-${nextPos}`
-    } else {
-      // Move to next shelf, position 1
-      return `${prefix}${shelfNum + 1}-1`
-    }
+    // Increment position
+    const nextPos = posNum + 1
+    const nextLocation = `${prefix}${shelfNum}-${nextPos}`
+    
+    console.log(`📍 Next location calculated: ${nextLocation}`)
+    
+    return nextLocation
   }
 
   const refreshLocationSuggestion = async () => {
