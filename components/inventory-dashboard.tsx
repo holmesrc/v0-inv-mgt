@@ -80,6 +80,8 @@ export default function InventoryDashboard() {
   const [customQuantityInput, setCustomQuantityInput] = useState<Record<string, string>>({})
   const [showCustomInput, setShowCustomInput] = useState<Record<string, boolean>>({})
   const [suggestedLocation, setSuggestedLocation] = useState<string>("H1-1")
+  const [showCustomLocationInput, setShowCustomLocationInput] = useState(false)
+  const [customLocationValue, setCustomLocationValue] = useState("")
 
   // Form state for adding new items
   const [newItem, setNewItem] = useState({
@@ -691,11 +693,27 @@ export default function InventoryDashboard() {
         reorderPoint: "",
       })
       
+      // Reset location form state
+      setShowCustomLocationInput(false)
+      setCustomLocationValue("")
+      
       setAddItemDialogOpen(false)
       alert("Item submitted for approval!")
+      
+      // Refresh location suggestion for next item
+      await generateLocationSuggestion()
     } catch (error) {
       console.error("Failed to add item:", error)
       alert("Failed to add item. Please try again.")
+    }
+  }
+
+  const handleAddItemDialogOpen = (open: boolean) => {
+    setAddItemDialogOpen(open)
+    if (!open) {
+      // Reset location form state when closing
+      setShowCustomLocationInput(false)
+      setCustomLocationValue("")
     }
   }
 
@@ -850,7 +868,7 @@ export default function InventoryDashboard() {
           <p className="text-muted-foreground">Managing {inventory.length} inventory items</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button onClick={() => setAddItemDialogOpen(true)} className="flex items-center gap-2">
+          <Button onClick={() => handleAddItemDialogOpen(true)} className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
             Add Item
           </Button>
@@ -907,7 +925,7 @@ export default function InventoryDashboard() {
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Items</CardTitle>
@@ -933,24 +951,6 @@ export default function InventoryDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">{pendingChanges.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Next Location</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{suggestedLocation}</div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={refreshLocationSuggestion}
-              className="mt-1 h-6 px-2 text-xs"
-            >
-              <RefreshCw className="h-3 w-3 mr-1" />
-              Refresh
-            </Button>
           </CardContent>
         </Card>
       </div>
@@ -1199,7 +1199,7 @@ export default function InventoryDashboard() {
       </Card>
 
       {/* Add Item Dialog */}
-      <Dialog open={addItemDialogOpen} onOpenChange={setAddItemDialogOpen}>
+      <Dialog open={addItemDialogOpen} onOpenChange={handleAddItemDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Add New Item</DialogTitle>
@@ -1247,28 +1247,73 @@ export default function InventoryDashboard() {
             </div>
             <div>
               <Label htmlFor="location">Location</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="location"
+              {showCustomLocationInput ? (
+                <div className="flex gap-2">
+                  <Input
+                    id="location"
+                    value={customLocationValue}
+                    onChange={(e) => setCustomLocationValue(e.target.value)}
+                    placeholder="Enter custom location"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setNewItem(prev => ({ ...prev, location: customLocationValue }))
+                      setShowCustomLocationInput(false)
+                      setCustomLocationValue("")
+                    }}
+                    disabled={!customLocationValue.trim()}
+                  >
+                    Use
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowCustomLocationInput(false)
+                      setCustomLocationValue("")
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Select
                   value={newItem.location}
-                  onChange={(e) => setNewItem(prev => ({ ...prev, location: e.target.value }))}
-                  placeholder="Enter location"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setNewItem(prev => ({ ...prev, location: suggestedLocation }))
-                    refreshLocationSuggestion()
+                  onValueChange={(value) => {
+                    if (value === "custom") {
+                      setShowCustomLocationInput(true)
+                    } else {
+                      setNewItem(prev => ({ ...prev, location: value }))
+                    }
                   }}
-                  className="whitespace-nowrap"
                 >
-                  Use {suggestedLocation}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Suggested next location: {suggestedLocation}
-              </p>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select or enter location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={suggestedLocation}>
+                      🎯 {suggestedLocation} (Suggested)
+                    </SelectItem>
+                    <Separator />
+                    {uniqueLocations.map((location) => (
+                      <SelectItem key={location} value={location}>
+                        📍 {location}
+                      </SelectItem>
+                    ))}
+                    <Separator />
+                    <SelectItem value="custom">
+                      ✏️ Custom Location...
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+              {newItem.location && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Selected: {newItem.location}
+                </p>
+              )}
             </div>
             <div>
               <Label htmlFor="supplier">Supplier</Label>
@@ -1300,7 +1345,7 @@ export default function InventoryDashboard() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddItemDialogOpen(false)}>
+            <Button variant="outline" onClick={() => handleAddItemDialogOpen(false)}>
               Cancel
             </Button>
             <Button 
