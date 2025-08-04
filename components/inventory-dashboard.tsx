@@ -86,6 +86,20 @@ export default function InventoryDashboard() {
   const [showRequesterWarning, setShowRequesterWarning] = useState(false)
   const [showCustomPackageInput, setShowCustomPackageInput] = useState(false)
   const [customPackageValue, setCustomPackageValue] = useState("")
+  const [batchEntryItems, setBatchEntryItems] = useState<any[]>([])
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false)
+  const [duplicatePartInfo, setDuplicatePartInfo] = useState<{
+    partNumber: string
+    mfgPartNumber?: string
+    description: string
+    newQuantity: number
+    location: string
+    supplier: string
+    package: string
+    reorderPoint?: number
+    existingItem: any
+    batchIndex?: number
+  } | null>(null)
 
   // Form state for adding new items
   const [newItem, setNewItem] = useState({
@@ -765,6 +779,128 @@ export default function InventoryDashboard() {
     } catch (error) {
       console.error("Failed to add item:", error)
       alert("Failed to add item. Please try again.")
+    }
+  }
+
+  const handleAddToBatch = async () => {
+    // Validate required fields
+    if (!newItem.requester.trim()) {
+      setShowRequesterWarning(true)
+      return
+    }
+    if (!newItem.partNumber.trim() || !newItem.description.trim() || !newItem.quantity.trim()) {
+      alert("Please fill in all required fields (Requester, Part Number, Description, Quantity)")
+      return
+    }
+
+    // Check for duplicate part number
+    const existingItem = inventory.find(
+      (item) => item["Part number"].toLowerCase() === newItem.partNumber.toLowerCase()
+    )
+
+    if (existingItem) {
+      setDuplicatePartInfo({
+        partNumber: newItem.partNumber,
+        mfgPartNumber: newItem.mfgPartNumber,
+        description: newItem.description,
+        newQuantity: parseInt(newItem.quantity) || 0,
+        location: newItem.location,
+        supplier: newItem.supplier,
+        package: newItem.package,
+        reorderPoint: parseInt(newItem.reorderPoint) || alertSettings.defaultReorderPoint || 10,
+        existingItem: existingItem,
+        batchIndex: batchEntryItems.length
+      })
+      setShowDuplicateDialog(true)
+      return
+    }
+
+    // Add to batch
+    const batchItem = {
+      partNumber: newItem.partNumber,
+      mfgPartNumber: newItem.mfgPartNumber,
+      description: newItem.description,
+      quantity: newItem.quantity,
+      location: newItem.location,
+      supplier: newItem.supplier,
+      package: newItem.package,
+      reorderPoint: newItem.reorderPoint || alertSettings.defaultReorderPoint || 10,
+      requester: newItem.requester
+    }
+
+    setBatchEntryItems(prev => [...prev, batchItem])
+
+    // Clear form but keep requester
+    const requesterName = newItem.requester
+    setNewItem({
+      partNumber: "",
+      mfgPartNumber: "",
+      description: "",
+      quantity: "",
+      location: "",
+      supplier: "",
+      package: "",
+      reorderPoint: "",
+      requester: requesterName, // Keep requester for next item
+    })
+
+    // Reset form state
+    setShowCustomLocationInput(false)
+    setCustomLocationValue("")
+    setShowCustomPackageInput(false)
+    setCustomPackageValue("")
+    setShowRequesterWarning(false)
+    
+    // Refresh location suggestion for next item
+    await generateLocationSuggestion()
+  }
+
+  const handleSubmitBatch = async () => {
+    if (batchEntryItems.length === 0) {
+      alert("No items in batch to submit")
+      return
+    }
+
+    try {
+      const requesterName = batchEntryItems[0]?.requester
+      if (!requesterName) {
+        alert("Missing requester information")
+        return
+      }
+
+      // Submit each item in the batch
+      let successCount = 0
+      for (const item of batchEntryItems) {
+        try {
+          const itemData = {
+            "Part number": item.partNumber,
+            "MFG Part number": item.mfgPartNumber || "",
+            "Part description": item.description,
+            QTY: parseInt(item.quantity) || 0,
+            Location: item.location,
+            Supplier: item.supplier,
+            Package: item.package,
+            reorderPoint: item.reorderPoint,
+          }
+
+          await addInventoryItem(itemData, requesterName)
+          successCount++
+        } catch (error) {
+          console.error(`Failed to submit item ${item.partNumber}:`, error)
+        }
+      }
+
+      alert(`✅ Batch submitted! ${successCount} of ${batchEntryItems.length} items submitted for approval.`)
+
+      // Clear batch and close dialog
+      setBatchEntryItems([])
+      setAddItemDialogOpen(false)
+      
+      // Refresh location suggestion
+      await generateLocationSuggestion()
+    } catch (error) {
+      console.error("Failed to submit batch:", error)
+      alert("Failed to submit batch. Please try again.")
     }
   }
 
@@ -1562,15 +1698,185 @@ export default function InventoryDashboard() {
               </p>
             </div>
           </div>
+
+          {/* Batch Items Display */}
+          {batchEntryItems.length > 0 && (
+            <div className="mt-6 space-y-4 border-t pt-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium">Batch Items ({batchEntryItems.length})</h3>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => {
+                    setBatchEntryItems([])
+                    setAddItemFormModified(false)
+                  }}
+                >
+                  Clear Batch
+                </Button>
+              </div>
+
+              <div className="border rounded-lg overflow-hidden">
+                <div className="max-h-60 overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="text-left p-2 border-r">Part Number</th>
+                        <th className="text-left p-2 border-r">Description</th>
+                        <th className="text-left p-2 border-r">Qty</th>
+                        <th className="text-left p-2 border-r">Location</th>
+                        <th className="text-left p-2 border-r">Package</th>
+                        <th className="text-left p-2">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {batchEntryItems.map((item, index) => (
+                        <tr key={index} className="border-t hover:bg-gray-50">
+                          <td className="p-2 border-r font-mono text-xs">{item.partNumber}</td>
+                          <td className="p-2 border-r">{item.description}</td>
+                          <td className="p-2 border-r">{item.quantity}</td>
+                          <td className="p-2 border-r">{item.location}</td>
+                          <td className="p-2 border-r">{item.package}</td>
+                          <td className="p-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setBatchEntryItems(prev => prev.filter((_, i) => i !== index))
+                                setAddItemFormModified(true)
+                              }}
+                              className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                            >
+                              ×
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => handleAddItemDialogOpen(false)}>
+            <div className="flex justify-between w-full">
+              <Button variant="outline" onClick={() => handleAddItemDialogOpen(false)}>
+                Cancel
+              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline"
+                  onClick={handleAddToBatch}
+                  disabled={!newItem.partNumber || !newItem.description || !newItem.quantity || !newItem.requester}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add to Batch
+                </Button>
+                <Button 
+                  onClick={handleAddItem}
+                  disabled={!newItem.partNumber || !newItem.description || !newItem.quantity || !newItem.requester}
+                >
+                  Add Single Item
+                </Button>
+                {batchEntryItems.length > 0 && (
+                  <Button 
+                    onClick={handleSubmitBatch}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    Submit Batch ({batchEntryItems.length})
+                  </Button>
+                )}
+              </div>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Duplicate Part Number Dialog */}
+      <Dialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Duplicate Part Number Found</DialogTitle>
+            <DialogDescription>
+              This part number already exists in your inventory
+            </DialogDescription>
+          </DialogHeader>
+          
+          {duplicatePartInfo && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg border bg-yellow-50 border-yellow-200">
+                <h4 className="font-medium mb-2 text-yellow-800">
+                  Existing Item Information:
+                </h4>
+                <div className="text-sm space-y-1">
+                  <div><strong>Part Number:</strong> {duplicatePartInfo.existingItem["Part number"]}</div>
+                  <div><strong>Description:</strong> {duplicatePartInfo.existingItem["Part description"]}</div>
+                  <div><strong>Quantity:</strong> {duplicatePartInfo.existingItem.QTY} units</div>
+                  <div><strong>Location:</strong> {duplicatePartInfo.existingItem.Location}</div>
+                  <div><strong>Supplier:</strong> {duplicatePartInfo.existingItem.Supplier}</div>
+                  <div><strong>Package:</strong> {duplicatePartInfo.existingItem.Package}</div>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-lg border bg-blue-50 border-blue-200">
+                <h4 className="font-medium mb-2 text-blue-800">
+                  New Item Information:
+                </h4>
+                <div className="text-sm space-y-1">
+                  <div><strong>Part Number:</strong> {duplicatePartInfo.partNumber}</div>
+                  <div><strong>Description:</strong> {duplicatePartInfo.description}</div>
+                  <div><strong>Quantity:</strong> {duplicatePartInfo.newQuantity} units</div>
+                  <div><strong>Location:</strong> {duplicatePartInfo.location}</div>
+                  <div><strong>Supplier:</strong> {duplicatePartInfo.supplier}</div>
+                  <div><strong>Package:</strong> {duplicatePartInfo.package}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDuplicateDialog(false)}>
               Cancel
             </Button>
             <Button 
-              onClick={handleAddItem}
-              disabled={!newItem.partNumber || !newItem.description || !newItem.quantity || !newItem.requester}
+              onClick={() => {
+                if (duplicatePartInfo) {
+                  // Add to batch anyway
+                  const batchItem = {
+                    partNumber: duplicatePartInfo.partNumber,
+                    mfgPartNumber: duplicatePartInfo.mfgPartNumber,
+                    description: duplicatePartInfo.description,
+                    quantity: duplicatePartInfo.newQuantity.toString(),
+                    location: duplicatePartInfo.location,
+                    supplier: duplicatePartInfo.supplier,
+                    package: duplicatePartInfo.package,
+                    reorderPoint: duplicatePartInfo.reorderPoint,
+                    requester: newItem.requester
+                  }
+
+                  setBatchEntryItems(prev => [...prev, batchItem])
+
+                  // Clear form but keep requester
+                  const requesterName = newItem.requester
+                  setNewItem({
+                    partNumber: "",
+                    mfgPartNumber: "",
+                    description: "",
+                    quantity: "",
+                    location: "",
+                    supplier: "",
+                    package: "",
+                    reorderPoint: "",
+                    requester: requesterName,
+                  })
+
+                  setShowDuplicateDialog(false)
+                  setDuplicatePartInfo(null)
+                }
+              }}
             >
-              Add Item
+              Add to Batch Anyway
             </Button>
           </DialogFooter>
         </DialogContent>
