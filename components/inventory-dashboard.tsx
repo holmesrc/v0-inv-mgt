@@ -106,6 +106,7 @@ export default function InventoryDashboard() {
   const [editingBatchQuantity, setEditingBatchQuantity] = useState<Record<number, string>>({})
   const [duplicateCheckTimeout, setDuplicateCheckTimeout] = useState<NodeJS.Timeout | null>(null)
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false)
+  const [editingQuantity, setEditingQuantity] = useState<Record<string, string>>({})
 
   // Form state for adding new items
   const [newItem, setNewItem] = useState({
@@ -1163,6 +1164,59 @@ export default function InventoryDashboard() {
     }
   }
 
+  const handleInlineQuantityEdit = (itemId: string, currentQuantity: number) => {
+    setEditingQuantity(prev => ({
+      ...prev,
+      [itemId]: currentQuantity.toString()
+    }))
+  }
+
+  const handleInlineQuantityUpdate = async (itemId: string, newQuantity: string) => {
+    const quantity = parseInt(newQuantity)
+    if (isNaN(quantity) || quantity < 0) {
+      alert("Please enter a valid quantity")
+      return
+    }
+
+    const requesterName = prompt("Enter your name for approval tracking:")
+    if (!requesterName) return
+
+    try {
+      await updateInventoryQuantity(itemId, quantity, requesterName)
+      setEditingQuantity(prev => {
+        const updated = { ...prev }
+        delete updated[itemId]
+        return updated
+      })
+      alert("Quantity update submitted for approval!")
+    } catch (error) {
+      console.error("Failed to update quantity:", error)
+      alert("Failed to update quantity. Please try again.")
+    }
+  }
+
+  const handleInlineQuantityCancel = (itemId: string) => {
+    setEditingQuantity(prev => {
+      const updated = { ...prev }
+      delete updated[itemId]
+      return updated
+    })
+  }
+
+  const handleQuantityIncrement = async (itemId: string, currentQuantity: number, increment: number) => {
+    const newQuantity = Math.max(0, currentQuantity + increment)
+    const requesterName = prompt("Enter your name for approval tracking:")
+    if (!requesterName) return
+
+    try {
+      await updateInventoryQuantity(itemId, newQuantity, requesterName)
+      alert(`Quantity ${increment > 0 ? 'increase' : 'decrease'} submitted for approval!`)
+    } catch (error) {
+      console.error("Failed to update quantity:", error)
+      alert("Failed to update quantity. Please try again.")
+    }
+  }
+
   const handleAddItemDialogOpen = (open: boolean) => {
     if (!open && addItemFormModified) {
       // Check if user is trying to close with unsaved changes
@@ -1585,27 +1639,54 @@ export default function InventoryDashboard() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleTempQuantityChange(item.id, -99)}
-                                className="h-6 px-1 text-xs"
+                                onClick={() => handleQuantityIncrement(item.id, item.QTY, -1)}
+                                className="h-6 w-6 p-0"
+                                disabled={item.QTY <= 0}
                               >
-                                -99
+                                -
                               </Button>
+                              
+                              {editingQuantity[item.id] !== undefined ? (
+                                <div className="flex gap-1 items-center">
+                                  <Input
+                                    type="number"
+                                    value={editingQuantity[item.id]}
+                                    onChange={(e) => setEditingQuantity(prev => ({
+                                      ...prev,
+                                      [item.id]: e.target.value
+                                    }))}
+                                    className="h-6 w-12 px-1 text-xs text-center"
+                                    onKeyPress={(e) => {
+                                      if (e.key === 'Enter') {
+                                        handleInlineQuantityUpdate(item.id, editingQuantity[item.id])
+                                      } else if (e.key === 'Escape') {
+                                        handleInlineQuantityCancel(item.id)
+                                      }
+                                    }}
+                                    onBlur={() => handleInlineQuantityUpdate(item.id, editingQuantity[item.id])}
+                                    autoFocus
+                                  />
+                                </div>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleInlineQuantityEdit(item.id, item.QTY)}
+                                  className="h-6 w-12 px-1 text-xs font-medium hover:bg-gray-100"
+                                >
+                                  {item.QTY}
+                                </Button>
+                              )}
+
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleTempQuantityChange(item.id, 99)}
-                                className="h-6 px-1 text-xs"
-                              >
-                                +99
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleTempQuantityChange(item.id, 1)}
-                                className="h-6 px-2"
+                                onClick={() => handleQuantityIncrement(item.id, item.QTY, 1)}
+                                className="h-6 w-6 p-0"
                               >
                                 +
                               </Button>
+
                               {showCustomInput[item.id] ? (
                                 <div className="flex gap-1">
                                   <Input
@@ -1644,6 +1725,7 @@ export default function InventoryDashboard() {
                                   Custom
                                 </Button>
                               )}
+                              
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -1655,6 +1737,7 @@ export default function InventoryDashboard() {
                               >
                                 <Edit className="h-3 w-3" />
                               </Button>
+                              
                               <Button
                                 size="sm"
                                 variant="outline"
