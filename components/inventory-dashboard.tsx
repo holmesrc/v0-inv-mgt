@@ -76,6 +76,9 @@ export default function InventoryDashboard() {
   const [editDialogOpen, setEditDialogOpen] = useState<Record<string, boolean>>({})
   const [addItemDialogOpen, setAddItemDialogOpen] = useState(false)
   const [tempQuantityChanges, setTempQuantityChanges] = useState<Record<string, number>>({})
+  const [showSettings, setShowSettings] = useState(false)
+  const [customQuantityInput, setCustomQuantityInput] = useState<Record<string, string>>({})
+  const [showCustomInput, setShowCustomInput] = useState<Record<string, boolean>>({})
 
   // Form state for adding new items
   const [newItem, setNewItem] = useState({
@@ -338,6 +341,146 @@ export default function InventoryDashboard() {
     }
   }
 
+  const handleManualSync = async () => {
+    try {
+      setSyncing(true)
+      setError(null)
+      
+      if (inventory.length === 0) {
+        throw new Error("No inventory data to sync. Please upload inventory first.")
+      }
+
+      await saveInventoryToDatabase(inventory, "Manual sync from dashboard")
+      alert("✅ Sync completed successfully!")
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown sync error"
+      console.error("❌ Sync failed:", errorMessage)
+      setError(`Sync failed: ${errorMessage}`)
+      alert(`❌ Sync failed: ${errorMessage}`)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  const handleDownloadExcel = () => {
+    const csvContent = [
+      ["Part Number", "MFG Part Number", "Description", "Quantity", "Location", "Supplier", "Package", "Reorder Point"],
+      ...inventory.map(item => [
+        item["Part number"],
+        item["MFG Part number"] || "",
+        item["Part description"],
+        item.QTY,
+        item.Location,
+        item.Supplier,
+        item.Package,
+        item.reorderPoint || alertSettings.defaultReorderPoint
+      ])
+    ].map(row => row.join(",")).join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv" })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `inventory-${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  }
+
+  const sendLowStockAlert = async () => {
+    try {
+      const response = await fetch("/api/slack/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "low_stock",
+          items: lowStockItems
+        })
+      })
+
+      if (response.ok) {
+        alert("✅ Low stock alert sent successfully!")
+      } else {
+        throw new Error("Failed to send alert")
+      }
+    } catch (error) {
+      console.error("Failed to send low stock alert:", error)
+      alert("❌ Failed to send low stock alert")
+    }
+  }
+
+  const sendFullAlert = async () => {
+    try {
+      const response = await fetch("/api/slack/send-full-alert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inventory: inventory,
+          lowStockItems: lowStockItems
+        })
+      })
+
+      if (response.ok) {
+        alert("✅ Full inventory alert sent successfully!")
+      } else {
+        throw new Error("Failed to send full alert")
+      }
+    } catch (error) {
+      console.error("Failed to send full alert:", error)
+      alert("❌ Failed to send full inventory alert")
+    }
+  }
+
+  const handleCustomQuantityChange = (itemId: string, customAmount: string) => {
+    const amount = parseInt(customAmount)
+    if (!isNaN(amount) && amount !== 0) {
+      setTempQuantityChanges(prev => ({
+        ...prev,
+        [itemId]: amount
+      }))
+      setShowCustomInput(prev => ({
+        ...prev,
+        [itemId]: false
+      }))
+      setCustomQuantityInput(prev => ({
+        ...prev,
+        [itemId]: ""
+      }))
+    }
+  }
+
+  const updateReorderPoint = async (itemId: string, newReorderPoint: number, requester: string) => {
+    try {
+      const response = await fetch("/api/inventory/update-reorder-point", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          itemId,
+          newReorderPoint,
+          requester,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const result = await response.json()
+      if (!result.success) {
+        throw new Error(result.error || "Unknown error occurred")
+      }
+
+      await loadInventoryFromDatabase()
+      await loadPendingChanges()
+    } catch (error) {
+      console.error("Update reorder point failed:", error)
+      throw error
+    }
+  }
+
   const handleAddItem = async () => {
     try {
       const requesterName = prompt("Enter your name for approval tracking:")
@@ -526,13 +669,51 @@ export default function InventoryDashboard() {
           <h1 className="text-3xl font-bold">Inventory Management System</h1>
           <p className="text-muted-foreground">Managing {inventory.length} inventory items</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button onClick={() => setAddItemDialogOpen(true)} className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
             Add Item
           </Button>
+          <Button variant="outline" onClick={handleDownloadExcel} className="flex items-center gap-2">
+            <Download className="h-4 w-4" />
+            Download Excel
+          </Button>
+          <Button variant="outline" onClick={() => setShowUpload(true)} className="flex items-center gap-2">
+            <Upload className="h-4 w-4" />
+            Upload New File
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={handleManualSync}
+            disabled={syncing}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Syncing...' : 'Sync to Database'}
+          </Button>
+          <Button variant="outline" onClick={sendLowStockAlert} className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            Send Alert Now
+          </Button>
+          <Button variant="outline" onClick={sendFullAlert} className="flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            Send Full Alert
+          </Button>
           <Button variant="outline" onClick={() => setShowPendingChanges(true)}>
             Pending Changes ({pendingChanges.length})
+          </Button>
+          <Button variant="outline" onClick={() => window.open('/low-stock', '_blank')}>
+            Low Stock Page
+          </Button>
+          <Button variant="outline" onClick={() => window.open('/reorder-status', '_blank')}>
+            Reorder Status
+          </Button>
+          <Button variant="outline" onClick={() => window.open('/endpoints', '_blank')}>
+            All Endpoints
+          </Button>
+          <Button variant="outline" onClick={() => setShowSettings(true)} className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            Settings
           </Button>
         </div>
       </div>
@@ -672,7 +853,7 @@ export default function InventoryDashboard() {
                         </Badge>
                       </td>
                       <td className="border border-gray-300 p-2">
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 flex-wrap">
                           {hasChanges ? (
                             <>
                               <Button
@@ -696,18 +877,100 @@ export default function InventoryDashboard() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleTempQuantityChange(item.id, 1)}
-                                className="h-6 px-2"
+                                onClick={() => handleTempQuantityChange(item.id, -99)}
+                                className="h-6 px-1 text-xs"
                               >
-                                +1
+                                -99
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleTempQuantityChange(item.id, -1)}
+                                onClick={() => handleTempQuantityChange(item.id, 99)}
+                                className="h-6 px-1 text-xs"
+                              >
+                                +99
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleTempQuantityChange(item.id, 1)}
                                 className="h-6 px-2"
                               >
-                                -1
+                                +
+                              </Button>
+                              {showCustomInput[item.id] ? (
+                                <div className="flex gap-1">
+                                  <Input
+                                    type="number"
+                                    placeholder="±"
+                                    value={customQuantityInput[item.id] || ""}
+                                    onChange={(e) => setCustomQuantityInput(prev => ({
+                                      ...prev,
+                                      [item.id]: e.target.value
+                                    }))}
+                                    className="h-6 w-16 px-1 text-xs"
+                                    onKeyPress={(e) => {
+                                      if (e.key === 'Enter') {
+                                        handleCustomQuantityChange(item.id, customQuantityInput[item.id] || "")
+                                      }
+                                    }}
+                                  />
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleCustomQuantityChange(item.id, customQuantityInput[item.id] || "")}
+                                    className="h-6 px-1"
+                                  >
+                                    <Check className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setShowCustomInput(prev => ({
+                                    ...prev,
+                                    [item.id]: true
+                                  }))}
+                                  className="h-6 px-1 text-xs"
+                                >
+                                  Custom
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setEditDialogOpen(prev => ({
+                                  ...prev,
+                                  [item.id]: true
+                                }))}
+                                className="h-6 px-2"
+                              >
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  const requesterName = prompt("Enter your name for reorder request:")
+                                  if (requesterName) {
+                                    // Handle reorder request
+                                    fetch("/api/reorder-requests", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({
+                                        item: item,
+                                        requester: requesterName
+                                      })
+                                    }).then(() => {
+                                      alert("Reorder request submitted!")
+                                    }).catch(() => {
+                                      alert("Failed to submit reorder request")
+                                    })
+                                  }
+                                }}
+                                className="h-6 px-1 text-xs"
+                              >
+                                Reorder
                               </Button>
                               <Button
                                 size="sm"
@@ -831,6 +1094,199 @@ export default function InventoryDashboard() {
               disabled={!newItem.partNumber || !newItem.description || !newItem.quantity}
             >
               Add Item
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Settings Dialog */}
+      <Dialog open={showSettings} onOpenChange={setShowSettings}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Settings</DialogTitle>
+            <DialogDescription>
+              Configure inventory alert settings
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="default-reorder-point">Default Reorder Point</Label>
+              <Input
+                id="default-reorder-point"
+                type="number"
+                value={alertSettings.defaultReorderPoint}
+                onChange={(e) => setAlertSettings(prev => ({
+                  ...prev,
+                  defaultReorderPoint: parseInt(e.target.value) || 10
+                }))}
+              />
+            </div>
+            <div>
+              <Label htmlFor="low-stock-threshold">Low Stock Threshold</Label>
+              <Input
+                id="low-stock-threshold"
+                type="number"
+                value={alertSettings.lowStockThreshold}
+                onChange={(e) => setAlertSettings(prev => ({
+                  ...prev,
+                  lowStockThreshold: parseInt(e.target.value) || 5
+                }))}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="slack-notifications"
+                checked={alertSettings.enableSlackNotifications}
+                onCheckedChange={(checked) => setAlertSettings(prev => ({
+                  ...prev,
+                  enableSlackNotifications: checked
+                }))}
+              />
+              <Label htmlFor="slack-notifications">Enable Slack Notifications</Label>
+            </div>
+            {alertSettings.enableSlackNotifications && (
+              <div>
+                <Label htmlFor="slack-webhook">Slack Webhook URL</Label>
+                <Input
+                  id="slack-webhook"
+                  type="url"
+                  value={alertSettings.slackWebhookUrl}
+                  onChange={(e) => setAlertSettings(prev => ({
+                    ...prev,
+                    slackWebhookUrl: e.target.value
+                  }))}
+                  placeholder="https://hooks.slack.com/..."
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSettings(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => {
+              handleSettingsUpdate(alertSettings)
+              setShowSettings(false)
+            }}>
+              Save Settings
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Item Dialogs */}
+      {inventory.map((item) => (
+        <Dialog 
+          key={`edit-${item.id}`}
+          open={editDialogOpen[item.id] || false} 
+          onOpenChange={(open) => setEditDialogOpen(prev => ({
+            ...prev,
+            [item.id]: open
+          }))}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit Item</DialogTitle>
+              <DialogDescription>
+                Edit {item["Part number"]} - {item["Part description"]}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Part Number</Label>
+                <Input value={item["Part number"]} disabled />
+              </div>
+              <div>
+                <Label>Current Quantity</Label>
+                <Input value={item.QTY} disabled />
+              </div>
+              <div>
+                <Label>Reorder Point</Label>
+                <Input
+                  type="number"
+                  defaultValue={item.reorderPoint || alertSettings.defaultReorderPoint}
+                  onBlur={(e) => {
+                    const newReorderPoint = parseInt(e.target.value)
+                    if (!isNaN(newReorderPoint)) {
+                      const requesterName = prompt("Enter your name for approval tracking:")
+                      if (requesterName) {
+                        updateReorderPoint(item.id, newReorderPoint, requesterName)
+                          .then(() => {
+                            alert("Reorder point update submitted for approval!")
+                            setEditDialogOpen(prev => ({
+                              ...prev,
+                              [item.id]: false
+                            }))
+                          })
+                          .catch(() => alert("Failed to update reorder point"))
+                      }
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditDialogOpen(prev => ({
+                ...prev,
+                [item.id]: false
+              }))}>
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ))}
+
+      {/* Pending Changes Dialog */}
+      <Dialog open={showPendingChanges} onOpenChange={setShowPendingChanges}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Pending Changes</DialogTitle>
+            <DialogDescription>
+              Review and manage pending inventory changes
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {pendingChanges.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">No pending changes</p>
+            ) : (
+              <div className="space-y-2">
+                {pendingChanges.map((change) => (
+                  <Card key={change.id} className="p-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-medium">{change.change_type}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Requested by: {change.requester}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(change.timestamp).toLocaleString()}
+                        </p>
+                        {change.item_data && (
+                          <div className="mt-2 text-sm">
+                            <p><strong>Part:</strong> {change.item_data.part_number}</p>
+                            <p><strong>Description:</strong> {change.item_data.part_description}</p>
+                            {change.item_data.quantity && (
+                              <p><strong>Quantity:</strong> {change.item_data.quantity}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <Badge variant={change.status === 'pending' ? 'secondary' : 'default'}>
+                        {change.status}
+                      </Badge>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPendingChanges(false)}>
+              Close
+            </Button>
+            <Button onClick={() => window.open('/approvals', '_blank')}>
+              Open Approvals Page
             </Button>
           </DialogFooter>
         </DialogContent>
