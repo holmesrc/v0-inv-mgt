@@ -1489,6 +1489,34 @@ export default function InventoryDashboard() {
         </div>
       </div>
 
+      {/* Stock Status Definitions */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0 mt-0.5">
+            <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+              <span className="text-white text-xs font-bold">i</span>
+            </div>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-blue-900 mb-2">Stock Status Definitions</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <Badge variant="destructive" className="text-xs">Low Stock</Badge>
+                <span className="text-blue-800">At or below reorder point - Order immediately</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-xs">Approaching Low</Badge>
+                <span className="text-blue-800">Within 50% above reorder point - Monitor closely</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-400 text-xs px-2 py-1 bg-gray-100 rounded">-</span>
+                <span className="text-blue-800">Good stock - More than 50% above reorder point</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Error Display */}
       {error && (
         <Alert variant="destructive">
