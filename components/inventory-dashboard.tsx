@@ -980,14 +980,19 @@ export default function InventoryDashboard() {
     }
   }, [inventory])
 
-  // Convert the async useMemo to a state-based approach
-  const [suggestedLocation, setSuggestedLocation] = useState<string>("H1-1")
-  
-  useEffect(() => {
+  // Manual refresh function for location suggestions
+  const refreshLocationSuggestion = async () => {
+    console.log("🔄 Manually refreshing location suggestion...") // Debug
     const generateLocationSuggestion = async () => {
+      console.log("📍 Generating location suggestion...") // Debug
       try {
         // Get current inventory locations
-        const currentLocations = inventory.map(item => item["Location"]).filter(Boolean)
+        const currentLocations = inventory
+          .map(item => item["Location"])
+          .filter(Boolean)
+          .map(loc => loc.trim())
+        
+        console.log("📍 Current inventory locations:", currentLocations.length) // Debug
         
         // Get pending changes locations
         let pendingLocations: string[] = []
@@ -995,22 +1000,65 @@ export default function InventoryDashboard() {
           const response = await fetch("/api/inventory/pending")
           if (response.ok) {
             const result = await response.json()
-            if (result.success) {
+            if (result.success && result.data) {
               pendingLocations = result.data
                 .filter((change: any) => change.status === "pending")
-                .map((change: any) => change.item_data?.location || change.original_data?.location)
+                .map((change: any) => {
+                  // Handle different change types
+                  if (change.change_type === "add") {
+                    return change.item_data?.location
+                  } else if (change.change_type === "update") {
+                    return change.item_data?.location
+                  } else if (change.change_type === "batch_add" && change.item_data?.batch_items) {
+                    // Extract locations from batch items
+                    return change.item_data.batch_items.map((item: any) => item.location).filter(Boolean)
+                  }
+                  return null
+                })
+                .flat() // Flatten in case of batch items
                 .filter(Boolean)
+                .map((loc: string) => loc.trim())
             }
           }
+          console.log("📍 Pending changes locations:", pendingLocations.length) // Debug
         } catch (error) {
-          console.log("Could not fetch pending changes for location suggestion")
+          console.log("📍 Could not fetch pending changes for location suggestion:", error)
+        }
+
+        // Get current batch entry locations (if in batch mode)
+        let batchLocations: string[] = []
+        if (addItemMode === 'batch') {
+          batchLocations = batchEntryItems
+            .map(item => item.location)
+            .filter(Boolean)
+            .map(loc => loc.trim())
+          console.log("📍 Current batch locations:", batchLocations.length) // Debug
+        }
+
+        // Get current single entry location (if in single mode and has value)
+        let currentFormLocation: string[] = []
+        if (addItemMode === 'single') {
+          const locationInput = document.querySelector("#add-location") as HTMLSelectElement
+          if (locationInput && locationInput.value && locationInput.value !== suggestedLocation) {
+            currentFormLocation = [locationInput.value.trim()]
+            console.log("📍 Current form location:", currentFormLocation) // Debug
+          }
         }
 
         // Combine all locations
-        const allLocations = [...currentLocations, ...pendingLocations]
-        const uniqueAllLocations = Array.from(new Set(allLocations))
+        const allLocations = [
+          ...currentLocations, 
+          ...pendingLocations, 
+          ...batchLocations,
+          ...currentFormLocation
+        ]
+        const uniqueAllLocations = Array.from(new Set(allLocations)).filter(Boolean)
+
+        console.log("📍 Total unique locations found:", uniqueAllLocations.length) // Debug
+        console.log("📍 Sample locations:", uniqueAllLocations.slice(0, 5)) // Debug
 
         if (uniqueAllLocations.length === 0) {
+          console.log("📍 No locations found, using default H1-1") // Debug
           setSuggestedLocation("H1-1")
           return
         }
@@ -1055,6 +1103,8 @@ export default function InventoryDashboard() {
           return 0
         })
 
+        console.log("📍 Highest locations:", sortedLocations.slice(0, 3)) // Debug
+
         // Get the highest location and suggest next
         const highestLocation = sortedLocations[0]
         const parts = highestLocation.split(/[-_\s]+/)
@@ -1066,18 +1116,174 @@ export default function InventoryDashboard() {
           const nextNumber = (parseInt(number, 10) + 1).toString()
           const newLastPart = prefix + nextNumber + suffix
           const suggestedLocation = [...parts.slice(0, -1), newLastPart].join('-')
+          console.log("📍 Generated suggestion:", suggestedLocation) // Debug
           setSuggestedLocation(suggestedLocation)
         } else {
-          setSuggestedLocation(highestLocation + "-1")
+          const fallback = highestLocation + "-1"
+          console.log("📍 Using fallback suggestion:", fallback) // Debug
+          setSuggestedLocation(fallback)
         }
       } catch (error) {
-        console.error("Error generating location suggestion:", error)
+        console.error("📍 Error generating location suggestion:", error)
+        setSuggestedLocation("H1-1")
+      }
+    }
+    
+    await generateLocationSuggestion()
+  }
+
+  // Convert the async useMemo to a state-based approach
+  const [suggestedLocation, setSuggestedLocation] = useState<string>("H1-1")
+  
+  useEffect(() => {
+    const generateLocationSuggestion = async () => {
+      console.log("📍 Generating location suggestion...") // Debug
+      try {
+        // Get current inventory locations
+        const currentLocations = inventory
+          .map(item => item["Location"])
+          .filter(Boolean)
+          .map(loc => loc.trim())
+        
+        console.log("📍 Current inventory locations:", currentLocations.length) // Debug
+        
+        // Get pending changes locations
+        let pendingLocations: string[] = []
+        try {
+          const response = await fetch("/api/inventory/pending")
+          if (response.ok) {
+            const result = await response.json()
+            if (result.success && result.data) {
+              pendingLocations = result.data
+                .filter((change: any) => change.status === "pending")
+                .map((change: any) => {
+                  // Handle different change types
+                  if (change.change_type === "add") {
+                    return change.item_data?.location
+                  } else if (change.change_type === "update") {
+                    return change.item_data?.location
+                  } else if (change.change_type === "batch_add" && change.item_data?.batch_items) {
+                    // Extract locations from batch items
+                    return change.item_data.batch_items.map((item: any) => item.location).filter(Boolean)
+                  }
+                  return null
+                })
+                .flat() // Flatten in case of batch items
+                .filter(Boolean)
+                .map((loc: string) => loc.trim())
+            }
+          }
+          console.log("📍 Pending changes locations:", pendingLocations.length) // Debug
+        } catch (error) {
+          console.log("📍 Could not fetch pending changes for location suggestion:", error)
+        }
+
+        // Get current batch entry locations (if in batch mode)
+        let batchLocations: string[] = []
+        if (addItemMode === 'batch') {
+          batchLocations = batchEntryItems
+            .map(item => item.location)
+            .filter(Boolean)
+            .map(loc => loc.trim())
+          console.log("📍 Current batch locations:", batchLocations.length) // Debug
+        }
+
+        // Get current single entry location (if in single mode and has value)
+        let currentFormLocation: string[] = []
+        if (addItemMode === 'single') {
+          const locationInput = document.querySelector("#add-location") as HTMLSelectElement
+          if (locationInput && locationInput.value && locationInput.value !== suggestedLocation) {
+            currentFormLocation = [locationInput.value.trim()]
+            console.log("📍 Current form location:", currentFormLocation) // Debug
+          }
+        }
+
+        // Combine all locations
+        const allLocations = [
+          ...currentLocations, 
+          ...pendingLocations, 
+          ...batchLocations,
+          ...currentFormLocation
+        ]
+        const uniqueAllLocations = Array.from(new Set(allLocations)).filter(Boolean)
+
+        console.log("📍 Total unique locations found:", uniqueAllLocations.length) // Debug
+        console.log("📍 Sample locations:", uniqueAllLocations.slice(0, 5)) // Debug
+
+        if (uniqueAllLocations.length === 0) {
+          console.log("📍 No locations found, using default H1-1") // Debug
+          setSuggestedLocation("H1-1")
+          return
+        }
+
+        // Sort all locations descending
+        const sortedLocations = uniqueAllLocations.sort((a, b) => {
+          const aParts = a.split(/[-_\s]+/)
+          const bParts = b.split(/[-_\s]+/)
+
+          for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+            const aPart = aParts[i] || ""
+            const bPart = bParts[i] || ""
+
+            const aMatch = aPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
+            const bMatch = bPart.match(/^([A-Za-z]*)(\d*)(.*)$/)
+
+            if (aMatch && bMatch) {
+              const [, aPrefix, aNumber, aSuffix] = aMatch
+              const [, bPrefix, bNumber, bSuffix] = bMatch
+
+              if (aPrefix !== bPrefix) {
+                return bPrefix.localeCompare(aPrefix)
+              }
+
+              if (aNumber && bNumber) {
+                const aNum = Number.parseInt(aNumber, 10)
+                const bNum = Number.parseInt(bNumber, 10)
+                if (aNum !== bNum) {
+                  return bNum - aNum
+                }
+              } else if (aNumber && !bNumber) {
+                return -1
+              } else if (!aNumber && bNumber) {
+                return 1
+              }
+
+              if (aSuffix !== bSuffix) {
+                return bSuffix.localeCompare(aSuffix)
+              }
+            }
+          }
+          return 0
+        })
+
+        console.log("📍 Highest locations:", sortedLocations.slice(0, 3)) // Debug
+
+        // Get the highest location and suggest next
+        const highestLocation = sortedLocations[0]
+        const parts = highestLocation.split(/[-_\s]+/)
+        const lastPart = parts[parts.length - 1]
+        const match = lastPart.match(/^([A-Za-z]*)(\d+)(.*)$/)
+        
+        if (match) {
+          const [, prefix, number, suffix] = match
+          const nextNumber = (parseInt(number, 10) + 1).toString()
+          const newLastPart = prefix + nextNumber + suffix
+          const suggestedLocation = [...parts.slice(0, -1), newLastPart].join('-')
+          console.log("📍 Generated suggestion:", suggestedLocation) // Debug
+          setSuggestedLocation(suggestedLocation)
+        } else {
+          const fallback = highestLocation + "-1"
+          console.log("📍 Using fallback suggestion:", fallback) // Debug
+          setSuggestedLocation(fallback)
+        }
+      } catch (error) {
+        console.error("📍 Error generating location suggestion:", error)
         setSuggestedLocation("H1-1")
       }
     }
 
     generateLocationSuggestion()
-  }, [inventory])
+  }, [inventory, batchEntryItems, addItemMode])
 
   // Function to check for duplicate part numbers
   const checkForDuplicatePart = async (partNumber: string, mode: 'single' | 'batch', batchIndex?: number) => {
