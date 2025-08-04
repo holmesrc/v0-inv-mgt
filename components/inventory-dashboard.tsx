@@ -99,6 +99,8 @@ export default function InventoryDashboard() {
     reorderPoint?: number
     existingItem: any
     batchIndex?: number
+    duplicateSource: 'inventory' | 'pending' | 'batch'
+    duplicateData?: any
   } | null>(null)
   const [batchMode, setBatchMode] = useState(false)
   const [editingBatchQuantity, setEditingBatchQuantity] = useState<Record<number, string>>({})
@@ -747,6 +749,27 @@ export default function InventoryDashboard() {
       return
     }
 
+    // Check for comprehensive duplicates
+    const duplicateCheck = await checkForComprehensiveDuplicate(newItem.partNumber)
+    
+    if (duplicateCheck) {
+      setDuplicatePartInfo({
+        partNumber: newItem.partNumber,
+        mfgPartNumber: newItem.mfgPartNumber,
+        description: newItem.description,
+        newQuantity: parseInt(newItem.quantity) || 0,
+        location: newItem.location,
+        supplier: newItem.supplier,
+        package: newItem.package,
+        reorderPoint: parseInt(newItem.reorderPoint) || alertSettings.defaultReorderPoint || 10,
+        existingItem: duplicateCheck.data,
+        duplicateSource: duplicateCheck.source,
+        duplicateData: duplicateCheck
+      })
+      setShowDuplicateDialog(true)
+      return
+    }
+
     try {
       const itemData = {
         "Part number": newItem.partNumber,
@@ -804,65 +827,10 @@ export default function InventoryDashboard() {
       return
     }
 
-    // Check for duplicate in current batch first
-    const batchDuplicateIndex = checkForDuplicateInBatch(newItem.partNumber)
-    if (batchDuplicateIndex !== -1) {
-      const existingBatchItem = batchEntryItems[batchDuplicateIndex]
-      const currentQty = parseInt(existingBatchItem.quantity) || 0
-      const additionalQty = parseInt(newItem.quantity) || 0
-      const newTotalQty = currentQty + additionalQty
-
-      const confirmUpdate = window.confirm(
-        `Part ${newItem.partNumber} is already in the batch with quantity ${currentQty}.\n\n` +
-        `Do you want to add ${additionalQty} more (total: ${newTotalQty})?`
-      )
-
-      if (confirmUpdate) {
-        // Update the existing batch item quantity
-        setBatchEntryItems(prev => 
-          prev.map((item, i) => 
-            i === batchDuplicateIndex 
-              ? { ...item, quantity: newTotalQty.toString() }
-              : item
-          )
-        )
-
-        // Clear form but keep requester and stay in batch mode
-        const requesterName = newItem.requester
-        setNewItem({
-          partNumber: "",
-          mfgPartNumber: "",
-          description: "",
-          quantity: "",
-          location: "",
-          supplier: "",
-          package: "",
-          reorderPoint: "",
-          requester: requesterName,
-        })
-
-        // Reset form state
-        setShowCustomLocationInput(false)
-        setCustomLocationValue("")
-        setShowCustomPackageInput(false)
-        setCustomPackageValue("")
-        setShowRequesterWarning(false)
-        setBatchMode(true)
-        
-        // Refresh location suggestion for next item
-        await generateLocationSuggestion()
-        return
-      } else {
-        return // User cancelled, don't add to batch
-      }
-    }
-
-    // Check for duplicate part number in main inventory
-    const existingItem = inventory.find(
-      (item) => item["Part number"].toLowerCase() === newItem.partNumber.toLowerCase()
-    )
-
-    if (existingItem) {
+    // Check for comprehensive duplicates
+    const duplicateCheck = await checkForComprehensiveDuplicate(newItem.partNumber)
+    
+    if (duplicateCheck) {
       setDuplicatePartInfo({
         partNumber: newItem.partNumber,
         mfgPartNumber: newItem.mfgPartNumber,
@@ -872,8 +840,9 @@ export default function InventoryDashboard() {
         supplier: newItem.supplier,
         package: newItem.package,
         reorderPoint: parseInt(newItem.reorderPoint) || alertSettings.defaultReorderPoint || 10,
-        existingItem: existingItem,
-        batchIndex: batchEntryItems.length
+        existingItem: duplicateCheck.data,
+        duplicateSource: duplicateCheck.source,
+        duplicateData: duplicateCheck
       })
       setShowDuplicateDialog(true)
       return
@@ -1015,6 +984,139 @@ export default function InventoryDashboard() {
     return batchEntryItems.findIndex(
       item => item.partNumber.toLowerCase() === partNumber.toLowerCase()
     )
+  }
+
+  const checkForComprehensiveDuplicate = async (partNumber: string) => {
+    const lowerPartNumber = partNumber.toLowerCase()
+
+    // Check inventory first
+    const inventoryDuplicate = inventory.find(
+      item => item["Part number"].toLowerCase() === lowerPartNumber
+    )
+
+    if (inventoryDuplicate) {
+      return {
+        source: 'inventory' as const,
+        data: inventoryDuplicate
+      }
+    }
+
+    // Check pending approvals
+    try {
+      const response = await fetch("/api/inventory/pending")
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && Array.isArray(result.data)) {
+          const pendingDuplicate = result.data.find((change: any) => {
+            const changePartNumber = change.item_data?.part_number || 
+                                   change.item_data?.["Part number"] ||
+                                   change.item_data?.partNumber
+            return changePartNumber && changePartNumber.toLowerCase() === lowerPartNumber
+          })
+
+          if (pendingDuplicate) {
+            return {
+              source: 'pending' as const,
+              data: pendingDuplicate
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error checking pending duplicates:", error)
+    }
+
+    // Check batch items
+    const batchDuplicateIndex = checkForDuplicateInBatch(partNumber)
+    if (batchDuplicateIndex !== -1) {
+      return {
+        source: 'batch' as const,
+        data: batchEntryItems[batchDuplicateIndex],
+        index: batchDuplicateIndex
+      }
+    }
+
+    return null
+  }
+
+  const handleAddStockToExisting = async (duplicateInfo: any, additionalQuantity: number) => {
+    try {
+      if (duplicateInfo.source === 'inventory') {
+        // Add stock to existing inventory item
+        const response = await fetch("/api/inventory/add-stock", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            itemId: duplicateInfo.data.id,
+            additionalQuantity: additionalQuantity,
+            requester: newItem.requester,
+            partNumber: newItem.partNumber
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+
+        const result = await response.json()
+        if (!result.success) {
+          throw new Error(result.error || "Unknown error occurred")
+        }
+
+        alert(`✅ Stock addition submitted for approval! Adding ${additionalQuantity} to existing inventory.`)
+        
+      } else if (duplicateInfo.source === 'pending') {
+        // Add stock to pending approval item
+        const response = await fetch("/api/inventory/add-stock-pending", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            pendingId: duplicateInfo.data.id,
+            additionalQuantity: additionalQuantity,
+            requester: newItem.requester,
+            partNumber: newItem.partNumber
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+
+        const result = await response.json()
+        if (!result.success) {
+          throw new Error(result.error || "Unknown error occurred")
+        }
+
+        alert(`✅ Stock addition submitted for approval! Adding ${additionalQuantity} to pending item.`)
+        
+      } else if (duplicateInfo.source === 'batch') {
+        // Update batch item directly
+        const currentQty = parseInt(duplicateInfo.data.quantity) || 0
+        const newTotalQty = currentQty + additionalQuantity
+
+        setBatchEntryItems(prev => 
+          prev.map((item, i) => 
+            i === duplicateInfo.index 
+              ? { ...item, quantity: newTotalQty.toString() }
+              : item
+          )
+        )
+
+        alert(`✅ Added ${additionalQuantity} to batch item! New total: ${newTotalQty}`)
+      }
+
+      // Refresh data
+      await loadInventoryFromDatabase()
+      await loadPendingChanges()
+      
+    } catch (error) {
+      console.error("Failed to add stock:", error)
+      alert("Failed to add stock. Please try again.")
+    }
   }
 
   const handleAddItemDialogOpen = (open: boolean) => {
@@ -1983,41 +2085,109 @@ export default function InventoryDashboard() {
 
       {/* Duplicate Part Number Dialog */}
       <Dialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[700px]">
           <DialogHeader>
             <DialogTitle>Duplicate Part Number Found</DialogTitle>
             <DialogDescription>
-              This part number already exists in your inventory
+              This part number already exists. You can add stock to the existing entry.
             </DialogDescription>
           </DialogHeader>
           
           {duplicatePartInfo && (
             <div className="space-y-4">
-              <div className="p-4 rounded-lg border bg-yellow-50 border-yellow-200">
-                <h4 className="font-medium mb-2 text-yellow-800">
-                  Existing Item Information:
+              {/* Existing Item Information */}
+              <div className={`p-4 rounded-lg border ${
+                duplicatePartInfo.duplicateSource === 'inventory' ? 'bg-green-50 border-green-200' :
+                duplicatePartInfo.duplicateSource === 'pending' ? 'bg-orange-50 border-orange-200' :
+                'bg-blue-50 border-blue-200'
+              }`}>
+                <h4 className={`font-medium mb-2 ${
+                  duplicatePartInfo.duplicateSource === 'inventory' ? 'text-green-800' :
+                  duplicatePartInfo.duplicateSource === 'pending' ? 'text-orange-800' :
+                  'text-blue-800'
+                }`}>
+                  {duplicatePartInfo.duplicateSource === 'inventory' ? '📦 Existing Inventory Item:' :
+                   duplicatePartInfo.duplicateSource === 'pending' ? '⏳ Pending Approval Item:' :
+                   '📋 Current Batch Item:'}
                 </h4>
                 <div className="text-sm space-y-1">
-                  <div><strong>Part Number:</strong> {duplicatePartInfo.existingItem["Part number"]}</div>
-                  <div><strong>Description:</strong> {duplicatePartInfo.existingItem["Part description"]}</div>
-                  <div><strong>Quantity:</strong> {duplicatePartInfo.existingItem.QTY} units</div>
-                  <div><strong>Location:</strong> {duplicatePartInfo.existingItem.Location}</div>
-                  <div><strong>Supplier:</strong> {duplicatePartInfo.existingItem.Supplier}</div>
-                  <div><strong>Package:</strong> {duplicatePartInfo.existingItem.Package}</div>
+                  <div><strong>Part Number:</strong> {
+                    duplicatePartInfo.duplicateSource === 'inventory' 
+                      ? duplicatePartInfo.existingItem["Part number"]
+                      : duplicatePartInfo.duplicateSource === 'pending'
+                      ? (duplicatePartInfo.existingItem.item_data?.part_number || duplicatePartInfo.existingItem.item_data?.["Part number"])
+                      : duplicatePartInfo.existingItem.partNumber
+                  }</div>
+                  <div><strong>Description:</strong> {
+                    duplicatePartInfo.duplicateSource === 'inventory' 
+                      ? duplicatePartInfo.existingItem["Part description"]
+                      : duplicatePartInfo.duplicateSource === 'pending'
+                      ? (duplicatePartInfo.existingItem.item_data?.part_description || duplicatePartInfo.existingItem.item_data?.["Part description"])
+                      : duplicatePartInfo.existingItem.description
+                  }</div>
+                  <div><strong>Current Quantity:</strong> {
+                    duplicatePartInfo.duplicateSource === 'inventory' 
+                      ? duplicatePartInfo.existingItem.QTY
+                      : duplicatePartInfo.duplicateSource === 'pending'
+                      ? (duplicatePartInfo.existingItem.item_data?.quantity || duplicatePartInfo.existingItem.item_data?.QTY)
+                      : duplicatePartInfo.existingItem.quantity
+                  } units</div>
+                  <div><strong>Location:</strong> {
+                    duplicatePartInfo.duplicateSource === 'inventory' 
+                      ? duplicatePartInfo.existingItem.Location
+                      : duplicatePartInfo.duplicateSource === 'pending'
+                      ? (duplicatePartInfo.existingItem.item_data?.location || duplicatePartInfo.existingItem.item_data?.Location)
+                      : duplicatePartInfo.existingItem.location
+                  }</div>
+                  <div><strong>Supplier:</strong> {
+                    duplicatePartInfo.duplicateSource === 'inventory' 
+                      ? duplicatePartInfo.existingItem.Supplier
+                      : duplicatePartInfo.duplicateSource === 'pending'
+                      ? (duplicatePartInfo.existingItem.item_data?.supplier || duplicatePartInfo.existingItem.item_data?.Supplier)
+                      : duplicatePartInfo.existingItem.supplier
+                  }</div>
+                  <div><strong>Package:</strong> {
+                    duplicatePartInfo.duplicateSource === 'inventory' 
+                      ? duplicatePartInfo.existingItem.Package
+                      : duplicatePartInfo.duplicateSource === 'pending'
+                      ? (duplicatePartInfo.existingItem.item_data?.package || duplicatePartInfo.existingItem.item_data?.Package)
+                      : duplicatePartInfo.existingItem.package
+                  }</div>
+                  {duplicatePartInfo.duplicateSource === 'pending' && (
+                    <div><strong>Status:</strong> <span className="text-orange-600">Pending Approval</span></div>
+                  )}
                 </div>
               </div>
 
+              {/* New Item Information */}
               <div className="p-4 rounded-lg border bg-blue-50 border-blue-200">
                 <h4 className="font-medium mb-2 text-blue-800">
-                  New Item Information:
+                  ➕ New Stock to Add:
                 </h4>
                 <div className="text-sm space-y-1">
                   <div><strong>Part Number:</strong> {duplicatePartInfo.partNumber}</div>
                   <div><strong>Description:</strong> {duplicatePartInfo.description}</div>
-                  <div><strong>Quantity:</strong> {duplicatePartInfo.newQuantity} units</div>
+                  <div><strong>Additional Quantity:</strong> {duplicatePartInfo.newQuantity} units</div>
                   <div><strong>Location:</strong> {duplicatePartInfo.location}</div>
                   <div><strong>Supplier:</strong> {duplicatePartInfo.supplier}</div>
                   <div><strong>Package:</strong> {duplicatePartInfo.package}</div>
+                </div>
+              </div>
+
+              {/* Calculation Summary */}
+              <div className="p-4 rounded-lg border bg-gray-50 border-gray-200">
+                <h4 className="font-medium mb-2 text-gray-800">
+                  📊 After Adding Stock:
+                </h4>
+                <div className="text-sm">
+                  <div><strong>New Total Quantity:</strong> {
+                    (duplicatePartInfo.duplicateSource === 'inventory' 
+                      ? duplicatePartInfo.existingItem.QTY
+                      : duplicatePartInfo.duplicateSource === 'pending'
+                      ? (duplicatePartInfo.existingItem.item_data?.quantity || duplicatePartInfo.existingItem.item_data?.QTY || 0)
+                      : parseInt(duplicatePartInfo.existingItem.quantity) || 0
+                    ) + duplicatePartInfo.newQuantity
+                  } units</div>
                 </div>
               </div>
             </div>
@@ -2028,24 +2198,11 @@ export default function InventoryDashboard() {
               Cancel
             </Button>
             <Button 
-              onClick={() => {
+              onClick={async () => {
                 if (duplicatePartInfo) {
-                  // Add to batch anyway
-                  const batchItem = {
-                    partNumber: duplicatePartInfo.partNumber,
-                    mfgPartNumber: duplicatePartInfo.mfgPartNumber,
-                    description: duplicatePartInfo.description,
-                    quantity: duplicatePartInfo.newQuantity.toString(),
-                    location: duplicatePartInfo.location,
-                    supplier: duplicatePartInfo.supplier,
-                    package: duplicatePartInfo.package,
-                    reorderPoint: duplicatePartInfo.reorderPoint,
-                    requester: newItem.requester
-                  }
-
-                  setBatchEntryItems(prev => [...prev, batchItem])
-
-                  // Clear form but keep requester and stay in batch mode
+                  await handleAddStockToExisting(duplicatePartInfo.duplicateData, duplicatePartInfo.newQuantity)
+                  
+                  // Clear form
                   const requesterName = newItem.requester
                   setNewItem({
                     partNumber: "",
@@ -2056,17 +2213,64 @@ export default function InventoryDashboard() {
                     supplier: "",
                     package: "",
                     reorderPoint: "",
-                    requester: requesterName,
+                    requester: batchMode ? requesterName : "", // Keep requester in batch mode
                   })
 
-                  setBatchMode(true) // Ensure we stay in batch mode
                   setShowDuplicateDialog(false)
                   setDuplicatePartInfo(null)
+                  
+                  // Close dialog if not in batch mode
+                  if (!batchMode) {
+                    setAddItemDialogOpen(false)
+                  }
                 }
               }}
+              className="bg-green-600 hover:bg-green-700"
             >
-              Add to Batch Anyway
+              Add Stock to Existing
             </Button>
+            {batchMode && (
+              <Button 
+                onClick={() => {
+                  if (duplicatePartInfo) {
+                    // Add to batch anyway (create separate entry)
+                    const batchItem = {
+                      partNumber: duplicatePartInfo.partNumber,
+                      mfgPartNumber: duplicatePartInfo.mfgPartNumber,
+                      description: duplicatePartInfo.description,
+                      quantity: duplicatePartInfo.newQuantity.toString(),
+                      location: duplicatePartInfo.location,
+                      supplier: duplicatePartInfo.supplier,
+                      package: duplicatePartInfo.package,
+                      reorderPoint: duplicatePartInfo.reorderPoint,
+                      requester: newItem.requester
+                    }
+
+                    setBatchEntryItems(prev => [...prev, batchItem])
+
+                    // Clear form but keep requester and stay in batch mode
+                    const requesterName = newItem.requester
+                    setNewItem({
+                      partNumber: "",
+                      mfgPartNumber: "",
+                      description: "",
+                      quantity: "",
+                      location: "",
+                      supplier: "",
+                      package: "",
+                      reorderPoint: "",
+                      requester: requesterName,
+                    })
+
+                    setBatchMode(true)
+                    setShowDuplicateDialog(false)
+                    setDuplicatePartInfo(null)
+                  }
+                }}
+              >
+                Add to Batch Anyway
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
