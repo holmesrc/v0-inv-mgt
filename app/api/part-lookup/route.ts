@@ -62,6 +62,13 @@ const mockPartData: { [key: string]: PartInfo } = {
     found: true,
     source: 'Mock-Digikey'
   },
+  'TC2050-IDC-ND': {
+    mfgPartNumber: 'TC2050-IDC',
+    description: 'CONN CABLE ASSY 10POS 6" 20AWG',
+    supplier: 'Digikey',
+    found: true,
+    source: 'Mock-Digikey'
+  },
   // Add more common parts for testing
   'ATMEGA328P-PU': {
     mfgPartNumber: 'ATMEGA328P-PU',
@@ -310,13 +317,40 @@ export async function POST(request: NextRequest) {
 
     console.log(`Looking up part: ${cleanPartNumber}`)
 
-    // First try real web scraping
+    // Smart search order based on part number format
+    const isDigikeyFormat = cleanPartNumber.match(/-ND$/i) || cleanPartNumber.match(/-\d+-ND$/i) || cleanPartNumber.match(/-CT-ND$/i)
+    const isMouserFormat = cleanPartNumber.match(/^\d{3}-\d{4}/) // Mouser format like 595-TL072CP
+    
+    console.log(`Part format detection: Digikey=${!!isDigikeyFormat}, Mouser=${!!isMouserFormat}`)
+
+    // First try real web scraping with smart ordering
     try {
       console.log('Attempting real web scraping...')
-      const searchPromises = [
-        searchDigikey(cleanPartNumber),
-        searchMouser(cleanPartNumber),
-      ]
+      
+      let searchPromises: Promise<PartInfo | null>[]
+      
+      if (isDigikeyFormat) {
+        // Search Digikey first for Digikey-format parts
+        searchPromises = [
+          searchDigikey(cleanPartNumber),
+          searchMouser(cleanPartNumber),
+        ]
+        console.log('Searching Digikey first (detected Digikey format)')
+      } else if (isMouserFormat) {
+        // Search Mouser first for Mouser-format parts
+        searchPromises = [
+          searchMouser(cleanPartNumber),
+          searchDigikey(cleanPartNumber),
+        ]
+        console.log('Searching Mouser first (detected Mouser format)')
+      } else {
+        // Default order for generic parts
+        searchPromises = [
+          searchDigikey(cleanPartNumber),
+          searchMouser(cleanPartNumber),
+        ]
+        console.log('Using default search order')
+      }
 
       // Wait for searches with shorter timeout for real scraping
       const timeoutPromise = new Promise<null>((resolve) => {
@@ -334,16 +368,21 @@ export async function POST(request: NextRequest) {
         // Find the best result from real scraping
         let bestResult: PartInfo | null = null
         
-        for (const result of results) {
+        for (let i = 0; i < results.length; i++) {
+          const result = results[i]
+          console.log(`Search result ${i}:`, result.status, result.status === 'fulfilled' ? result.value : result.reason)
+          
           if (result.status === 'fulfilled' && result.value && result.value.found) {
             const value = result.value
             
             // Prefer results with both mfg part number and description
             if (value.mfgPartNumber && value.description) {
               bestResult = value
+              console.log(`Selected best result from ${value.source}:`, value)
               break
             } else if (!bestResult) {
               bestResult = value
+              console.log(`Selected fallback result from ${value.source}:`, value)
             }
           }
         }
