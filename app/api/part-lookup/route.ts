@@ -236,7 +236,7 @@ async function searchMouser(partNumber: string): Promise<PartInfo | null> {
         
         const descPatterns = [
           /product-title[^>]*>([^<]+)</i,
-          /<h1[^>]*>([^<]+)</h1>/i,
+          /<h1[^>]*>([^<]+)<\/h1>/i,
           /"productTitle":"([^"]+)"/i,
           /product-name[^>]*>([^<]+)</i,
           /<title>([^<]+)<\/title>/i
