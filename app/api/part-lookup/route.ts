@@ -142,7 +142,7 @@ async function searchDigikey(partNumber: string): Promise<PartInfo | null> {
           /product-description[^>]*>([^<]+)</i,
           /"description":"([^"]+)"/i,
           /<meta[^>]*name="description"[^>]*content="([^"]+)"/i,
-          /<title>([^<]+)</title>/i
+          /<title>([^<]+)<\/title>/i
         ]
 
         let mfgPartNumber = ''
@@ -239,7 +239,7 @@ async function searchMouser(partNumber: string): Promise<PartInfo | null> {
           /<h1[^>]*>([^<]+)</h1>/i,
           /"productTitle":"([^"]+)"/i,
           /product-name[^>]*>([^<]+)</i,
-          /<title>([^<]+)</title>/i
+          /<title>([^<]+)<\/title>/i
         ]
 
         let mfgPartNumber = ''
