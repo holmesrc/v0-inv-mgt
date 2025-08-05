@@ -281,6 +281,31 @@ async function searchGeneric(partNumber: string, site: string): Promise<PartInfo
   }
 }
 
+// Mock data for testing - replace with real scraping later
+const mockPartData: { [key: string]: PartInfo } = {
+  'LM358': {
+    mfgPartNumber: 'LM358N',
+    description: 'Dual Operational Amplifier, 8-Pin DIP',
+    supplier: 'Digikey',
+    found: true,
+    source: 'Mock-Digikey'
+  },
+  'STM32F103': {
+    mfgPartNumber: 'STM32F103C8T6',
+    description: '32-bit ARM Cortex-M3 Microcontroller, 64KB Flash',
+    supplier: 'Mouser',
+    found: true,
+    source: 'Mock-Mouser'
+  },
+  '74HC595': {
+    mfgPartNumber: '74HC595N',
+    description: '8-bit Serial-in, Serial or Parallel-out Shift Register',
+    supplier: 'Digikey',
+    found: true,
+    source: 'Mock-Digikey'
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { partNumber } = await request.json()
@@ -302,86 +327,85 @@ export async function POST(request: NextRequest) {
 
     console.log(`Looking up part: ${cleanPartNumber}`)
 
-    // Try multiple search strategies with different timeouts
-    const searchPromises = [
-      searchDigikey(cleanPartNumber),
-      searchMouser(cleanPartNumber),
-      searchGeneric(cleanPartNumber, 'digikey'),
-      searchGeneric(cleanPartNumber, 'mouser'),
-    ]
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 1500))
 
-    // Wait for all searches to complete or timeout (max 15 seconds total)
-    const timeoutPromise = new Promise<null>((resolve) => {
-      setTimeout(() => resolve(null), 15000)
-    })
-
-    const raceResult = await Promise.race([
-      Promise.allSettled(searchPromises),
-      timeoutPromise
-    ])
-
-    if (!raceResult) {
-      console.log(`Timeout looking up part: ${cleanPartNumber}`)
-      return NextResponse.json({
-        success: false,
-        message: 'Search timeout - please try again',
-        data: {
-          mfgPartNumber: '',
-          description: '',
-          supplier: '',
-          found: false
-        }
-      })
-    }
-
-    const results = raceResult as PromiseSettledResult<PartInfo | null>[]
-    
-    // Find the best result
-    let bestResult: PartInfo | null = null
-    let fallbackResult: PartInfo | null = null
-    
-    for (const result of results) {
-      if (result.status === 'fulfilled' && result.value && result.value.found) {
-        const value = result.value
-        
-        // Prefer results with both mfg part number and description
-        if (value.mfgPartNumber && value.description) {
-          bestResult = value
-          break
-        } 
-        // Keep track of partial results as fallback
-        else if (!fallbackResult && (value.mfgPartNumber || value.description)) {
-          fallbackResult = value
-        }
-      }
-    }
-
-    const finalResult = bestResult || fallbackResult
-
-    if (finalResult) {
-      console.log(`Found part info from ${finalResult.source}:`, {
-        mfgPartNumber: finalResult.mfgPartNumber,
-        description: finalResult.description?.substring(0, 50) + '...',
-        supplier: finalResult.supplier
-      })
-      
+    // Check mock data first
+    const mockResult = mockPartData[cleanPartNumber.toUpperCase()]
+    if (mockResult) {
+      console.log(`Found mock data for: ${cleanPartNumber}`)
       return NextResponse.json({
         success: true,
-        data: finalResult
-      })
-    } else {
-      console.log(`No part info found for: ${cleanPartNumber}`)
-      return NextResponse.json({
-        success: false,
-        message: 'Part not found in Digikey or Mouser',
-        data: {
-          mfgPartNumber: '',
-          description: '',
-          supplier: '',
-          found: false
-        }
+        data: mockResult
       })
     }
+
+    // Try real web scraping for other parts
+    try {
+      const searchPromises = [
+        searchDigikey(cleanPartNumber),
+        searchMouser(cleanPartNumber),
+      ]
+
+      // Wait for searches with timeout
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => resolve(null), 10000)
+      })
+
+      const raceResult = await Promise.race([
+        Promise.allSettled(searchPromises),
+        timeoutPromise
+      ])
+
+      if (raceResult) {
+        const results = raceResult as PromiseSettledResult<PartInfo | null>[]
+        
+        // Find the best result
+        let bestResult: PartInfo | null = null
+        
+        for (const result of results) {
+          if (result.status === 'fulfilled' && result.value && result.value.found) {
+            const value = result.value
+            
+            // Prefer results with both mfg part number and description
+            if (value.mfgPartNumber && value.description) {
+              bestResult = value
+              break
+            } else if (!bestResult) {
+              bestResult = value
+            }
+          }
+        }
+
+        if (bestResult) {
+          console.log(`Found part info from ${bestResult.source}:`, {
+            mfgPartNumber: bestResult.mfgPartNumber,
+            description: bestResult.description?.substring(0, 50) + '...',
+            supplier: bestResult.supplier
+          })
+          
+          return NextResponse.json({
+            success: true,
+            data: bestResult
+          })
+        }
+      }
+    } catch (scrapingError) {
+      console.error('Web scraping failed:', scrapingError)
+    }
+
+    // No results found
+    console.log(`No part info found for: ${cleanPartNumber}`)
+    return NextResponse.json({
+      success: false,
+      message: 'Part not found in Digikey or Mouser',
+      data: {
+        mfgPartNumber: '',
+        description: '',
+        supplier: '',
+        found: false
+      }
+    })
 
   } catch (error) {
     console.error('Part lookup API error:', error)
