@@ -45,6 +45,7 @@ import FileUpload from "./file-upload"
 import { getExcelFileMetadata } from "@/lib/storage"
 import ProtectedUploadButton from "./protected-upload-button"
 import PendingChangesDisplay from "./pending-changes-display"
+import AddInventoryItem from "./add-inventory-item"
 
 export default function InventoryDashboard() {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
@@ -1405,119 +1406,14 @@ Please check your Slack configuration.`)
           <p className="text-muted-foreground">Managing {inventory.length} inventory items</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Item
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New Item</DialogTitle>
-                <DialogDescription>Add a new item to the inventory</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label>Requester Name *</Label>
-                  <Input id="add-requester" placeholder="Enter your name" required />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Part Number *</Label>
-                    <Input id="add-part-number" placeholder="Enter part number" required />
-                  </div>
-                  <div>
-                    <Label>MFG Part Number</Label>
-                    <Input id="add-mfg-part-number" placeholder="Enter MFG part number" />
-                  </div>
-                </div>
-                <div>
-                  <Label>Description *</Label>
-                  <Input id="add-description" placeholder="Enter description" required />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Quantity *</Label>
-                    <Input id="add-quantity" type="number" min="0" placeholder="Enter quantity" required />
-                  </div>
-                  <div>
-                    <Label>Reorder Point</Label>
-                    <Input
-                      id="add-reorder-point"
-                      type="number"
-                      min="0"
-                      defaultValue={alertSettings.defaultReorderPoint}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Location</Label>
-                    <Input id="add-location" placeholder="Enter location" />
-                  </div>
-                  <div>
-                    <Label>Supplier</Label>
-                    <Input id="add-supplier" placeholder="Enter supplier" />
-                  </div>
-                </div>
-                <div>
-                  <Label>Package Type</Label>
-                  <Input id="add-package" placeholder="Enter package type" />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  onClick={async (e) => {
-                    const dialog = (e.target as HTMLElement).closest('[role="dialog"]')
-                    const requesterInput = dialog?.querySelector("#add-requester") as HTMLInputElement
-                    const partNumberInput = dialog?.querySelector("#add-part-number") as HTMLInputElement
-                    const mfgPartNumberInput = dialog?.querySelector("#add-mfg-part-number") as HTMLInputElement
-                    const descriptionInput = dialog?.querySelector("#add-description") as HTMLInputElement
-                    const quantityInput = dialog?.querySelector("#add-quantity") as HTMLInputElement
-                    const reorderPointInput = dialog?.querySelector("#add-reorder-point") as HTMLInputElement
-                    const locationInput = dialog?.querySelector("#add-location") as HTMLInputElement
-                    const supplierInput = dialog?.querySelector("#add-supplier") as HTMLInputElement
-                    const packageInput = dialog?.querySelector("#add-package") as HTMLInputElement
-
-                    if (
-                      !requesterInput?.value?.trim() ||
-                      !partNumberInput?.value?.trim() ||
-                      !descriptionInput?.value?.trim() ||
-                      !quantityInput?.value?.trim()
-                    ) {
-                      alert("Please fill in all required fields")
-                      return
-                    }
-
-                    const newItem = {
-                      "Part number": partNumberInput.value.trim(),
-                      "MFG Part number": mfgPartNumberInput?.value?.trim() || "",
-                      "Part description": descriptionInput.value.trim(),
-                      QTY: Number.parseInt(quantityInput.value) || 0,
-                      Location: locationInput?.value?.trim() || "",
-                      Supplier: supplierInput?.value?.trim() || "",
-                      Package: packageInput?.value?.trim() || "",
-                      reorderPoint: Number.parseInt(reorderPointInput?.value) || alertSettings.defaultReorderPoint,
-                    }
-
-                    try {
-                      await addInventoryItem(newItem, requesterInput.value.trim())
-                      // Close dialog
-                      const closeButton = document.querySelector(
-                        '[data-state="open"] button[aria-label="Close"]',
-                      ) as HTMLButtonElement
-                      closeButton?.click()
-                    } catch (error) {
-                      console.error("Failed to add item:", error)
-                    }
-                  }}
-                >
-                  Add Item
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <AddInventoryItem
+            onAddItem={addInventoryItem}
+            packageTypes={packageTypes}
+            suppliers={suppliers}
+            locations={locations}
+            defaultReorderPoint={alertSettings.defaultReorderPoint}
+            inventory={inventory}
+          />
           <Button onClick={handleDownloadExcel} variant="outline">
             <Download className="w-4 h-4 mr-2" />
             Download Excel

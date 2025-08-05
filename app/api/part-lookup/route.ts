@@ -303,6 +303,13 @@ const mockPartData: { [key: string]: PartInfo } = {
     supplier: 'Digikey',
     found: true,
     source: 'Mock-Digikey'
+  },
+  '568-4109-1-ND': {
+    mfgPartNumber: 'ATMEGA328P-PU',
+    description: 'MCU 8-bit ATmega AVR RISC 32KB Flash 28-Pin PDIP',
+    supplier: 'Digikey',
+    found: true,
+    source: 'Mock-Digikey'
   }
 }
 
