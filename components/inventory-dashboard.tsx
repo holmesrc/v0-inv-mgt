@@ -1410,7 +1410,7 @@ Please check your Slack configuration.`)
             onAddItem={addInventoryItem}
             packageTypes={packageTypes}
             suppliers={suppliers}
-            locations={locations}
+            locations={uniqueLocations}
             defaultReorderPoint={alertSettings.defaultReorderPoint}
             inventory={inventory}
           />
