@@ -57,6 +57,8 @@ export default function AddInventoryItem({
   const [quickUpdateQuantity, setQuickUpdateQuantity] = useState("")
   const [isUpdating, setIsUpdating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isLookingUp, setIsLookingUp] = useState(false)
+  const [lookupStatus, setLookupStatus] = useState<string>("")
 
   // Helper function to determine correct package type based on quantity
   const getCorrectPackageType = (qty: number): string => {
@@ -68,6 +70,54 @@ export default function AddInventoryItem({
       return "REEL"
     }
     return "EXACT" // Default fallback
+  }
+
+  // Function to lookup part information from web
+  const lookupPartInfo = async (partNumber: string) => {
+    if (!partNumber.trim() || partNumber.length < 3) {
+      return
+    }
+
+    setIsLookingUp(true)
+    setLookupStatus("Searching Digikey and Mouser...")
+
+    try {
+      const response = await fetch('/api/part-lookup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ partNumber: partNumber.trim() }),
+      })
+
+      const result = await response.json()
+
+      if (result.success && result.data.found) {
+        const { mfgPartNumber, description, supplier } = result.data
+        
+        // Auto-populate fields only if they're currently empty
+        setFormData(prev => ({
+          ...prev,
+          mfgPartNumber: prev.mfgPartNumber || mfgPartNumber || "",
+          description: prev.description || description || "",
+          supplier: prev.supplier || supplier || "",
+        }))
+
+        setLookupStatus(`✅ Found on ${result.data.source}`)
+        
+        // Clear status after 3 seconds
+        setTimeout(() => setLookupStatus(""), 3000)
+      } else {
+        setLookupStatus("ℹ️ Not found - enter manually")
+        setTimeout(() => setLookupStatus(""), 3000)
+      }
+    } catch (error) {
+      console.error('Part lookup failed:', error)
+      setLookupStatus("⚠️ Lookup failed - enter manually")
+      setTimeout(() => setLookupStatus(""), 3000)
+    } finally {
+      setIsLookingUp(false)
+    }
   }
 
   // Check for duplicates when part number changes
@@ -105,6 +155,17 @@ export default function AddInventoryItem({
     setDuplicateWarning(null)
   }, [formData.partNumber, inventory, batchItems])
 
+  // Auto-lookup part information when part number changes
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (formData.partNumber.trim() && formData.partNumber.length >= 3 && !duplicateWarning) {
+        lookupPartInfo(formData.partNumber)
+      }
+    }, 1000) // Debounce for 1 second
+
+    return () => clearTimeout(timeoutId)
+  }, [formData.partNumber, duplicateWarning])
+
   // Auto-suggest package type based on quantity
   useEffect(() => {
     const qty = Number(formData.quantity)
@@ -129,6 +190,8 @@ export default function AddInventoryItem({
     setDuplicateWarning(null)
     setQuickUpdateQuantity("")
     setError(null)
+    setIsLookingUp(false)
+    setLookupStatus("")
   }
 
   const handleAddToBatch = () => {
@@ -373,13 +436,23 @@ export default function AddInventoryItem({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="partNumber">Part Number *</Label>
-                <Input
-                  id="partNumber"
-                  value={formData.partNumber}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, partNumber: e.target.value }))}
-                  placeholder="Enter part number"
-                  className={duplicateWarning ? "border-orange-300 bg-orange-50" : ""}
-                />
+                <div className="relative">
+                  <Input
+                    id="partNumber"
+                    value={formData.partNumber}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, partNumber: e.target.value }))}
+                    placeholder="Enter part number"
+                    className={duplicateWarning ? "border-orange-300 bg-orange-50" : ""}
+                  />
+                  {isLookingUp && (
+                    <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    </div>
+                  )}
+                </div>
+                {lookupStatus && (
+                  <p className="text-xs mt-1 text-blue-600">{lookupStatus}</p>
+                )}
               </div>
               <div>
                 <Label htmlFor="mfgPartNumber">MFG Part Number *</Label>
