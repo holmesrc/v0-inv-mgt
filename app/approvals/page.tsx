@@ -253,23 +253,6 @@ export default function ApprovalsPage() {
     }
   }
 
-  const getDisplayChangeType = (change: PendingChange) => {
-    const actionType = change.item_data?.action_type || change.change_type
-    
-    switch (actionType) {
-      case "edit_item":
-        return { type: "UPDATE", color: "bg-blue-100 text-blue-800" }
-      case "delete_item":
-        return { type: "DELETE", color: "bg-red-100 text-red-800" }
-      case "add_item":
-        return { type: "ADD", color: "bg-green-100 text-green-800" }
-      case "batch_add":
-        return { type: "BATCH ADD", color: "bg-green-100 text-green-800" }
-      default:
-        return { type: change.change_type.toUpperCase(), color: getChangeTypeColor(change.change_type) }
-    }
-  }
-
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "pending":
