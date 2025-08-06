@@ -352,12 +352,94 @@ async function handleSingleItemApproval(pendingChange: any, action: string, appr
   // Handle approval - apply the change to the inventory
   const inventoryResults = []
 
-  if (pendingChange.change_type === "add") {
+  // Check action_type first (for new operations), then fall back to change_type
+  const actionType = pendingChange.item_data?.action_type || pendingChange.change_type
+
+  if (actionType === "delete_item") {
+    // Handle item deletion
+    const itemId = pendingChange.item_data?.item_id
+    
+    if (!itemId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Missing item ID for deletion",
+        },
+        { status: 400 },
+      )
+    }
+
+    const { error: deleteError } = await supabase
+      .from("inventory")
+      .delete()
+      .eq("id", itemId)
+
+    if (deleteError) {
+      console.error("Error deleting inventory item:", deleteError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Failed to delete item: ${deleteError.message}`,
+        },
+        { status: 500 },
+      )
+    }
+
+    console.log(`✅ Successfully deleted item with ID: ${itemId}`)
+    
+  } else if (actionType === "edit_item") {
+    // Handle item editing
+    const itemId = pendingChange.item_data?.item_id
+    const proposedChanges = pendingChange.item_data?.proposed_changes
+    
+    if (!itemId || !proposedChanges) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Missing item ID or proposed changes for edit",
+        },
+        { status: 400 },
+      )
+    }
+
+    const updateData = {
+      part_number: proposedChanges.partNumber,
+      mfg_part_number: proposedChanges.mfgPartNumber || '',
+      part_description: proposedChanges.description,
+      qty: parseInt(proposedChanges.quantity),
+      location: proposedChanges.location,
+      supplier: proposedChanges.supplier,
+      package: proposedChanges.package,
+      reorder_point: parseInt(proposedChanges.reorderPoint) || 10,
+    }
+
+    const { data, error: updateError } = await supabase
+      .from("inventory")
+      .update(updateData)
+      .eq("id", itemId)
+      .select()
+      .single()
+
+    if (updateError) {
+      console.error("Error updating inventory item:", updateError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Failed to update item: ${updateError.message}`,
+        },
+        { status: 500 },
+      )
+    }
+
+    inventoryResults.push(data)
+    console.log(`✅ Successfully updated item with ID: ${itemId}`)
+    
+  } else if (actionType === "add_item" || pendingChange.change_type === "add") {
     // Handle regular single item add
     const inventoryItem = {
       part_number: String(pendingChange.item_data.part_number || "").trim(),
       mfg_part_number: String(pendingChange.item_data.mfg_part_number || "").trim(),
-      qty: Number(pendingChange.item_data.qty) || 0,
+      qty: Number(pendingChange.item_data.qty || pendingChange.item_data.quantity) || 0,
       part_description: String(pendingChange.item_data.part_description || "").trim(),
       supplier: String(pendingChange.item_data.supplier || "").trim(),
       location: String(pendingChange.item_data.location || "").trim(),
