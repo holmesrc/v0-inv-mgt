@@ -1647,6 +1647,19 @@ export default function InventoryDashboard() {
     }
   }
 
+  // Check if an item has pending changes awaiting approval
+  const hasPendingApproval = (item: InventoryItem) => {
+    return pendingChanges.some(change => 
+      change.status === 'pending' && 
+      (
+        // Check if it's an edit for this specific item
+        (change.item_data?.item_id === item.id) ||
+        // Check if it's an add/stock change for this part number
+        (change.item_data?.part_number === item["Part number"])
+      )
+    )
+  }
+
   // Show loading screen
   if (loading) {
     return (
@@ -1929,6 +1942,7 @@ export default function InventoryDashboard() {
                   const stockStatus = getStockStatus(item)
                   const displayQuantity = getDisplayQuantity(item)
                   const hasChanges = hasTempChanges(item.id)
+                  const awaitingApproval = hasPendingApproval(item)
                   
                   return (
                     <tr key={item.id} className="hover:bg-gray-50">
@@ -1954,18 +1968,26 @@ export default function InventoryDashboard() {
                       <td className="border border-gray-300 p-2">{item.Supplier}</td>
                       <td className="border border-gray-300 p-2">{item.Package}</td>
                       <td className="border border-gray-300 p-2">
-                        {stockStatus.status === "low" && (
-                          <Badge variant="destructive">
-                            Low Stock
+                        {awaitingApproval ? (
+                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300">
+                            Awaiting Approval
                           </Badge>
-                        )}
-                        {stockStatus.status === "approaching" && (
-                          <Badge variant="secondary">
-                            Approaching Low
-                          </Badge>
-                        )}
-                        {stockStatus.status === "good" && (
-                          <span className="text-gray-400 text-sm">-</span>
+                        ) : (
+                          <>
+                            {stockStatus.status === "low" && (
+                              <Badge variant="destructive">
+                                Low Stock
+                              </Badge>
+                            )}
+                            {stockStatus.status === "approaching" && (
+                              <Badge variant="secondary">
+                                Approaching Low
+                              </Badge>
+                            )}
+                            {stockStatus.status === "good" && (
+                              <span className="text-gray-400 text-sm">-</span>
+                            )}
+                          </>
                         )}
                       </td>
                       <td className="border border-gray-300 p-2">
