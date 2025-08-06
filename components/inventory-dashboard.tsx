@@ -1192,7 +1192,9 @@ export default function InventoryDashboard() {
     if (!requesterName) return
 
     try {
-      const response = await fetch("/api/inventory/edit-item", {
+      console.log('Submitting edit with data:', { itemId, formData, requesterName })
+      
+      const response = await fetch("/api/inventory/test-edit", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1204,16 +1206,23 @@ export default function InventoryDashboard() {
         }),
       })
 
+      console.log('Response status:', response.status)
+      console.log('Response ok:', response.ok)
+
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
+        const errorText = await response.text()
+        console.error('Response error text:', errorText)
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
       }
 
       const result = await response.json()
+      console.log('Response result:', result)
+      
       if (!result.success) {
         throw new Error(result.error || "Unknown error occurred")
       }
 
-      alert("Item changes submitted for approval!")
+      alert("Test successful! Edit functionality is working.")
       setEditDialogOpen(prev => ({
         ...prev,
         [itemId]: false
@@ -1226,7 +1235,7 @@ export default function InventoryDashboard() {
       await loadPendingChanges()
     } catch (error) {
       console.error("Edit item failed:", error)
-      alert("Failed to submit changes. Please try again.")
+      alert("Failed to submit changes. Error: " + (error as Error).message)
     }
   }
 
