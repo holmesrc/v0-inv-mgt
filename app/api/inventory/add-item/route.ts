@@ -21,12 +21,14 @@ export async function POST(request: NextRequest) {
 
     // Step 2: Parse request body
     console.log("Step 2: Parsing request body...")
-    let item
+    let item, requester
     try {
       const requestBody = await request.json()
       item = requestBody.item
+      requester = requestBody.requester
       console.log("✅ Request body parsed successfully")
       console.log("Item:", item)
+      console.log("Requester:", requester)
     } catch (parseError) {
       console.error("❌ Error parsing request body:", parseError)
       return NextResponse.json(
@@ -83,33 +85,83 @@ export async function POST(request: NextRequest) {
     }
     console.log("✅ Item transformed:", transformedItem)
 
-    // Step 6: Insert item
-    console.log("Step 6: Inserting item...")
-    const { data: insertedItem, error: insertError } = await supabase
-      .from("inventory")
-      .insert(transformedItem)
-      .select("*")
-      .single()
+    // Step 6: Create pending change for approval instead of direct insert
+    console.log("Step 6: Creating pending change for approval...")
+    const { error: pendingError } = await supabase
+      .from('pending_changes')
+      .insert({
+        change_type: 'add',
+        requested_by: requester,
+        status: 'pending',
+        item_data: {
+          // Fields for display system
+          part_number: transformedItem.part_number,
+          mfg_part_number: transformedItem.mfg_part_number,
+          part_description: transformedItem.part_description,
+          quantity: transformedItem.qty,
+          location: transformedItem.location,
+          supplier: transformedItem.supplier,
+          package: transformedItem.package,
+          reorder_point: transformedItem.reorder_point,
+          
+          // Additional data for processing
+          action_type: 'add_item',
+          new_item_data: transformedItem
+        }
+      })
 
-    if (insertError) {
-      console.error("❌ Error inserting item:", insertError)
+    if (pendingError) {
+      console.error("❌ Error creating pending change:", pendingError)
       return NextResponse.json(
         {
-          error: "Failed to insert item",
-          details: insertError.message,
-          code: insertError.code,
+          error: "Failed to create pending change",
+          details: pendingError.message,
+          code: pendingError.code,
         },
         { status: 500 },
       )
     }
 
-    console.log("✅ Item inserted successfully:", insertedItem)
+    console.log("✅ Pending change created successfully")
 
-    // Step 7: Return success response
+    // Step 7: Send Slack notification
+    try {
+      const slackResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://v0-inv-mgt.vercel.app'}/api/slack/send-approval-request`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          changeType: 'add',
+          itemData: {
+            part_number: transformedItem.part_number,
+            part_description: transformedItem.part_description,
+            qty: transformedItem.qty,
+            location: transformedItem.location,
+            supplier: transformedItem.supplier,
+            package: transformedItem.package,
+            reorder_point: transformedItem.reorder_point
+          },
+          requestedBy: requester,
+          changeId: `add-${transformedItem.part_number}-${Date.now()}`
+        })
+      })
+
+      if (!slackResponse.ok) {
+        console.error('Slack notification failed:', await slackResponse.text())
+        // Don't fail the whole request if Slack fails
+      } else {
+        console.log('Slack notification sent successfully')
+      }
+    } catch (slackError) {
+      console.error('Error sending Slack notification:', slackError)
+      // Don't fail the whole request if Slack fails
+    }
+
+    // Step 8: Return success response
     return NextResponse.json({
       success: true,
-      message: "Item added successfully",
-      item: insertedItem,
+      message: "Item submitted for approval",
     })
   } catch (error) {
     console.error("=== ADD ITEM CRITICAL ERROR ===")
