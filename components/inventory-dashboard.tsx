@@ -104,6 +104,10 @@ export default function InventoryDashboard() {
   } | null>(null)
   const [batchMode, setBatchMode] = useState(false)
   const [editingBatchQuantity, setEditingBatchQuantity] = useState<Record<number, string>>({})
+  const [editingBatchFields, setEditingBatchFields] = useState<Record<number, {
+    field: 'partNumber' | 'mfgPartNumber' | 'description' | 'location' | 'package' | 'supplier' | 'reorderPoint'
+    value: string
+  }>>({})
   const [duplicateCheckTimeout, setDuplicateCheckTimeout] = useState<NodeJS.Timeout | null>(null)
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false)
   const [editingQuantity, setEditingQuantity] = useState<Record<string, string>>({})
@@ -1093,6 +1097,47 @@ export default function InventoryDashboard() {
     })
   }
 
+  // New handlers for editing all batch fields
+  const handleBatchFieldEdit = (index: number, field: 'partNumber' | 'mfgPartNumber' | 'description' | 'location' | 'package' | 'supplier' | 'reorderPoint', currentValue: string) => {
+    setEditingBatchFields(prev => ({
+      ...prev,
+      [index]: { field, value: currentValue }
+    }))
+  }
+
+  const handleBatchFieldUpdate = (index: number) => {
+    const editingField = editingBatchFields[index]
+    if (!editingField) return
+
+    const { field, value } = editingField
+    
+    // Validate the input based on field type
+    if (field === 'reorderPoint' && value && (isNaN(parseInt(value)) || parseInt(value) < 0)) {
+      alert('Reorder point must be a valid number')
+      return
+    }
+
+    setBatchEntryItems(prev => 
+      prev.map((item, i) => 
+        i === index ? { ...item, [field]: value } : item
+      )
+    )
+    
+    setEditingBatchFields(prev => {
+      const updated = { ...prev }
+      delete updated[index]
+      return updated
+    })
+  }
+
+  const handleBatchFieldCancel = (index: number) => {
+    setEditingBatchFields(prev => {
+      const updated = { ...prev }
+      delete updated[index]
+      return updated
+    })
+  }
+
   const checkForDuplicateInBatch = (partNumber: string): number => {
     return batchEntryItems.findIndex(
       item => item.partNumber.toLowerCase() === partNumber.toLowerCase()
@@ -1363,6 +1408,7 @@ export default function InventoryDashboard() {
       setBatchMode(false)
       setBatchEntryItems([])
       setEditingBatchQuantity({})
+      setEditingBatchFields({})
       setIsCheckingDuplicate(false)
       
       // Reset form data
@@ -2323,6 +2369,7 @@ export default function InventoryDashboard() {
                     setBatchEntryItems([])
                     setBatchMode(false)
                     setEditingBatchQuantity({})
+                    setEditingBatchFields({})
                     setAddItemFormModified(false)
                   }}
                 >
@@ -2337,37 +2384,49 @@ export default function InventoryDashboard() {
                       <thead className="bg-gray-50 sticky top-0 z-10">
                         <tr>
                           <th className="text-left p-3 border-r border-gray-200 font-medium min-w-[140px]">Part Number</th>
+                          <th className="text-left p-3 border-r border-gray-200 font-medium min-w-[140px]">Mfg Part Number</th>
                           <th className="text-left p-3 border-r border-gray-200 font-medium min-w-[180px]">Description</th>
                           <th className="text-left p-3 border-r border-gray-200 font-medium min-w-[100px]">Qty</th>
                           <th className="text-left p-3 border-r border-gray-200 font-medium min-w-[120px]">Location</th>
                           <th className="text-left p-3 border-r border-gray-200 font-medium min-w-[120px]">Package</th>
+                          <th className="text-left p-3 border-r border-gray-200 font-medium min-w-[120px]">Supplier</th>
+                          <th className="text-left p-3 border-r border-gray-200 font-medium min-w-[100px]">Reorder Point</th>
                           <th className="text-left p-3 font-medium min-w-[100px]">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {batchEntryItems.map((item, index) => (
-                          <tr key={index} className="border-t border-gray-200 hover:bg-gray-50">
-                            <td className="p-3 border-r border-gray-200 font-mono text-xs break-all">{item.partNumber}</td>
-                            <td className="p-3 border-r border-gray-200 text-xs break-words max-w-[200px]">{item.description}</td>
-                            <td className="p-3 border-r border-gray-200">
-                              {editingBatchQuantity[index] !== undefined ? (
+                        {batchEntryItems.map((item, index) => {
+                          const renderEditableCell = (
+                            field: 'partNumber' | 'mfgPartNumber' | 'description' | 'location' | 'package' | 'supplier' | 'reorderPoint',
+                            displayValue: string,
+                            inputType: 'text' | 'number' = 'text',
+                            className: string = "text-xs break-all"
+                          ) => {
+                            const isEditing = editingBatchFields[index]?.field === field
+                            
+                            if (isEditing) {
+                              return (
                                 <div className="flex gap-1 items-center">
                                   <Input
-                                    type="number"
-                                    value={editingBatchQuantity[index]}
-                                    onChange={(e) => handleBatchQuantityEdit(index, e.target.value)}
-                                    className="h-7 w-20 px-2 text-xs"
+                                    type={inputType}
+                                    value={editingBatchFields[index]?.value || ''}
+                                    onChange={(e) => setEditingBatchFields(prev => ({
+                                      ...prev,
+                                      [index]: { field, value: e.target.value }
+                                    }))}
+                                    className="h-7 px-2 text-xs min-w-[100px]"
                                     onKeyPress={(e) => {
                                       if (e.key === 'Enter') {
-                                        handleBatchQuantityUpdate(index)
+                                        handleBatchFieldUpdate(index)
                                       } else if (e.key === 'Escape') {
-                                        handleBatchQuantityCancel(index)
+                                        handleBatchFieldCancel(index)
                                       }
                                     }}
+                                    autoFocus
                                   />
                                   <Button
                                     size="sm"
-                                    onClick={() => handleBatchQuantityUpdate(index)}
+                                    onClick={() => handleBatchFieldUpdate(index)}
                                     className="h-7 w-7 p-0"
                                   >
                                     <Check className="h-3 w-3" />
@@ -2375,53 +2434,147 @@ export default function InventoryDashboard() {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => handleBatchQuantityCancel(index)}
+                                    onClick={() => handleBatchFieldCancel(index)}
                                     className="h-7 w-7 p-0"
                                   >
                                     <X className="h-3 w-3" />
                                   </Button>
                                 </div>
-                              ) : (
-                                <div className="flex gap-1 items-center">
-                                  <span className="text-sm font-medium">{item.quantity}</span>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => handleBatchQuantityEdit(index, item.quantity)}
-                                    className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700"
-                                  >
-                                    <Edit className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              )}
-                            </td>
-                            <td className="p-3 border-r border-gray-200 text-xs break-all">{item.location}</td>
-                            <td className="p-3 border-r border-gray-200 text-xs break-all">{item.package}</td>
-                            <td className="p-3">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  setBatchEntryItems(prev => prev.filter((_, i) => i !== index))
-                                  setAddItemFormModified(true)
-                                  // Clear any editing state for this item
-                                  setEditingBatchQuantity(prev => {
-                                    const updated = { ...prev }
-                                    delete updated[index]
-                                    return updated
-                                  })
-                                  // Exit batch mode if no items left
-                                  if (batchEntryItems.length === 1) {
-                                    setBatchMode(false)
-                                  }
-                                }}
-                                className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                ×
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
+                              )
+                            }
+                            
+                            return (
+                              <div className="flex gap-1 items-center group">
+                                <span className={className}>{displayValue}</span>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleBatchFieldEdit(index, field, displayValue)}
+                                  className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <Edit className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            )
+                          }
+
+                          return (
+                            <tr key={index} className="border-t border-gray-200 hover:bg-gray-50">
+                              {/* Part Number */}
+                              <td className="p-3 border-r border-gray-200">
+                                {renderEditableCell('partNumber', item.partNumber, 'text', 'font-mono text-xs break-all')}
+                              </td>
+                              
+                              {/* Mfg Part Number */}
+                              <td className="p-3 border-r border-gray-200">
+                                {renderEditableCell('mfgPartNumber', item.mfgPartNumber || '', 'text', 'font-mono text-xs break-all')}
+                              </td>
+                              
+                              {/* Description */}
+                              <td className="p-3 border-r border-gray-200">
+                                {renderEditableCell('description', item.description, 'text', 'text-xs break-words max-w-[200px]')}
+                              </td>
+                              
+                              {/* Quantity - Keep the existing quantity editing logic */}
+                              <td className="p-3 border-r border-gray-200">
+                                {editingBatchQuantity[index] !== undefined ? (
+                                  <div className="flex gap-1 items-center">
+                                    <Input
+                                      type="number"
+                                      value={editingBatchQuantity[index]}
+                                      onChange={(e) => handleBatchQuantityEdit(index, e.target.value)}
+                                      className="h-7 w-20 px-2 text-xs"
+                                      onKeyPress={(e) => {
+                                        if (e.key === 'Enter') {
+                                          handleBatchQuantityUpdate(index)
+                                        } else if (e.key === 'Escape') {
+                                          handleBatchQuantityCancel(index)
+                                        }
+                                      }}
+                                    />
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleBatchQuantityUpdate(index)}
+                                      className="h-7 w-7 p-0"
+                                    >
+                                      <Check className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleBatchQuantityCancel(index)}
+                                      className="h-7 w-7 p-0"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="flex gap-1 items-center group">
+                                    <span className="text-sm font-medium">{item.quantity}</span>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => handleBatchQuantityEdit(index, item.quantity)}
+                                      className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                      <Edit className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </td>
+                              
+                              {/* Location */}
+                              <td className="p-3 border-r border-gray-200">
+                                {renderEditableCell('location', item.location, 'text', 'text-xs break-all')}
+                              </td>
+                              
+                              {/* Package */}
+                              <td className="p-3 border-r border-gray-200">
+                                {renderEditableCell('package', item.package, 'text', 'text-xs break-all')}
+                              </td>
+                              
+                              {/* Supplier */}
+                              <td className="p-3 border-r border-gray-200">
+                                {renderEditableCell('supplier', item.supplier || '', 'text', 'text-xs break-all')}
+                              </td>
+                              
+                              {/* Reorder Point */}
+                              <td className="p-3 border-r border-gray-200">
+                                {renderEditableCell('reorderPoint', item.reorderPoint?.toString() || '', 'number', 'text-xs')}
+                              </td>
+                              
+                              {/* Actions */}
+                              <td className="p-3">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setBatchEntryItems(prev => prev.filter((_, i) => i !== index))
+                                    setAddItemFormModified(true)
+                                    // Clear any editing state for this item
+                                    setEditingBatchQuantity(prev => {
+                                      const updated = { ...prev }
+                                      delete updated[index]
+                                      return updated
+                                    })
+                                    setEditingBatchFields(prev => {
+                                      const updated = { ...prev }
+                                      delete updated[index]
+                                      return updated
+                                    })
+                                    // Exit batch mode if no items left
+                                    if (batchEntryItems.length === 1) {
+                                      setBatchMode(false)
+                                    }
+                                  }}
+                                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  ×
+                                </Button>
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
