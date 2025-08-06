@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
   try {
     const { itemId, changes, requester } = await request.json()
 
-    console.log('Edit item request received:', { itemId, requester, changes })
+    console.log('Edit item API called with:', { itemId, requester })
 
     if (!itemId || !changes || !requester) {
       console.log('Missing required fields')
@@ -44,25 +44,20 @@ export async function POST(request: NextRequest) {
 
     console.log('Existing item found:', existingItem['Part number'])
 
-    // Create a simple pending change record following the same pattern as add-stock
-    const pendingData = {
-      change_type: 'edit_item',
-      requester: requester,
-      status: 'pending',
-      item_data: {
-        item_id: itemId,
-        part_number: existingItem['Part number'],
-        part_description: existingItem['Part description'],
-        current_data: existingItem,
-        proposed_changes: changes
-      }
-    }
-
-    console.log('Inserting pending change...')
-
+    // Create a simple pending change record
     const { error: pendingError } = await supabase
       .from('pending_changes')
-      .insert(pendingData)
+      .insert({
+        change_type: 'edit_item',
+        requester: requester,
+        status: 'pending',
+        item_data: {
+          item_id: itemId,
+          part_number: existingItem['Part number'],
+          current_data: existingItem,
+          proposed_changes: changes
+        }
+      })
 
     if (pendingError) {
       console.error('Pending change insert error:', pendingError)

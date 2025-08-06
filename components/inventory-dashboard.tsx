@@ -1194,7 +1194,7 @@ export default function InventoryDashboard() {
     try {
       console.log('Submitting edit with data:', { itemId, formData, requesterName })
       
-      const response = await fetch("/api/inventory/test-edit", {
+      const response = await fetch("/api/inventory/edit-item", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1222,7 +1222,7 @@ export default function InventoryDashboard() {
         throw new Error(result.error || "Unknown error occurred")
       }
 
-      alert("Test successful! Edit functionality is working.")
+      alert("Item changes submitted for approval!")
       setEditDialogOpen(prev => ({
         ...prev,
         [itemId]: false
