@@ -74,6 +74,16 @@ export default function InventoryDashboard() {
   const [showPendingChanges, setShowPendingChanges] = useState(false)
   const [slackConfigured, setSlackConfigured] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState<Record<string, boolean>>({})
+  const [editFormData, setEditFormData] = useState<Record<string, {
+    partNumber: string
+    mfgPartNumber: string
+    description: string
+    quantity: string
+    location: string
+    supplier: string
+    package: string
+    reorderPoint: string
+  }>>({})
   const [addItemDialogOpen, setAddItemDialogOpen] = useState(false)
   const [tempQuantityChanges, setTempQuantityChanges] = useState<Record<string, number>>({})
   const [showSettings, setShowSettings] = useState(false)
@@ -110,7 +120,6 @@ export default function InventoryDashboard() {
   }>>({})
   const [duplicateCheckTimeout, setDuplicateCheckTimeout] = useState<NodeJS.Timeout | null>(null)
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false)
-  const [editingQuantity, setEditingQuantity] = useState<Record<string, string>>({})
   const [suppliers, setSuppliers] = useState<string[]>([])
   const [showCustomSupplierInput, setShowCustomSupplierInput] = useState(false)
   const [customSupplierValue, setCustomSupplierValue] = useState("")
@@ -1144,6 +1153,83 @@ export default function InventoryDashboard() {
     )
   }
 
+  // Edit item functions
+  const handleEditItem = (item: InventoryItem) => {
+    setEditFormData(prev => ({
+      ...prev,
+      [item.id]: {
+        partNumber: item["Part number"],
+        mfgPartNumber: item["MFG Part number"] || "",
+        description: item["Part description"],
+        quantity: item.QTY.toString(),
+        location: item.Location,
+        supplier: item.Supplier,
+        package: item.Package,
+        reorderPoint: (item.reorderPoint || alertSettings.defaultReorderPoint || 10).toString()
+      }
+    }))
+    setEditDialogOpen(prev => ({
+      ...prev,
+      [item.id]: true
+    }))
+  }
+
+  const handleEditFormChange = (itemId: string, field: string, value: string) => {
+    setEditFormData(prev => ({
+      ...prev,
+      [itemId]: {
+        ...prev[itemId],
+        [field]: value
+      }
+    }))
+  }
+
+  const handleSubmitEdit = async (itemId: string) => {
+    const formData = editFormData[itemId]
+    if (!formData) return
+
+    const requesterName = prompt("Enter your name for approval tracking:")
+    if (!requesterName) return
+
+    try {
+      const response = await fetch("/api/inventory/edit-item", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          itemId,
+          changes: formData,
+          requester: requesterName,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const result = await response.json()
+      if (!result.success) {
+        throw new Error(result.error || "Unknown error occurred")
+      }
+
+      alert("Item changes submitted for approval!")
+      setEditDialogOpen(prev => ({
+        ...prev,
+        [itemId]: false
+      }))
+      setEditFormData(prev => {
+        const updated = { ...prev }
+        delete updated[itemId]
+        return updated
+      })
+      await loadPendingChanges()
+    } catch (error) {
+      console.error("Edit item failed:", error)
+      alert("Failed to submit changes. Please try again.")
+    }
+  }
+
   const checkForComprehensiveDuplicate = async (partNumber: string) => {
     const normalizedPartNumber = normalizeSearchTerm(partNumber)
 
@@ -1319,45 +1405,6 @@ export default function InventoryDashboard() {
       console.error("Failed to add stock:", error)
       alert("Failed to add stock. Please try again.")
     }
-  }
-
-  const handleInlineQuantityEdit = (itemId: string, currentQuantity: number) => {
-    setEditingQuantity(prev => ({
-      ...prev,
-      [itemId]: currentQuantity.toString()
-    }))
-  }
-
-  const handleInlineQuantityUpdate = async (itemId: string, newQuantity: string) => {
-    const quantity = parseInt(newQuantity)
-    if (isNaN(quantity) || quantity < 0) {
-      alert("Please enter a valid quantity")
-      return
-    }
-
-    const requesterName = prompt("Enter your name for approval tracking:")
-    if (!requesterName) return
-
-    try {
-      await updateItemQuantity(itemId, quantity, requesterName)
-      setEditingQuantity(prev => {
-        const updated = { ...prev }
-        delete updated[itemId]
-        return updated
-      })
-      alert("Quantity update submitted for approval!")
-    } catch (error) {
-      console.error("Failed to update quantity:", error)
-      alert("Failed to update quantity. Please try again.")
-    }
-  }
-
-  const handleInlineQuantityCancel = (itemId: string) => {
-    setEditingQuantity(prev => {
-      const updated = { ...prev }
-      delete updated[itemId]
-      return updated
-    })
   }
 
   const handleQuantityIncrement = async (itemId: string, currentQuantity: number, increment: number) => {
@@ -1914,170 +1961,59 @@ export default function InventoryDashboard() {
                       </td>
                       <td className="border border-gray-300 p-2">
                         <div className="flex gap-1 flex-wrap">
-                          {hasChanges ? (
-                            <>
-                              <Button
-                                size="sm"
-                                onClick={() => confirmQuantityChange(item.id)}
-                                className="h-6 px-2"
-                              >
-                                <Check className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => cancelTempChanges(item.id)}
-                                className="h-6 px-2"
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleQuantityIncrement(item.id, item.QTY, -1)}
-                                className="h-6 w-6 p-0"
-                                disabled={item.QTY <= 0}
-                              >
-                                -
-                              </Button>
-                              
-                              {editingQuantity[item.id] !== undefined ? (
-                                <div className="flex gap-1 items-center">
-                                  <Input
-                                    type="number"
-                                    value={editingQuantity[item.id]}
-                                    onChange={(e) => setEditingQuantity(prev => ({
-                                      ...prev,
-                                      [item.id]: e.target.value
-                                    }))}
-                                    className="h-6 w-12 px-1 text-xs text-center"
-                                    onKeyPress={(e) => {
-                                      if (e.key === 'Enter') {
-                                        handleInlineQuantityUpdate(item.id, editingQuantity[item.id])
-                                      } else if (e.key === 'Escape') {
-                                        handleInlineQuantityCancel(item.id)
-                                      }
-                                    }}
-                                    onBlur={() => handleInlineQuantityUpdate(item.id, editingQuantity[item.id])}
-                                    autoFocus
-                                  />
-                                </div>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleInlineQuantityEdit(item.id, item.QTY)}
-                                  className="h-6 w-12 px-1 text-xs font-medium hover:bg-gray-100"
-                                >
-                                  {item.QTY}
-                                </Button>
-                              )}
-
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleQuantityIncrement(item.id, item.QTY, 1)}
-                                className="h-6 w-6 p-0"
-                              >
-                                +
-                              </Button>
-
-                              {showCustomInput[item.id] ? (
-                                <div className="flex gap-1">
-                                  <Input
-                                    type="number"
-                                    placeholder="±"
-                                    value={customQuantityInput[item.id] || ""}
-                                    onChange={(e) => setCustomQuantityInput(prev => ({
-                                      ...prev,
-                                      [item.id]: e.target.value
-                                    }))}
-                                    className="h-6 w-16 px-1 text-xs"
-                                    onKeyPress={(e) => {
-                                      if (e.key === 'Enter') {
-                                        handleCustomQuantityChange(item.id, customQuantityInput[item.id] || "")
-                                      }
-                                    }}
-                                  />
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleCustomQuantityChange(item.id, customQuantityInput[item.id] || "")}
-                                    className="h-6 px-1"
-                                  >
-                                    <Check className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => setShowCustomInput(prev => ({
-                                    ...prev,
-                                    [item.id]: true
-                                  }))}
-                                  className="h-6 px-1 text-xs"
-                                >
-                                  Custom
-                                </Button>
-                              )}
-                              
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setEditDialogOpen(prev => ({
-                                  ...prev,
-                                  [item.id]: true
-                                }))}
-                                className="h-6 px-2"
-                              >
-                                <Edit className="h-3 w-3" />
-                              </Button>
-                              
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  const requesterName = prompt("Enter your name for reorder request:")
-                                  if (requesterName) {
-                                    // Handle reorder request
-                                    fetch("/api/reorder-requests", {
-                                      method: "POST",
-                                      headers: { "Content-Type": "application/json" },
-                                      body: JSON.stringify({
-                                        item: item,
-                                        requester: requesterName
-                                      })
-                                    }).then(() => {
-                                      alert("Reorder request submitted!")
-                                    }).catch(() => {
-                                      alert("Failed to submit reorder request")
-                                    })
-                                  }
-                                }}
-                                className="h-6 px-1 text-xs"
-                              >
-                                Reorder
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  const requesterName = prompt("Enter your name for approval tracking:")
-                                  if (requesterName) {
-                                    deleteInventoryItem(item.id, requesterName)
-                                      .then(() => alert("Item deletion submitted for approval!"))
-                                      .catch(() => alert("Failed to delete item. Please try again."))
-                                  }
-                                }}
-                                className="h-6 px-2"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </>
-                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEditItem(item)}
+                            className="h-6 px-2"
+                            title="Edit all item details"
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const requesterName = prompt("Enter your name for reorder request:")
+                              if (requesterName) {
+                                // Handle reorder request
+                                fetch("/api/reorder-requests", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    item: item,
+                                    requester: requesterName
+                                  })
+                                }).then(() => {
+                                  alert("Reorder request submitted!")
+                                }).catch(() => {
+                                  alert("Failed to submit reorder request")
+                                })
+                              }
+                            }}
+                            className="h-6 px-1 text-xs"
+                            title="Request reorder"
+                          >
+                            Reorder
+                          </Button>
+                          
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const requesterName = prompt("Enter your name for approval tracking:")
+                              if (requesterName) {
+                                deleteInventoryItem(item.id, requesterName)
+                                  .then(() => alert("Item deletion submitted for approval!"))
+                                  .catch(() => alert("Failed to delete item. Please try again."))
+                              }
+                            }}
+                            className="h-6 px-2"
+                            title="Delete item"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -2974,58 +2910,111 @@ export default function InventoryDashboard() {
         <Dialog 
           key={`edit-${item.id}`}
           open={editDialogOpen[item.id] || false} 
-          onOpenChange={(open) => setEditDialogOpen(prev => ({
-            ...prev,
-            [item.id]: open
-          }))}
+          onOpenChange={(open) => {
+            setEditDialogOpen(prev => ({
+              ...prev,
+              [item.id]: open
+            }))
+            if (!open) {
+              // Clear form data when closing
+              setEditFormData(prev => {
+                const updated = { ...prev }
+                delete updated[item.id]
+                return updated
+              })
+            }
+          }}
         >
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Item</DialogTitle>
               <DialogDescription>
-                Edit {item["Part number"]} - {item["Part description"]}
+                Make changes to {item["Part number"]} - {item["Part description"]}
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Part Number</Label>
-                <Input value={item["Part number"]} disabled />
+            {editFormData[item.id] && (
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="edit-part-number">Part Number</Label>
+                  <Input
+                    id="edit-part-number"
+                    value={editFormData[item.id].partNumber}
+                    onChange={(e) => handleEditFormChange(item.id, 'partNumber', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-mfg-part-number">Manufacturer Part Number</Label>
+                  <Input
+                    id="edit-mfg-part-number"
+                    value={editFormData[item.id].mfgPartNumber}
+                    onChange={(e) => handleEditFormChange(item.id, 'mfgPartNumber', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-description">Description</Label>
+                  <Textarea
+                    id="edit-description"
+                    value={editFormData[item.id].description}
+                    onChange={(e) => handleEditFormChange(item.id, 'description', e.target.value)}
+                    rows={2}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-quantity">Quantity</Label>
+                  <Input
+                    id="edit-quantity"
+                    type="number"
+                    value={editFormData[item.id].quantity}
+                    onChange={(e) => handleEditFormChange(item.id, 'quantity', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-location">Location</Label>
+                  <Input
+                    id="edit-location"
+                    value={editFormData[item.id].location}
+                    onChange={(e) => handleEditFormChange(item.id, 'location', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-supplier">Supplier</Label>
+                  <Input
+                    id="edit-supplier"
+                    value={editFormData[item.id].supplier}
+                    onChange={(e) => handleEditFormChange(item.id, 'supplier', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-package">Package</Label>
+                  <Input
+                    id="edit-package"
+                    value={editFormData[item.id].package}
+                    onChange={(e) => handleEditFormChange(item.id, 'package', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-reorder-point">Reorder Point</Label>
+                  <Input
+                    id="edit-reorder-point"
+                    type="number"
+                    value={editFormData[item.id].reorderPoint}
+                    onChange={(e) => handleEditFormChange(item.id, 'reorderPoint', e.target.value)}
+                  />
+                </div>
               </div>
-              <div>
-                <Label>Current Quantity</Label>
-                <Input value={item.QTY} disabled />
-              </div>
-              <div>
-                <Label>Reorder Point</Label>
-                <Input
-                  type="number"
-                  defaultValue={item.reorderPoint || alertSettings.defaultReorderPoint || 10}
-                  onBlur={(e) => {
-                    const newReorderPoint = parseInt(e.target.value)
-                    if (!isNaN(newReorderPoint)) {
-                      const requesterName = prompt("Enter your name for approval tracking:")
-                      if (requesterName) {
-                        updateReorderPoint(item.id, newReorderPoint, requesterName)
-                          .then(() => {
-                            alert("Reorder point update submitted for approval!")
-                            setEditDialogOpen(prev => ({
-                              ...prev,
-                              [item.id]: false
-                            }))
-                          })
-                          .catch(() => alert("Failed to update reorder point"))
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
+            )}
             <DialogFooter>
-              <Button variant="outline" onClick={() => setEditDialogOpen(prev => ({
-                ...prev,
-                [item.id]: false
-              }))}>
-                Close
+              <Button 
+                variant="outline" 
+                onClick={() => setEditDialogOpen(prev => ({
+                  ...prev,
+                  [item.id]: false
+                }))}
+              >
+                Cancel
+              </Button>
+              <Button onClick={() => handleSubmitEdit(item.id)}>
+                Submit Changes
               </Button>
             </DialogFooter>
           </DialogContent>
