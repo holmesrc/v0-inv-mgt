@@ -1840,14 +1840,14 @@ export default function InventoryDashboard() {
                         {change.item_data?.part_description || 'No description'}
                       </p>
                       <div className="flex items-center gap-4 text-xs text-gray-500">
-                        <span>👤 {change.requester}</span>
+                        <span>👤 {change.requested_by || change.requester || 'Unknown'}</span>
                         {change.item_data?.location && (
                           <span>📍 {change.item_data.location}</span>
                         )}
                         {change.item_data?.quantity && (
                           <span>📦 Qty: {change.item_data.quantity}</span>
                         )}
-                        <span>🕒 {new Date(change.timestamp).toLocaleDateString()}</span>
+                        <span>🕒 {change.created_at ? new Date(change.created_at).toLocaleDateString() : 'Invalid Date'}</span>
                       </div>
                     </div>
                   </div>

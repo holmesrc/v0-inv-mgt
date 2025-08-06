@@ -52,20 +52,23 @@ export async function POST(request: NextRequest) {
         requested_by: requester,
         status: 'pending',
         item_data: {
-          // Fields for display system
-          part_number: existingItem['Part number'],
-          mfg_part_number: existingItem['MFG Part number'],
-          part_description: existingItem['Part description'],
-          quantity: existingItem.QTY,
-          location: existingItem.Location,
-          supplier: existingItem.Supplier,
-          package: existingItem.Package,
-          reorder_point: existingItem.reorderPoint,
+          // Fields for display system (using the exact field names expected)
+          part_number: existingItem['Part number'] || existingItem.part_number,
+          mfg_part_number: existingItem['MFG Part number'] || existingItem.mfg_part_number || '',
+          part_description: existingItem['Part description'] || existingItem.part_description,
+          quantity: existingItem.QTY || existingItem.qty,
+          location: existingItem.Location || existingItem.location,
+          supplier: existingItem.Supplier || existingItem.supplier,
+          package: existingItem.Package || existingItem.package,
+          reorder_point: existingItem.reorderPoint || existingItem.reorder_point || 0,
           
           // Additional data for processing
           item_id: itemId,
           action_type: 'delete_item',
-          current_data: existingItem
+          current_data: existingItem,
+          
+          // Add alternative field names that might be expected
+          qty: existingItem.QTY || existingItem.qty,
         }
       })
 
