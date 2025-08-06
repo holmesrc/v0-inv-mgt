@@ -1732,6 +1732,82 @@ export default function InventoryDashboard() {
         </Card>
       </div>
 
+      {/* Pending Changes Display */}
+      {pendingChanges.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-lg font-medium flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-orange-500" />
+              Pending Approvals ({pendingChanges.length})
+            </CardTitle>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowPendingChanges(true)}
+            >
+              View All
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="max-h-64 overflow-y-auto space-y-2 border rounded-lg p-2 bg-gray-50">
+              {pendingChanges.slice(0, 10).map((change) => (
+                <div key={change.id} className="bg-white p-3 rounded border shadow-sm">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-mono text-sm font-medium text-blue-600">
+                          {change.item_data?.part_number || 'N/A'}
+                        </span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          change.change_type === 'add' ? 'bg-green-100 text-green-800' :
+                          change.change_type === 'update' ? 'bg-blue-100 text-blue-800' :
+                          change.change_type === 'delete' ? 'bg-red-100 text-red-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {change.change_type.toUpperCase()}
+                        </span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          change.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                          change.status === 'approved' ? 'bg-green-100 text-green-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {change.status.toUpperCase()}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-1">
+                        {change.item_data?.part_description || 'No description'}
+                      </p>
+                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <span>👤 {change.requester}</span>
+                        {change.item_data?.location && (
+                          <span>📍 {change.item_data.location}</span>
+                        )}
+                        {change.item_data?.quantity && (
+                          <span>📦 Qty: {change.item_data.quantity}</span>
+                        )}
+                        <span>🕒 {new Date(change.timestamp).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {pendingChanges.length > 10 && (
+                <div className="text-center py-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setShowPendingChanges(true)}
+                    className="text-blue-600 hover:text-blue-700"
+                  >
+                    View {pendingChanges.length - 10} more pending changes...
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Search and Filter */}
       <div className="flex gap-4">
         <div className="flex-1">
