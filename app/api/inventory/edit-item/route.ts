@@ -80,6 +80,49 @@ export async function POST(request: NextRequest) {
 
     console.log('Edit item request completed successfully')
 
+    // Send Slack notification for the edit request
+    try {
+      const slackResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://v0-inv-mgt.vercel.app'}/api/slack/send-approval-request`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          changeType: 'update',
+          itemData: {
+            part_number: changes.partNumber,
+            part_description: changes.description,
+            qty: parseInt(changes.quantity),
+            location: changes.location,
+            supplier: changes.supplier,
+            package: changes.package,
+            reorder_point: parseInt(changes.reorderPoint)
+          },
+          originalData: {
+            part_number: existingItem['Part number'],
+            part_description: existingItem['Part description'],
+            qty: existingItem.QTY,
+            location: existingItem.Location,
+            supplier: existingItem.Supplier,
+            package: existingItem.Package,
+            reorder_point: existingItem.reorderPoint
+          },
+          requestedBy: requester,
+          changeId: `edit-${itemId}-${Date.now()}`
+        })
+      })
+
+      if (!slackResponse.ok) {
+        console.error('Slack notification failed:', await slackResponse.text())
+        // Don't fail the whole request if Slack fails
+      } else {
+        console.log('Slack notification sent successfully')
+      }
+    } catch (slackError) {
+      console.error('Error sending Slack notification:', slackError)
+      // Don't fail the whole request if Slack fails
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Item changes submitted for approval'
