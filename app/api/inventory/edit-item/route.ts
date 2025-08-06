@@ -44,18 +44,19 @@ export async function POST(request: NextRequest) {
 
     console.log('Existing item found:', existingItem['Part number'])
 
-    // Create a pending change record using the correct column name
+    // Create a pending change record using an allowed change_type
     const { error: pendingError } = await supabase
       .from('pending_changes')
       .insert({
-        change_type: 'edit_item',
-        requested_by: requester,  // Changed from 'requester' to 'requested_by'
+        change_type: 'add',  // Using existing allowed value instead of 'edit_item'
+        requested_by: requester,
         status: 'pending',
         item_data: {
           item_id: itemId,
           part_number: existingItem['Part number'],
           current_data: existingItem,
-          proposed_changes: changes
+          proposed_changes: changes,
+          action_type: 'edit_item'  // Store the actual action type in item_data
         }
       })
 
