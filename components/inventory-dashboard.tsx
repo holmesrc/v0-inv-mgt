@@ -2997,6 +2997,20 @@ export default function InventoryDashboard() {
                     type="number"
                     value={editFormData[item.id].quantity}
                     onChange={(e) => handleEditFormChange(item.id, 'quantity', e.target.value)}
+                    onWheel={(e) => {
+                      // Prevent page scroll when focused on input
+                      e.preventDefault()
+                      
+                      const currentValue = parseInt(editFormData[item.id].quantity) || 0
+                      const delta = e.deltaY > 0 ? -1 : 1 // Scroll down = decrease, scroll up = increase
+                      const newValue = Math.max(0, currentValue + delta) // Don't allow negative quantities
+                      
+                      handleEditFormChange(item.id, 'quantity', newValue.toString())
+                    }}
+                    onFocus={(e) => {
+                      // Select all text when focused for easy editing
+                      e.target.select()
+                    }}
                   />
                 </div>
                 <div>
@@ -3030,6 +3044,20 @@ export default function InventoryDashboard() {
                     type="number"
                     value={editFormData[item.id].reorderPoint}
                     onChange={(e) => handleEditFormChange(item.id, 'reorderPoint', e.target.value)}
+                    onWheel={(e) => {
+                      // Prevent page scroll when focused on input
+                      e.preventDefault()
+                      
+                      const currentValue = parseInt(editFormData[item.id].reorderPoint) || 0
+                      const delta = e.deltaY > 0 ? -1 : 1 // Scroll down = decrease, scroll up = increase
+                      const newValue = Math.max(0, currentValue + delta) // Don't allow negative values
+                      
+                      handleEditFormChange(item.id, 'reorderPoint', newValue.toString())
+                    }}
+                    onFocus={(e) => {
+                      // Select all text when focused for easy editing
+                      e.target.select()
+                    }}
                   />
                 </div>
               </div>
