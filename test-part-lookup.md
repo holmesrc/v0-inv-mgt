@@ -1,38 +1,44 @@
-# Part Lookup Testing
+# Part Lookup Testing - REAL WEB SCRAPING
+
+## 🌐 How It Works:
+1. **FIRST**: Searches actual Digikey and Mouser websites simultaneously
+2. **FALLBACK**: Only uses mock data if real scraping completely fails
+3. **Smart ordering**: Digikey-format parts search Digikey first, etc.
 
 ## Test Parts to Try:
 
-### Mock Data (Should work immediately):
-- `LM358` - Op amp
-- `STM32F103` - Microcontroller  
-- `74HC595` - Shift register
-- `568-4109-1-ND` - Arduino MCU (Digikey format)
-- `TC2050-IDC-ND` - Cable assembly (Digikey format)
-- `ATMEGA328P-PU` - Arduino MCU
-- `ESP32-WROOM-32` - WiFi module
-- `NE555P` - Timer IC
+### Real Digikey Parts (will search actual Digikey.com):
+- `TC2050-IDC-ND` - Cable assembly
+- `568-4109-1-ND` - Arduino MCU  
+- `LM358N-ND` - Op amp
+- `ATMEGA328P-PU-ND` - Arduino MCU
+- `1N4007-E3/54GICT-ND` - Diode
 
-### Real Parts (Will attempt web scraping):
+### Real Mouser Parts (will search actual Mouser.com):
+- `595-TL072CP` - Op amp
+- `511-STM32F103C8T6` - Microcontroller
+- `700-MAX232CPE` - RS232 driver
+
+### Generic Parts (searches both sites):
 - `LM741CN` - Op amp
 - `2N2222A` - Transistor
 - `1N4007` - Diode
 - `CD4017BE` - Counter IC
 
-## Part Number Format Detection:
-- **Digikey format**: Parts ending in `-ND`, `-1-ND`, `-CT-ND` (searches Digikey first)
-- **Mouser format**: Parts like `595-TL072CP` (searches Mouser first)
-- **Generic**: Searches both sites in default order
+### Mock Data (ONLY if real scraping fails):
+- `LM358`, `STM32F103`, `74HC595` - Fallback only
 
 ## Expected Behavior:
 1. Enter part number
-2. Wait 1 second (debounce)
-3. See "Searching Digikey and Mouser..." status
-4. After 2-12 seconds, see result:
-   - ✅ Found on [correct source] - fields auto-populate
-   - ℹ️ Not found - enter manually
+2. See "🌐 Searching REAL Digikey and Mouser websites..."
+3. Wait 5-15 seconds for real web scraping
+4. Results:
+   - **Success**: "🎉 Found REAL data from Digikey!" (fields auto-populate)
+   - **Not found**: "❌ Not found on Digikey or Mouser - enter manually"
+   - **Error**: "💥 Search failed - check connection and try again"
 
 ## Debugging:
-- Check browser console for API logs and search results
-- Check Network tab for /api/part-lookup requests
-- Status messages should appear below Part Number field
-- Console should show format detection and search order
+- Check browser console for detailed scraping logs
+- Look for "🌐 Attempting REAL web scraping..." messages
+- Console shows which site found the part first
+- Mock data only used as last resort (shows "Fallback" in source)

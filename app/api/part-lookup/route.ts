@@ -323,9 +323,9 @@ export async function POST(request: NextRequest) {
     
     console.log(`Part format detection: Digikey=${!!isDigikeyFormat}, Mouser=${!!isMouserFormat}`)
 
-    // First try real web scraping with smart ordering
+    // FIRST: Try real web scraping from actual websites
     try {
-      console.log('Attempting real web scraping...')
+      console.log('🌐 Attempting REAL web scraping from Digikey and Mouser...')
       
       let searchPromises: Promise<PartInfo | null>[]
       
@@ -335,26 +335,26 @@ export async function POST(request: NextRequest) {
           searchDigikey(cleanPartNumber),
           searchMouser(cleanPartNumber),
         ]
-        console.log('Searching Digikey first (detected Digikey format)')
+        console.log('🔍 Searching Digikey first (detected Digikey format)')
       } else if (isMouserFormat) {
         // Search Mouser first for Mouser-format parts
         searchPromises = [
           searchMouser(cleanPartNumber),
           searchDigikey(cleanPartNumber),
         ]
-        console.log('Searching Mouser first (detected Mouser format)')
+        console.log('🔍 Searching Mouser first (detected Mouser format)')
       } else {
-        // Default order for generic parts
+        // Search both simultaneously for generic parts
         searchPromises = [
           searchDigikey(cleanPartNumber),
           searchMouser(cleanPartNumber),
         ]
-        console.log('Using default search order')
+        console.log('🔍 Searching both Digikey and Mouser simultaneously')
       }
 
-      // Wait for searches with shorter timeout for real scraping
+      // Wait for real searches with timeout
       const timeoutPromise = new Promise<null>((resolve) => {
-        setTimeout(() => resolve(null), 12000) // 12 second timeout
+        setTimeout(() => resolve(null), 15000) // 15 second timeout for real scraping
       })
 
       const raceResult = await Promise.race([
@@ -365,12 +365,14 @@ export async function POST(request: NextRequest) {
       if (raceResult) {
         const results = raceResult as PromiseSettledResult<PartInfo | null>[]
         
-        // Find the best result from real scraping
+        // Find the best result from REAL web scraping
         let bestResult: PartInfo | null = null
         
         for (let i = 0; i < results.length; i++) {
           const result = results[i]
-          console.log(`Search result ${i}:`, result.status, result.status === 'fulfilled' ? result.value : result.reason)
+          const siteName = i === 0 ? (isMouserFormat ? 'Mouser' : 'Digikey') : (isMouserFormat ? 'Digikey' : 'Mouser')
+          
+          console.log(`🔍 ${siteName} search result:`, result.status, result.status === 'fulfilled' ? result.value : result.reason)
           
           if (result.status === 'fulfilled' && result.value && result.value.found) {
             const value = result.value
@@ -378,42 +380,48 @@ export async function POST(request: NextRequest) {
             // Prefer results with both mfg part number and description
             if (value.mfgPartNumber && value.description) {
               bestResult = value
-              console.log(`Selected best result from ${value.source}:`, value)
+              console.log(`✅ Selected REAL result from ${value.source}:`, {
+                mfg: value.mfgPartNumber,
+                desc: value.description.substring(0, 50) + '...'
+              })
               break
             } else if (!bestResult) {
               bestResult = value
-              console.log(`Selected fallback result from ${value.source}:`, value)
+              console.log(`⚠️ Selected partial REAL result from ${value.source}:`, value)
             }
           }
         }
 
         if (bestResult) {
-          console.log(`Found real data from ${bestResult.source}:`, {
-            mfgPartNumber: bestResult.mfgPartNumber,
-            description: bestResult.description?.substring(0, 50) + '...',
-            supplier: bestResult.supplier
-          })
+          console.log(`🎉 Found REAL data from ${bestResult.source}!`)
           
           return NextResponse.json({
             success: true,
             data: bestResult
           })
+        } else {
+          console.log('❌ No results from real web scraping')
         }
+      } else {
+        console.log('⏰ Real web scraping timed out after 15 seconds')
       }
     } catch (scrapingError) {
-      console.error('Real web scraping failed:', scrapingError)
+      console.error('💥 Real web scraping failed:', scrapingError)
     }
 
-    // Fall back to mock data if real scraping fails
-    console.log('Real scraping failed, checking mock data...')
+    // FALLBACK: Only use mock data if real scraping completely fails
+    console.log('📚 Real scraping failed, checking mock data as fallback...')
     const mockResult = mockPartData[cleanPartNumber.toUpperCase()]
     if (mockResult) {
-      console.log(`Found mock data for: ${cleanPartNumber}`)
+      console.log(`📋 Found mock data for: ${cleanPartNumber} (fallback only)`)
       // Add a small delay to simulate network request
       await new Promise(resolve => setTimeout(resolve, 800))
       return NextResponse.json({
         success: true,
-        data: mockResult
+        data: {
+          ...mockResult,
+          source: mockResult.source + ' (Fallback - Real scraping failed)'
+        }
       })
     }
 

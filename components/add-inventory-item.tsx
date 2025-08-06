@@ -79,7 +79,7 @@ export default function AddInventoryItem({
     }
 
     setIsLookingUp(true)
-    setLookupStatus("Searching Digikey and Mouser...")
+    setLookupStatus("🌐 Searching REAL Digikey and Mouser websites...")
 
     try {
       const response = await fetch('/api/part-lookup', {
@@ -103,18 +103,18 @@ export default function AddInventoryItem({
           supplier: prev.supplier || supplier || "",
         }))
 
-        setLookupStatus(`✅ Found on ${result.data.source}`)
+        setLookupStatus(`🎉 Found REAL data from ${result.data.source}!`)
         
-        // Clear status after 3 seconds
-        setTimeout(() => setLookupStatus(""), 3000)
+        // Clear status after 4 seconds for success
+        setTimeout(() => setLookupStatus(""), 4000)
       } else {
-        setLookupStatus("ℹ️ Not found - enter manually")
-        setTimeout(() => setLookupStatus(""), 3000)
+        setLookupStatus("❌ Not found on Digikey or Mouser - enter manually")
+        setTimeout(() => setLookupStatus(""), 4000)
       }
     } catch (error) {
       console.error('Part lookup failed:', error)
-      setLookupStatus("⚠️ Lookup failed - enter manually")
-      setTimeout(() => setLookupStatus(""), 3000)
+      setLookupStatus("💥 Search failed - check connection and try again")
+      setTimeout(() => setLookupStatus(""), 4000)
     } finally {
       setIsLookingUp(false)
     }
