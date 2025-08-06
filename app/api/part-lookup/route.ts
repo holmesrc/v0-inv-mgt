@@ -177,14 +177,16 @@ async function searchDigikey(partNumber: string): Promise<PartInfo | null> {
         }
         
         if (mfgPartNumber || description) {
-          console.log(`Found Digikey data: MFG=${mfgPartNumber}, DESC=${description?.substring(0, 50)}...`)
+          console.log(`✅ Found Digikey data: MFG="${mfgPartNumber}", DESC="${description?.substring(0, 50)}..."`)
           return {
-            mfgPartNumber,
-            description,
+            mfgPartNumber: mfgPartNumber || '',
+            description: description || '',
             supplier: 'Digikey',
             found: true,
             source: 'Digikey'
           }
+        } else {
+          console.log(`❌ Digikey search found no usable data for ${searchUrl}`)
         }
       } catch (urlError) {
         console.log(`Digikey URL ${searchUrl} failed:`, urlError)
@@ -274,14 +276,16 @@ async function searchMouser(partNumber: string): Promise<PartInfo | null> {
         }
         
         if (mfgPartNumber || description) {
-          console.log(`Found Mouser data: MFG=${mfgPartNumber}, DESC=${description?.substring(0, 50)}...`)
+          console.log(`✅ Found Mouser data: MFG="${mfgPartNumber}", DESC="${description?.substring(0, 50)}..."`)
           return {
-            mfgPartNumber,
-            description,
+            mfgPartNumber: mfgPartNumber || '',
+            description: description || '',
             supplier: 'Mouser',
             found: true,
             source: 'Mouser'
           }
+        } else {
+          console.log(`❌ Mouser search found no usable data for ${searchUrl}`)
         }
       } catch (urlError) {
         console.log(`Mouser URL ${searchUrl} failed:`, urlError)
@@ -372,23 +376,33 @@ export async function POST(request: NextRequest) {
           const result = results[i]
           const siteName = i === 0 ? (isMouserFormat ? 'Mouser' : 'Digikey') : (isMouserFormat ? 'Digikey' : 'Mouser')
           
-          console.log(`🔍 ${siteName} search result:`, result.status, result.status === 'fulfilled' ? result.value : result.reason)
+          console.log(`🔍 ${siteName} search result:`, result.status)
           
           if (result.status === 'fulfilled' && result.value && result.value.found) {
             const value = result.value
+            console.log(`📋 ${siteName} returned:`, {
+              mfg: value.mfgPartNumber || '(empty)',
+              desc: value.description ? value.description.substring(0, 50) + '...' : '(empty)',
+              supplier: value.supplier,
+              source: value.source
+            })
             
             // Prefer results with both mfg part number and description
-            if (value.mfgPartNumber && value.description) {
+            if (value.mfgPartNumber && value.description && value.mfgPartNumber.trim() && value.description.trim()) {
               bestResult = value
-              console.log(`✅ Selected REAL result from ${value.source}:`, {
-                mfg: value.mfgPartNumber,
-                desc: value.description.substring(0, 50) + '...'
-              })
+              console.log(`✅ Selected COMPLETE result from ${value.source}`)
               break
-            } else if (!bestResult) {
+            } else if (value.mfgPartNumber && value.mfgPartNumber.trim() && !bestResult) {
               bestResult = value
-              console.log(`⚠️ Selected partial REAL result from ${value.source}:`, value)
+              console.log(`⚠️ Selected PARTIAL result from ${value.source} (has MFG part number)`)
+            } else if (value.description && value.description.trim() && !bestResult) {
+              bestResult = value
+              console.log(`⚠️ Selected PARTIAL result from ${value.source} (has description)`)
             }
+          } else if (result.status === 'rejected') {
+            console.log(`❌ ${siteName} search failed:`, result.reason)
+          } else {
+            console.log(`❌ ${siteName} search returned no data`)
           }
         }
 
