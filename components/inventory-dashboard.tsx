@@ -616,7 +616,7 @@ export default function InventoryDashboard() {
 
   const addInventoryItem = async (newItemData: Omit<InventoryItem, "id" | "lastUpdated">, requester: string) => {
     try {
-      const response = await fetch("/api/inventory/add", {
+      const response = await fetch("/api/inventory/add-item", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
