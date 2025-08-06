@@ -236,6 +236,40 @@ export default function ApprovalsPage() {
     }
   }
 
+  const getDisplayChangeType = (change: PendingChange) => {
+    const actionType = change.item_data?.action_type || change.change_type
+    
+    switch (actionType) {
+      case "edit_item":
+        return { type: "UPDATE", color: "bg-blue-100 text-blue-800" }
+      case "delete_item":
+        return { type: "DELETE", color: "bg-red-100 text-red-800" }
+      case "add_item":
+        return { type: "ADD", color: "bg-green-100 text-green-800" }
+      case "batch_add":
+        return { type: "BATCH ADD", color: "bg-green-100 text-green-800" }
+      default:
+        return { type: change.change_type.toUpperCase(), color: getChangeTypeColor(change.change_type) }
+    }
+  }
+
+  const getDisplayChangeType = (change: PendingChange) => {
+    const actionType = change.item_data?.action_type || change.change_type
+    
+    switch (actionType) {
+      case "edit_item":
+        return { type: "UPDATE", color: "bg-blue-100 text-blue-800" }
+      case "delete_item":
+        return { type: "DELETE", color: "bg-red-100 text-red-800" }
+      case "add_item":
+        return { type: "ADD", color: "bg-green-100 text-green-800" }
+      case "batch_add":
+        return { type: "BATCH ADD", color: "bg-green-100 text-green-800" }
+      default:
+        return { type: change.change_type.toUpperCase(), color: getChangeTypeColor(change.change_type) }
+    }
+  }
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "pending":
@@ -460,8 +494,148 @@ export default function ApprovalsPage() {
 
   const formatChangeDetails = (change: PendingChange) => {
     const { change_type, item_data, original_data } = change
+    
+    // Check action_type first (for new operations), then fall back to change_type
+    const actionType = item_data?.action_type || change_type
 
-    if (change_type === "add") {
+    if (actionType === "edit_item") {
+      // Handle edit operations - show changes
+      const currentData = item_data?.current_data
+      const proposedChanges = item_data?.proposed_changes
+      
+      if (!currentData || !proposedChanges) {
+        return <div className="text-sm text-gray-500">Edit data not available</div>
+      }
+
+      const changes = []
+      
+      // Check each field for changes
+      if (currentData['Part number'] !== proposedChanges.partNumber) {
+        changes.push({
+          field: 'Part Number',
+          old: currentData['Part number'],
+          new: proposedChanges.partNumber
+        })
+      }
+      
+      if ((currentData['MFG Part number'] || '') !== (proposedChanges.mfgPartNumber || '')) {
+        changes.push({
+          field: 'MFG Part Number',
+          old: currentData['MFG Part number'] || 'N/A',
+          new: proposedChanges.mfgPartNumber || 'N/A'
+        })
+      }
+      
+      if (currentData['Part description'] !== proposedChanges.description) {
+        changes.push({
+          field: 'Description',
+          old: currentData['Part description'],
+          new: proposedChanges.description
+        })
+      }
+      
+      if (currentData.QTY !== parseInt(proposedChanges.quantity)) {
+        changes.push({
+          field: 'Quantity',
+          old: currentData.QTY,
+          new: parseInt(proposedChanges.quantity)
+        })
+      }
+      
+      if (currentData.Location !== proposedChanges.location) {
+        changes.push({
+          field: 'Location',
+          old: currentData.Location,
+          new: proposedChanges.location
+        })
+      }
+      
+      if (currentData.Supplier !== proposedChanges.supplier) {
+        changes.push({
+          field: 'Supplier',
+          old: currentData.Supplier,
+          new: proposedChanges.supplier
+        })
+      }
+      
+      if (currentData.Package !== proposedChanges.package) {
+        changes.push({
+          field: 'Package',
+          old: currentData.Package,
+          new: proposedChanges.package
+        })
+      }
+      
+      if ((currentData.reorderPoint || 10) !== parseInt(proposedChanges.reorderPoint)) {
+        changes.push({
+          field: 'Reorder Point',
+          old: currentData.reorderPoint || 10,
+          new: parseInt(proposedChanges.reorderPoint)
+        })
+      }
+
+      return (
+        <div className="space-y-2 text-sm">
+          <div className="font-medium text-blue-800 mb-2">
+            Changes for: {currentData['Part number'] || "Unknown Part"}
+          </div>
+          {changes.length > 0 ? (
+            changes.map((change, index) => (
+              <div key={index} className="border-l-2 border-blue-200 pl-3 py-1">
+                <div className="font-medium text-gray-700">{change.field}:</div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="bg-red-100 text-red-800 px-2 py-1 rounded">From: {change.old}</span>
+                  <span className="text-gray-400">→</span>
+                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded">To: {change.new}</span>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-gray-500 italic">No changes detected</div>
+          )}
+        </div>
+      )
+    }
+
+    if (actionType === "delete_item") {
+      // Handle delete operations
+      const currentData = item_data?.current_data
+      
+      return (
+        <div className="space-y-2 text-sm">
+          <div className="font-medium text-red-800 mb-2">Deleting: {currentData?.['Part number'] || "Unknown Part"}</div>
+          <div className="grid grid-cols-2 gap-4 text-gray-600">
+            <div>
+              <p>
+                <strong>Part Number:</strong> {currentData?.['Part number'] || "N/A"}
+              </p>
+              <p>
+                <strong>MFG Part:</strong> {currentData?.['MFG Part number'] || "N/A"}
+              </p>
+              <p>
+                <strong>Supplier:</strong> {currentData?.Supplier || "N/A"}
+              </p>
+            </div>
+            <div>
+              <p>
+                <strong>Quantity:</strong> {currentData?.QTY || "N/A"}
+              </p>
+              <p>
+                <strong>Package:</strong> {currentData?.Package || "N/A"}
+              </p>
+              <p>
+                <strong>Location:</strong> {currentData?.Location || "N/A"}
+              </p>
+            </div>
+          </div>
+          <p>
+            <strong>Description:</strong> {currentData?.['Part description'] || "N/A"}
+          </p>
+        </div>
+      )
+    }
+
+    if (actionType === "add_item" || change_type === "add") {
       return (
         <div className="space-y-2 text-sm">
           <div className="grid grid-cols-2 gap-4">
@@ -833,9 +1007,14 @@ export default function ApprovalsPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge className={getChangeTypeColor(change.change_type)}>
-                              {change.change_type.toUpperCase()}
-                            </Badge>
+                            {(() => {
+                              const displayType = getDisplayChangeType(change)
+                              return (
+                                <Badge className={displayType.color}>
+                                  {displayType.type}
+                                </Badge>
+                              )
+                            })()}
                           </TableCell>
                           <TableCell className="max-w-md">{formatChangeDetails(change)}</TableCell>
                           <TableCell>{change.requested_by}</TableCell>
