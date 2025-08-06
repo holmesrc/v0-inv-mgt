@@ -175,15 +175,40 @@ async function searchDigikey(partNumber: string): Promise<PartInfo | null> {
         for (const pattern of descPatterns) {
           const match = html.match(pattern)
           if (match && match[1] && match[1].trim().length > 5) {
-            description = decodeHtmlEntities(cleanText(match[1]))
+            const rawDescription = decodeHtmlEntities(cleanText(match[1]))
+            
+            // Reject blocked/error responses
+            if (rawDescription.toLowerCase().includes('access denied') ||
+                rawDescription.toLowerCase().includes('blocked') ||
+                rawDescription.toLowerCase().includes('captcha') ||
+                rawDescription.toLowerCase().includes('robot') ||
+                rawDescription.toLowerCase().includes('forbidden')) {
+              console.log(`🚫 Digikey description indicates blocking: "${rawDescription}"`)
+              continue
+            }
+            
+            description = rawDescription
             // Clean up common title suffixes
             description = description.replace(/\s*-\s*Digi-Key.*$/i, '')
             description = description.replace(/\s*\|\s*Digi-Key.*$/i, '')
+            console.log(`🔍 Found DESC pattern: ${description.substring(0, 50)}...`)
             break
           }
         }
         
         if (mfgPartNumber || description) {
+          // Additional validation - make sure we have real data, not just error messages
+          if (description && (
+              description.toLowerCase().includes('access denied') ||
+              description.toLowerCase().includes('blocked') ||
+              description.toLowerCase().includes('captcha') ||
+              description.toLowerCase().includes('robot') ||
+              description.toLowerCase().includes('forbidden')
+            )) {
+            console.log(`🚫 Digikey data appears to be blocked: "${description}"`)
+            return null
+          }
+          
           console.log(`✅ Found Digikey data: MFG="${mfgPartNumber}", DESC="${description?.substring(0, 50)}..."`)
           return {
             mfgPartNumber: mfgPartNumber || '',
@@ -274,15 +299,40 @@ async function searchMouser(partNumber: string): Promise<PartInfo | null> {
         for (const pattern of descPatterns) {
           const match = html.match(pattern)
           if (match && match[1] && match[1].trim().length > 5) {
-            description = decodeHtmlEntities(cleanText(match[1]))
+            const rawDescription = decodeHtmlEntities(cleanText(match[1]))
+            
+            // Reject blocked/error responses
+            if (rawDescription.toLowerCase().includes('access denied') ||
+                rawDescription.toLowerCase().includes('blocked') ||
+                rawDescription.toLowerCase().includes('captcha') ||
+                rawDescription.toLowerCase().includes('robot') ||
+                rawDescription.toLowerCase().includes('forbidden')) {
+              console.log(`🚫 Mouser description indicates blocking: "${rawDescription}"`)
+              continue
+            }
+            
+            description = rawDescription
             // Clean up common title suffixes
             description = description.replace(/\s*-\s*Mouser.*$/i, '')
             description = description.replace(/\s*\|\s*Mouser.*$/i, '')
+            console.log(`🔍 Found DESC pattern: ${description.substring(0, 50)}...`)
             break
           }
         }
         
         if (mfgPartNumber || description) {
+          // Additional validation - make sure we have real data, not just error messages
+          if (description && (
+              description.toLowerCase().includes('access denied') ||
+              description.toLowerCase().includes('blocked') ||
+              description.toLowerCase().includes('captcha') ||
+              description.toLowerCase().includes('robot') ||
+              description.toLowerCase().includes('forbidden')
+            )) {
+            console.log(`🚫 Mouser data appears to be blocked: "${description}"`)
+            return null
+          }
+          
           console.log(`✅ Found Mouser data: MFG="${mfgPartNumber}", DESC="${description?.substring(0, 50)}..."`)
           return {
             mfgPartNumber: mfgPartNumber || '',
