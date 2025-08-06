@@ -44,12 +44,12 @@ export async function POST(request: NextRequest) {
 
     console.log('Existing item found:', existingItem['Part number'])
 
-    // Create a simple pending change record
+    // Create a pending change record using the correct column name
     const { error: pendingError } = await supabase
       .from('pending_changes')
       .insert({
         change_type: 'edit_item',
-        requester: requester,
+        requested_by: requester,  // Changed from 'requester' to 'requested_by'
         status: 'pending',
         item_data: {
           item_id: itemId,
