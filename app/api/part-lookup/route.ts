@@ -69,6 +69,13 @@ const mockPartData: { [key: string]: PartInfo } = {
     found: true,
     source: 'Mock-Digikey'
   },
+  'RMCF0402FT10K0CT-ND': {
+    mfgPartNumber: 'RMCF0402FT10K0',
+    description: 'RES SMD 10K OHM 1% 1/16W 0402',
+    supplier: 'Digikey',
+    found: true,
+    source: 'Mock-Digikey'
+  },
   // Add more common parts for testing
   'ATMEGA328P-PU': {
     mfgPartNumber: 'ATMEGA328P-PU',
@@ -328,8 +335,11 @@ export async function POST(request: NextRequest) {
     console.log(`Part format detection: Digikey=${!!isDigikeyFormat}, Mouser=${!!isMouserFormat}`)
 
     // FIRST: Try real web scraping from actual websites
+    // NOTE: Many sites now block automated scraping with "Access Denied" responses
+    // This is expected behavior due to anti-bot protection
     try {
       console.log('🌐 Attempting REAL web scraping from Digikey and Mouser...')
+      console.log('⚠️  Note: Sites may block with "Access Denied" due to anti-bot protection')
       
       let searchPromises: Promise<PartInfo | null>[]
       
@@ -423,18 +433,19 @@ export async function POST(request: NextRequest) {
       console.error('💥 Real web scraping failed:', scrapingError)
     }
 
-    // FALLBACK: Only use mock data if real scraping completely fails
-    console.log('📚 Real scraping failed, checking mock data as fallback...')
+    // FALLBACK: Use mock data when real scraping is blocked
+    console.log('📚 Real scraping blocked/failed, checking mock data as fallback...')
+    console.log('💡 This is expected - most sites block automated scraping')
     const mockResult = mockPartData[cleanPartNumber.toUpperCase()]
     if (mockResult) {
-      console.log(`📋 Found mock data for: ${cleanPartNumber} (fallback only)`)
+      console.log(`📋 Found mock data for: ${cleanPartNumber}`)
       // Add a small delay to simulate network request
       await new Promise(resolve => setTimeout(resolve, 800))
       return NextResponse.json({
         success: true,
         data: {
           ...mockResult,
-          source: mockResult.source + ' (Fallback - Real scraping failed)'
+          source: mockResult.source + ' (Real scraping blocked - using fallback data)'
         }
       })
     }
