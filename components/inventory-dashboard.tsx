@@ -1646,9 +1646,6 @@ export default function InventoryDashboard() {
             <Package className="h-4 w-4" />
             Send Full Alert
           </Button>
-          <Button variant="outline" onClick={() => setShowPendingChanges(true)}>
-            Pending Changes ({pendingChanges.length})
-          </Button>
           <Button variant="outline" onClick={() => window.open('/low-stock', '_blank')}>
             Low Stock Page
           </Button>
@@ -1727,18 +1724,18 @@ export default function InventoryDashboard() {
             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{pendingChanges.length}</div>
+            <div className="text-2xl font-bold text-orange-600">{pendingChanges.filter(change => change.status === 'pending').length}</div>
           </CardContent>
         </Card>
       </div>
 
       {/* Pending Changes Display */}
-      {pendingChanges.length > 0 && (
+      {pendingChanges.filter(change => change.status === 'pending').length > 0 && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-lg font-medium flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-orange-500" />
-              Pending Approvals ({pendingChanges.length})
+              Pending Approvals ({pendingChanges.filter(change => change.status === 'pending').length})
             </CardTitle>
             <Button 
               variant="outline" 
@@ -1750,7 +1747,10 @@ export default function InventoryDashboard() {
           </CardHeader>
           <CardContent>
             <div className="max-h-64 overflow-y-auto space-y-2 border rounded-lg p-2 bg-gray-50">
-              {pendingChanges.slice(0, 10).map((change) => (
+              {pendingChanges
+                .filter(change => change.status === 'pending')
+                .slice(0, 10)
+                .map((change) => (
                 <div key={change.id} className="bg-white p-3 rounded border shadow-sm">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
@@ -1765,13 +1765,6 @@ export default function InventoryDashboard() {
                           'bg-gray-100 text-gray-800'
                         }`}>
                           {change.change_type.toUpperCase()}
-                        </span>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          change.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          change.status === 'approved' ? 'bg-green-100 text-green-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {change.status.toUpperCase()}
                         </span>
                       </div>
                       <p className="text-sm text-gray-600 mb-1">
@@ -1791,7 +1784,7 @@ export default function InventoryDashboard() {
                   </div>
                 </div>
               ))}
-              {pendingChanges.length > 10 && (
+              {pendingChanges.filter(change => change.status === 'pending').length > 10 && (
                 <div className="text-center py-2">
                   <Button 
                     variant="ghost" 
@@ -1799,7 +1792,7 @@ export default function InventoryDashboard() {
                     onClick={() => setShowPendingChanges(true)}
                     className="text-blue-600 hover:text-blue-700"
                   >
-                    View {pendingChanges.length - 10} more pending changes...
+                    View {pendingChanges.filter(change => change.status === 'pending').length - 10} more pending changes...
                   </Button>
                 </div>
               )}
