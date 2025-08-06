@@ -1339,7 +1339,7 @@ export default function InventoryDashboard() {
     if (!requesterName) return
 
     try {
-      await updateInventoryQuantity(itemId, quantity, requesterName)
+      await updateItemQuantity(itemId, quantity, requesterName)
       setEditingQuantity(prev => {
         const updated = { ...prev }
         delete updated[itemId]
@@ -1366,7 +1366,7 @@ export default function InventoryDashboard() {
     if (!requesterName) return
 
     try {
-      await updateInventoryQuantity(itemId, newQuantity, requesterName)
+      await updateItemQuantity(itemId, newQuantity, requesterName)
       alert(`Quantity ${increment > 0 ? 'increase' : 'decrease'} submitted for approval!`)
     } catch (error) {
       console.error("Failed to update quantity:", error)
