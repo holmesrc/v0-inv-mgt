@@ -1740,7 +1740,7 @@ export default function InventoryDashboard() {
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => setShowPendingChanges(true)}
+              onClick={() => window.open('/approvals', '_blank')}
             >
               View All
             </Button>
@@ -1789,7 +1789,7 @@ export default function InventoryDashboard() {
                   <Button 
                     variant="ghost" 
                     size="sm"
-                    onClick={() => setShowPendingChanges(true)}
+                    onClick={() => window.open('/approvals', '_blank')}
                     className="text-blue-600 hover:text-blue-700"
                   >
                     View {pendingChanges.filter(change => change.status === 'pending').length - 10} more pending changes...
