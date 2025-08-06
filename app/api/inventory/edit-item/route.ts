@@ -9,41 +9,15 @@ export async function POST(request: NextRequest) {
   try {
     const { itemId, changes, requester } = await request.json()
 
-    console.log('Edit item request:', { itemId, changes, requester })
+    console.log('Edit item request received:', { itemId, requester, changes })
 
     if (!itemId || !changes || !requester) {
-      console.log('Missing required fields:', { itemId: !!itemId, changes: !!changes, requester: !!requester })
+      console.log('Missing required fields')
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
         { status: 400 }
       )
     }
-
-    // Validate quantity if provided
-    if (changes.quantity !== undefined) {
-      const quantity = parseInt(changes.quantity)
-      if (isNaN(quantity) || quantity < 0) {
-        console.log('Invalid quantity:', changes.quantity)
-        return NextResponse.json(
-          { success: false, error: 'Quantity must be a valid non-negative number' },
-          { status: 400 }
-        )
-      }
-    }
-
-    // Validate reorder point if provided
-    if (changes.reorderPoint !== undefined) {
-      const reorderPoint = parseInt(changes.reorderPoint)
-      if (isNaN(reorderPoint) || reorderPoint < 0) {
-        console.log('Invalid reorder point:', changes.reorderPoint)
-        return NextResponse.json(
-          { success: false, error: 'Reorder point must be a valid non-negative number' },
-          { status: 400 }
-        )
-      }
-    }
-
-    console.log('Fetching existing item with ID:', itemId)
 
     // Get the existing item details
     const { data: existingItem, error: fetchError } = await supabase
@@ -53,24 +27,25 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (fetchError) {
-      console.error('Error fetching existing item:', fetchError)
+      console.error('Database fetch error:', fetchError)
       return NextResponse.json(
-        { success: false, error: 'Failed to fetch item: ' + fetchError.message },
+        { success: false, error: 'Database error: ' + fetchError.message },
         { status: 500 }
       )
     }
 
     if (!existingItem) {
-      console.log('Item not found for ID:', itemId)
+      console.log('Item not found')
       return NextResponse.json(
         { success: false, error: 'Item not found' },
         { status: 404 }
       )
     }
 
-    console.log('Existing item found:', existingItem)
+    console.log('Existing item found:', existingItem['Part number'])
 
-    const pendingChangeData = {
+    // Create a simple pending change record following the same pattern as add-stock
+    const pendingData = {
       change_type: 'edit_item',
       requester: requester,
       status: 'pending',
@@ -78,48 +53,36 @@ export async function POST(request: NextRequest) {
         item_id: itemId,
         part_number: existingItem['Part number'],
         part_description: existingItem['Part description'],
-        existing_item: existingItem,
-        proposed_changes: {
-          part_number: changes.partNumber,
-          mfg_part_number: changes.mfgPartNumber,
-          part_description: changes.description,
-          quantity: changes.quantity ? parseInt(changes.quantity) : existingItem.QTY,
-          location: changes.location,
-          supplier: changes.supplier,
-          package: changes.package,
-          reorder_point: changes.reorderPoint ? parseInt(changes.reorderPoint) : existingItem.reorderPoint
-        }
+        current_data: existingItem,
+        proposed_changes: changes
       }
     }
 
-    console.log('Attempting to insert pending change:', pendingChangeData)
+    console.log('Inserting pending change...')
 
-    // Create a pending change for item edit
     const { error: pendingError } = await supabase
       .from('pending_changes')
-      .insert(pendingChangeData)
+      .insert(pendingData)
 
     if (pendingError) {
-      console.error('Error creating pending item edit:', pendingError)
+      console.error('Pending change insert error:', pendingError)
       return NextResponse.json(
-        { success: false, error: 'Failed to create pending change: ' + pendingError.message },
+        { success: false, error: 'Database insert failed: ' + pendingError.message },
         { status: 500 }
       )
     }
 
-    console.log('Pending change created successfully')
+    console.log('Edit item request completed successfully')
 
     return NextResponse.json({
       success: true,
-      message: 'Item changes submitted for approval',
-      item_id: itemId,
-      changes: changes
+      message: 'Item changes submitted for approval'
     })
 
   } catch (error) {
-    console.error('Edit item error:', error)
+    console.error('Edit item API error:', error)
     return NextResponse.json(
-      { success: false, error: 'Internal server error: ' + (error as Error).message },
+      { success: false, error: 'Server error: ' + (error as Error).message },
       { status: 500 }
     )
   }
