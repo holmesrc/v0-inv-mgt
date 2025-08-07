@@ -1,7 +1,5 @@
-// Part scraping utilities using Puppeteer
-// Real web scraping implementation for part suppliers
-
-import puppeteer from 'puppeteer'
+// Part scraping utilities with serverless compatibility
+// Falls back to simulated data when Puppeteer isn't available
 
 interface PartInfo {
   partNumber: string
@@ -15,15 +13,70 @@ interface PartInfo {
   availability?: string
 }
 
+// Check if we're in a serverless environment
+const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY
+
+// Fallback scraping for serverless environments
+async function fallbackScraping(partNumber: string, source: 'mouser' | 'digikey'): Promise<Partial<PartInfo>> {
+  console.log(`⚠️ Using fallback scraping for ${source}: ${partNumber}`)
+  
+  // Use fetch to get basic page info (limited but works in serverless)
+  try {
+    const url = source === 'mouser' 
+      ? `https://www.mouser.com/ProductDetail/${encodeURIComponent(partNumber)}`
+      : `https://www.digikey.com/en/products/detail/${encodeURIComponent(partNumber)}`
+    
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    })
+    
+    if (response.ok) {
+      const html = await response.text()
+      
+      // Basic HTML parsing to check if part exists
+      if (html.includes('Product Details') || html.includes('product-details') || html.includes('pdp-')) {
+        return {
+          mfgPartNumber: partNumber,
+          description: `Electronic Component - ${partNumber}`,
+          supplier: source === 'mouser' ? 'Mouser Electronics' : 'Digi-Key Electronics',
+          found: true,
+          source,
+          price: 'See website',
+          availability: 'Check website'
+        }
+      }
+    }
+    
+    return { found: false, source, error: 'Part not found' }
+    
+  } catch (error) {
+    return { 
+      found: false, 
+      source, 
+      error: `Fallback scraping failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
+    }
+  }
+}
+
 // Real Mouser Electronics scraping
 export async function scrapeMouser(partNumber: string): Promise<Partial<PartInfo>> {
+  // Use fallback in serverless environments
+  if (isServerless) {
+    return fallbackScraping(partNumber, 'mouser')
+  }
+
   let browser
   try {
     console.log(`🔍 Real scraping Mouser for: ${partNumber}`)
     
-    browser = await puppeteer.launch({ 
+    // Dynamic import to avoid issues in serverless
+    const puppeteer = await import('puppeteer')
+    
+    browser = await puppeteer.default.launch({ 
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     })
     const page = await browser.newPage()
     
@@ -147,11 +200,8 @@ export async function scrapeMouser(partNumber: string): Promise<Partial<PartInfo
     
   } catch (error) {
     console.error('❌ Mouser scraping error:', error)
-    return { 
-      found: false, 
-      source: 'mouser', 
-      error: `Mouser scraping failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
-    }
+    // Fallback to basic scraping if Puppeteer fails
+    return fallbackScraping(partNumber, 'mouser')
   } finally {
     if (browser) {
       await browser.close()
@@ -161,13 +211,21 @@ export async function scrapeMouser(partNumber: string): Promise<Partial<PartInfo
 
 // Real Digi-Key Electronics scraping
 export async function scrapeDigikey(partNumber: string): Promise<Partial<PartInfo>> {
+  // Use fallback in serverless environments
+  if (isServerless) {
+    return fallbackScraping(partNumber, 'digikey')
+  }
+
   let browser
   try {
     console.log(`🔍 Real scraping Digi-Key for: ${partNumber}`)
     
-    browser = await puppeteer.launch({ 
+    // Dynamic import to avoid issues in serverless
+    const puppeteer = await import('puppeteer')
+    
+    browser = await puppeteer.default.launch({ 
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     })
     const page = await browser.newPage()
     
@@ -291,11 +349,8 @@ export async function scrapeDigikey(partNumber: string): Promise<Partial<PartInf
     
   } catch (error) {
     console.error('❌ Digi-Key scraping error:', error)
-    return { 
-      found: false, 
-      source: 'digikey', 
-      error: `Digi-Key scraping failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
-    }
+    // Fallback to basic scraping if Puppeteer fails
+    return fallbackScraping(partNumber, 'digikey')
   } finally {
     if (browser) {
       await browser.close()
@@ -305,7 +360,7 @@ export async function scrapeDigikey(partNumber: string): Promise<Partial<PartInf
 
 // Main lookup function that tries multiple suppliers
 export async function lookupPart(partNumber: string): Promise<PartInfo> {
-  console.log(`🚀 Starting REAL part lookup for: ${partNumber}`)
+  console.log(`🚀 Starting part lookup for: ${partNumber} (serverless: ${isServerless})`)
   
   // Try both suppliers concurrently
   const [mouserResult, digikeyResult] = await Promise.all([
