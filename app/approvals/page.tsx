@@ -493,87 +493,108 @@ export default function ApprovalsPage() {
 
       const changes = []
       
-      // Check each field for changes
-      if (currentData['Part number'] !== proposedChanges.partNumber) {
+      // Check each field for changes (using correct database field names)
+      if (currentData.part_number !== proposedChanges.partNumber) {
         changes.push({
           field: 'Part Number',
-          old: currentData['Part number'],
+          old: currentData.part_number,
           new: proposedChanges.partNumber
         })
       }
       
-      if ((currentData['MFG Part number'] || '') !== (proposedChanges.mfgPartNumber || '')) {
+      if ((currentData.mfg_part_number || '') !== (proposedChanges.mfgPartNumber || '')) {
         changes.push({
           field: 'MFG Part Number',
-          old: currentData['MFG Part number'] || 'N/A',
+          old: currentData.mfg_part_number || 'N/A',
           new: proposedChanges.mfgPartNumber || 'N/A'
         })
       }
       
-      if (currentData['Part description'] !== proposedChanges.description) {
+      if (currentData.part_description !== proposedChanges.description) {
         changes.push({
           field: 'Description',
-          old: currentData['Part description'],
+          old: currentData.part_description,
           new: proposedChanges.description
         })
       }
       
-      if (currentData.QTY !== parseInt(proposedChanges.quantity)) {
+      if (currentData.qty !== parseInt(proposedChanges.quantity)) {
         changes.push({
           field: 'Quantity',
-          old: currentData.QTY,
+          old: currentData.qty,
           new: parseInt(proposedChanges.quantity)
         })
       }
       
-      if (currentData.Location !== proposedChanges.location) {
+      if (currentData.location !== proposedChanges.location) {
         changes.push({
           field: 'Location',
-          old: currentData.Location,
+          old: currentData.location,
           new: proposedChanges.location
         })
       }
       
-      if (currentData.Supplier !== proposedChanges.supplier) {
+      if (currentData.supplier !== proposedChanges.supplier) {
         changes.push({
           field: 'Supplier',
-          old: currentData.Supplier,
+          old: currentData.supplier,
           new: proposedChanges.supplier
         })
       }
       
-      if (currentData.Package !== proposedChanges.package) {
+      if (currentData.package !== proposedChanges.package) {
         changes.push({
           field: 'Package',
-          old: currentData.Package,
+          old: currentData.package,
           new: proposedChanges.package
         })
       }
       
-      if ((currentData.reorderPoint || 10) !== parseInt(proposedChanges.reorderPoint)) {
+      if ((currentData.reorder_point || 10) !== parseInt(proposedChanges.reorderPoint)) {
         changes.push({
           field: 'Reorder Point',
-          old: currentData.reorderPoint || 10,
+          old: currentData.reorder_point || 10,
           new: parseInt(proposedChanges.reorderPoint)
         })
       }
 
       return (
-        <div className="space-y-2 text-sm">
-          <div className="font-medium text-blue-800 mb-2">
-            Changes for: {currentData['Part number'] || "Unknown Part"}
-          </div>
-          {changes.length > 0 ? (
-            changes.map((change, index) => (
-              <div key={index} className="border-l-2 border-blue-200 pl-3 py-1">
-                <div className="font-medium text-gray-700">{change.field}:</div>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="bg-red-100 text-red-800 px-2 py-1 rounded">From: {change.old}</span>
-                  <span className="text-gray-400">→</span>
-                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded">To: {change.new}</span>
-                </div>
+        <div className="space-y-3 text-sm">
+          {/* Show complete part information */}
+          <div className="bg-gray-50 p-3 rounded-lg">
+            <div className="font-medium text-gray-800 mb-2">
+              Part Information: {currentData.part_number || "Unknown Part"}
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-xs text-gray-600">
+              <div>
+                <p><strong>MFG Part:</strong> {currentData.mfg_part_number || 'N/A'}</p>
+                <p><strong>Supplier:</strong> {currentData.supplier || 'N/A'}</p>
+                <p><strong>Location:</strong> {currentData.location || 'N/A'}</p>
               </div>
-            ))
+              <div>
+                <p><strong>Package:</strong> {currentData.package || 'N/A'}</p>
+                <p><strong>Current Qty:</strong> {currentData.qty || 0}</p>
+                <p><strong>Reorder Point:</strong> {currentData.reorder_point || 10}</p>
+              </div>
+            </div>
+            <p className="mt-2 text-xs"><strong>Description:</strong> {currentData.part_description || 'N/A'}</p>
+          </div>
+          
+          {/* Show only the actual changes */}
+          {changes.length > 0 ? (
+            <div>
+              <div className="font-medium text-blue-800 mb-2">Changes Requested:</div>
+              {changes.map((change, index) => (
+                <div key={index} className="border-l-2 border-blue-200 pl-3 py-1">
+                  <div className="font-medium text-gray-700">{change.field}:</div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="bg-red-100 text-red-800 px-2 py-1 rounded">From: {change.old}</span>
+                    <span className="text-gray-400">→</span>
+                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded">To: {change.new}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="text-gray-500 italic">No changes detected</div>
           )}
