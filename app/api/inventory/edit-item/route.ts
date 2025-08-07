@@ -99,13 +99,13 @@ export async function POST(request: NextRequest) {
             reorder_point: parseInt(changes.reorderPoint)
           },
           originalData: {
-            part_number: existingItem['Part number'],
-            part_description: existingItem['Part description'],
-            qty: existingItem.QTY,
-            location: existingItem.Location,
-            supplier: existingItem.Supplier,
-            package: existingItem.Package,
-            reorder_point: existingItem.reorderPoint
+            part_number: existingItem.part_number,
+            part_description: existingItem.part_description,
+            qty: existingItem.qty,
+            location: existingItem.location,
+            supplier: existingItem.supplier,
+            package: existingItem.package,
+            reorder_point: existingItem.reorder_point || 10
           },
           requestedBy: requester,
           changeId: `edit-${itemId}-${Date.now()}`
