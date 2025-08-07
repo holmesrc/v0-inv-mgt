@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Clock, AlertCircle, Package } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Clock, AlertCircle, Package, ExternalLink } from "lucide-react"
 
 interface PendingChange {
   id: string
@@ -167,6 +168,18 @@ export default function PendingChangesDisplay() {
         <div className="mt-3 p-3 bg-blue-50 rounded text-sm text-blue-800">
           <strong>Note:</strong> These changes have been sent to the inventory alerts channel for approval. They will be
           applied to the database once approved by an authorized user.
+        </div>
+        
+        {/* View Approvals Page Button */}
+        <div className="mt-4 pt-3 border-t border-yellow-200">
+          <Button 
+            variant="outline" 
+            className="w-full"
+            onClick={() => window.open('/approvals', '_blank')}
+          >
+            <ExternalLink className="w-4 h-4 mr-2" />
+            View Approvals Page
+          </Button>
         </div>
       </CardContent>
     </Card>
