@@ -815,6 +815,30 @@ export default function InventoryDashboard() {
     }
   }
 
+  const handleEndpointsAccess = async () => {
+    const password = prompt("Enter password to access All Endpoints:")
+    if (!password) return
+
+    try {
+      const response = await fetch("/api/auth/check-approval", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password })
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        window.open('/endpoints', '_blank')
+      } else {
+        alert("❌ Incorrect password")
+      }
+    } catch (error) {
+      console.error("Authentication error:", error)
+      alert("❌ Authentication failed")
+    }
+  }
+
   const handleCustomQuantityChange = (itemId: string, customAmount: string) => {
     const amount = parseInt(customAmount)
     if (!isNaN(amount) && amount !== 0) {
@@ -1715,13 +1739,10 @@ export default function InventoryDashboard() {
             <Package className="h-4 w-4" />
             Send Full Alert
           </Button>
-          <Button variant="outline" onClick={() => window.open('/low-stock', '_blank')}>
-            Low Stock Page
-          </Button>
           <Button variant="outline" onClick={() => window.open('/reorder-status', '_blank')}>
             Reorder Status
           </Button>
-          <Button variant="outline" onClick={() => window.open('/endpoints', '_blank')}>
+          <Button variant="outline" onClick={handleEndpointsAccess}>
             All Endpoints
           </Button>
           <Button variant="outline" onClick={() => setShowSettings(true)} className="flex items-center gap-2">
@@ -1785,6 +1806,14 @@ export default function InventoryDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">{lowStockItems.length}</div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="mt-2 w-full"
+              onClick={() => window.open('/low-stock', '_blank')}
+            >
+              View Low Stock Page
+            </Button>
           </CardContent>
         </Card>
         <Card>
@@ -1811,7 +1840,7 @@ export default function InventoryDashboard() {
               size="sm"
               onClick={() => window.open('/approvals', '_blank')}
             >
-              View All
+              View Approvals Page
             </Button>
           </CardHeader>
           <CardContent>
