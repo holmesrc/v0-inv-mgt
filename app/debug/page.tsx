@@ -3,7 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ExternalLink, Database, Slack, Settings, Package, AlertTriangle } from "lucide-react"
+import { ExternalLink, Database, Slack, Settings, Package, AlertTriangle, Search } from "lucide-react"
 import Link from "next/link"
 
 export default function DebugPage() {
@@ -140,6 +140,13 @@ export default function DebugPage() {
       description: "Restore environment variable access",
       icon: <Settings className="w-4 h-4" />,
       category: "System"
+    },
+    {
+      name: "Part Lookup Test",
+      path: "/debug/part-lookup-test",
+      description: "Test part scraping functionality",
+      icon: <Search className="w-4 h-4" />,
+      category: "Testing"
     }
   ]
 
