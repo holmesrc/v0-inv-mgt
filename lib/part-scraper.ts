@@ -1,5 +1,7 @@
 // Part scraping utilities using Puppeteer
-// This file contains the actual web scraping logic for part suppliers
+// Real web scraping implementation for part suppliers
+
+import puppeteer from 'puppeteer'
 
 interface PartInfo {
   partNumber: string
@@ -13,55 +15,130 @@ interface PartInfo {
   availability?: string
 }
 
-// Mouser Electronics scraping
+// Real Mouser Electronics scraping
 export async function scrapeMouser(partNumber: string): Promise<Partial<PartInfo>> {
+  let browser
   try {
-    console.log(`🔍 Scraping Mouser for: ${partNumber}`)
+    console.log(`🔍 Real scraping Mouser for: ${partNumber}`)
     
-    // For now, simulate the scraping with realistic data
-    // TODO: Replace with actual Puppeteer implementation
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    browser = await puppeteer.launch({ 
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    })
+    const page = await browser.newPage()
     
-    // Simulate different part types
-    const partLower = partNumber.toLowerCase()
+    // Set user agent to avoid bot detection
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
     
-    if (partLower.includes('resistor') || partLower.includes('res') || partLower.match(/\d+[rk]?\d*/)) {
-      return {
-        mfgPartNumber: `${partNumber.toUpperCase()}-MOUSER`,
-        description: `Resistor, ${partNumber}, 1/4W, 5%, Axial`,
-        supplier: 'Mouser Electronics',
-        found: true,
-        source: 'mouser',
-        price: '$0.12',
-        availability: 'In Stock'
+    // Navigate to Mouser search
+    const searchUrl = `https://www.mouser.com/ProductDetail/${encodeURIComponent(partNumber)}`
+    console.log(`🌐 Navigating to: ${searchUrl}`)
+    
+    await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 })
+    
+    // Wait a bit for dynamic content
+    await page.waitForTimeout(2000)
+    
+    // Check if we're on a product page or search results
+    const isProductPage = await page.$('.pdp-product-name, .product-details-title, h1[data-testid="product-title"]')
+    
+    if (isProductPage) {
+      // Extract product information
+      const productInfo = await page.evaluate(() => {
+        // Try multiple selectors for product name/description
+        const titleSelectors = [
+          '.pdp-product-name',
+          '.product-details-title', 
+          'h1[data-testid="product-title"]',
+          '.product-title',
+          'h1'
+        ]
+        
+        let description = ''
+        for (const selector of titleSelectors) {
+          const element = document.querySelector(selector)
+          if (element && element.textContent?.trim()) {
+            description = element.textContent.trim()
+            break
+          }
+        }
+        
+        // Try to get manufacturer part number
+        const mfgSelectors = [
+          '.pdp-product-mfr-part-number',
+          '.manufacturer-part-number',
+          '[data-testid="mfr-part-number"]'
+        ]
+        
+        let mfgPartNumber = ''
+        for (const selector of mfgSelectors) {
+          const element = document.querySelector(selector)
+          if (element && element.textContent?.trim()) {
+            mfgPartNumber = element.textContent.trim()
+            break
+          }
+        }
+        
+        // Try to get price
+        const priceSelectors = [
+          '.price-break-price',
+          '.pdp-pricing-price',
+          '.price',
+          '[data-testid="price"]'
+        ]
+        
+        let price = ''
+        for (const selector of priceSelectors) {
+          const element = document.querySelector(selector)
+          if (element && element.textContent?.trim()) {
+            price = element.textContent.trim()
+            break
+          }
+        }
+        
+        // Try to get availability
+        const availabilitySelectors = [
+          '.pdp-product-availability',
+          '.availability',
+          '[data-testid="availability"]'
+        ]
+        
+        let availability = ''
+        for (const selector of availabilitySelectors) {
+          const element = document.querySelector(selector)
+          if (element && element.textContent?.trim()) {
+            availability = element.textContent.trim()
+            break
+          }
+        }
+        
+        return {
+          description,
+          mfgPartNumber,
+          price,
+          availability,
+          pageTitle: document.title,
+          url: window.location.href
+        }
+      })
+      
+      console.log(`✅ Mouser product found:`, productInfo)
+      
+      if (productInfo.description) {
+        return {
+          mfgPartNumber: productInfo.mfgPartNumber || partNumber,
+          description: productInfo.description,
+          supplier: 'Mouser Electronics',
+          found: true,
+          source: 'mouser',
+          price: productInfo.price,
+          availability: productInfo.availability
+        }
       }
     }
     
-    if (partLower.includes('capacitor') || partLower.includes('cap') || partLower.includes('uf')) {
-      return {
-        mfgPartNumber: `${partNumber.toUpperCase()}-MOUSER`,
-        description: `Capacitor, ${partNumber}, Ceramic, X7R`,
-        supplier: 'Mouser Electronics',
-        found: true,
-        source: 'mouser',
-        price: '$0.08',
-        availability: 'In Stock'
-      }
-    }
-    
-    if (partLower.includes('ic') || partLower.includes('chip') || partLower.match(/^[a-z]{2,4}\d+/)) {
-      return {
-        mfgPartNumber: `${partNumber.toUpperCase()}-MOUSER`,
-        description: `Integrated Circuit, ${partNumber}, SOIC-8`,
-        supplier: 'Mouser Electronics',
-        found: true,
-        source: 'mouser',
-        price: '$2.45',
-        availability: 'In Stock'
-      }
-    }
-    
-    // Simulate not found
+    // If we get here, part wasn't found
+    console.log(`❌ Part not found on Mouser: ${partNumber}`)
     return { 
       found: false, 
       source: 'mouser',
@@ -69,64 +146,143 @@ export async function scrapeMouser(partNumber: string): Promise<Partial<PartInfo
     }
     
   } catch (error) {
-    console.error('Mouser scraping error:', error)
+    console.error('❌ Mouser scraping error:', error)
     return { 
       found: false, 
       source: 'mouser', 
       error: `Mouser scraping failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
     }
+  } finally {
+    if (browser) {
+      await browser.close()
+    }
   }
 }
 
-// Digi-Key Electronics scraping
+// Real Digi-Key Electronics scraping
 export async function scrapeDigikey(partNumber: string): Promise<Partial<PartInfo>> {
+  let browser
   try {
-    console.log(`🔍 Scraping Digi-Key for: ${partNumber}`)
+    console.log(`🔍 Real scraping Digi-Key for: ${partNumber}`)
     
-    // For now, simulate the scraping with realistic data
-    // TODO: Replace with actual Puppeteer implementation
-    await new Promise(resolve => setTimeout(resolve, 1200))
+    browser = await puppeteer.launch({ 
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    })
+    const page = await browser.newPage()
     
-    // Simulate different part types
-    const partLower = partNumber.toLowerCase()
+    // Set user agent to avoid bot detection
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
     
-    if (partLower.includes('diode') || partLower.includes('led') || partLower.match(/^1n\d+/)) {
-      return {
-        mfgPartNumber: `${partNumber.toUpperCase()}-DIGI`,
-        description: `Diode, ${partNumber}, 1A, 50V, DO-41`,
-        supplier: 'Digi-Key Electronics',
-        found: true,
-        source: 'digikey',
-        price: '$0.15',
-        availability: 'In Stock'
+    // Navigate to Digi-Key search
+    const searchUrl = `https://www.digikey.com/en/products/detail/${encodeURIComponent(partNumber)}`
+    console.log(`🌐 Navigating to: ${searchUrl}`)
+    
+    await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 })
+    
+    // Wait a bit for dynamic content
+    await page.waitForTimeout(2000)
+    
+    // Check if we're on a product page
+    const isProductPage = await page.$('.product-details-title, h1[data-testid="product-title"], .pdp-product-name')
+    
+    if (isProductPage) {
+      // Extract product information
+      const productInfo = await page.evaluate(() => {
+        // Try multiple selectors for product name/description
+        const titleSelectors = [
+          '.product-details-title',
+          'h1[data-testid="product-title"]',
+          '.pdp-product-name',
+          '.product-title',
+          'h1'
+        ]
+        
+        let description = ''
+        for (const selector of titleSelectors) {
+          const element = document.querySelector(selector)
+          if (element && element.textContent?.trim()) {
+            description = element.textContent.trim()
+            break
+          }
+        }
+        
+        // Try to get manufacturer part number
+        const mfgSelectors = [
+          '.product-details-mfr-part-number',
+          '.manufacturer-part-number',
+          '[data-testid="mfr-part-number"]'
+        ]
+        
+        let mfgPartNumber = ''
+        for (const selector of mfgSelectors) {
+          const element = document.querySelector(selector)
+          if (element && element.textContent?.trim()) {
+            mfgPartNumber = element.textContent.trim()
+            break
+          }
+        }
+        
+        // Try to get price
+        const priceSelectors = [
+          '.price-break-price',
+          '.product-dollars',
+          '.price',
+          '[data-testid="price"]'
+        ]
+        
+        let price = ''
+        for (const selector of priceSelectors) {
+          const element = document.querySelector(selector)
+          if (element && element.textContent?.trim()) {
+            price = element.textContent.trim()
+            break
+          }
+        }
+        
+        // Try to get availability
+        const availabilitySelectors = [
+          '.product-details-availability',
+          '.availability',
+          '[data-testid="availability"]'
+        ]
+        
+        let availability = ''
+        for (const selector of availabilitySelectors) {
+          const element = document.querySelector(selector)
+          if (element && element.textContent?.trim()) {
+            availability = element.textContent.trim()
+            break
+          }
+        }
+        
+        return {
+          description,
+          mfgPartNumber,
+          price,
+          availability,
+          pageTitle: document.title,
+          url: window.location.href
+        }
+      })
+      
+      console.log(`✅ Digi-Key product found:`, productInfo)
+      
+      if (productInfo.description) {
+        return {
+          mfgPartNumber: productInfo.mfgPartNumber || partNumber,
+          description: productInfo.description,
+          supplier: 'Digi-Key Electronics',
+          found: true,
+          source: 'digikey',
+          price: productInfo.price,
+          availability: productInfo.availability
+        }
       }
     }
     
-    if (partLower.includes('transistor') || partLower.includes('fet') || partLower.match(/^2n\d+/)) {
-      return {
-        mfgPartNumber: `${partNumber.toUpperCase()}-DIGI`,
-        description: `Transistor, ${partNumber}, NPN, TO-92`,
-        supplier: 'Digi-Key Electronics',
-        found: true,
-        source: 'digikey',
-        price: '$0.25',
-        availability: 'In Stock'
-      }
-    }
-    
-    if (partLower.includes('connector') || partLower.includes('conn') || partLower.includes('header')) {
-      return {
-        mfgPartNumber: `${partNumber.toUpperCase()}-DIGI`,
-        description: `Connector, ${partNumber}, 2.54mm Pitch`,
-        supplier: 'Digi-Key Electronics',
-        found: true,
-        source: 'digikey',
-        price: '$1.20',
-        availability: 'In Stock'
-      }
-    }
-    
-    // Simulate not found
+    // If we get here, part wasn't found
+    console.log(`❌ Part not found on Digi-Key: ${partNumber}`)
     return { 
       found: false, 
       source: 'digikey',
@@ -134,59 +290,22 @@ export async function scrapeDigikey(partNumber: string): Promise<Partial<PartInf
     }
     
   } catch (error) {
-    console.error('Digi-Key scraping error:', error)
+    console.error('❌ Digi-Key scraping error:', error)
     return { 
       found: false, 
       source: 'digikey', 
       error: `Digi-Key scraping failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
     }
-  }
-}
-
-// Future: Real Puppeteer implementation
-export async function scrapeWithPuppeteer(partNumber: string, supplier: 'mouser' | 'digikey'): Promise<Partial<PartInfo>> {
-  // This is where we'll implement the actual Puppeteer scraping
-  // For now, delegate to the simulated functions
-  
-  if (supplier === 'mouser') {
-    return scrapeMouser(partNumber)
-  } else {
-    return scrapeDigikey(partNumber)
-  }
-  
-  /* TODO: Real Puppeteer implementation would look like this:
-  
-  const puppeteer = require('puppeteer')
-  
-  const browser = await puppeteer.launch({ headless: true })
-  const page = await browser.newPage()
-  
-  try {
-    if (supplier === 'mouser') {
-      await page.goto(`https://www.mouser.com/ProductDetail/${partNumber}`)
-      // Extract part information from the page
-      const partInfo = await page.evaluate(() => {
-        // DOM scraping logic here
-        return {
-          mfgPartNumber: document.querySelector('.part-number')?.textContent,
-          description: document.querySelector('.description')?.textContent,
-          // etc.
-        }
-      })
-      return partInfo
-    }
-    
-    // Similar logic for Digi-Key
-    
   } finally {
-    await browser.close()
+    if (browser) {
+      await browser.close()
+    }
   }
-  */
 }
 
 // Main lookup function that tries multiple suppliers
 export async function lookupPart(partNumber: string): Promise<PartInfo> {
-  console.log(`🚀 Starting part lookup for: ${partNumber}`)
+  console.log(`🚀 Starting REAL part lookup for: ${partNumber}`)
   
   // Try both suppliers concurrently
   const [mouserResult, digikeyResult] = await Promise.all([
@@ -214,7 +333,7 @@ export async function lookupPart(partNumber: string): Promise<PartInfo> {
   }
   
   // Neither found the part
-  console.log(`❌ Part not found: ${partNumber}`)
+  console.log(`❌ Part not found anywhere: ${partNumber}`)
   const errors = []
   if (mouserResult.error) errors.push(`Mouser: ${mouserResult.error}`)
   if (digikeyResult.error) errors.push(`Digi-Key: ${digikeyResult.error}`)
