@@ -1520,7 +1520,7 @@ Please check your Slack configuration.`)
             variant="outline"
             onClick={() => {
               const password = prompt("Enter password to access endpoints:");
-              if (password === "admin123") {
+              if (password === "PHL10") {
                 window.open('/debug', '_blank');
               } else if (password !== null) {
                 alert("❌ Access denied. Incorrect password.");
