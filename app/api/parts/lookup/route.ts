@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { lookupPart } from "@/lib/part-scraper"
+import { lookupPart } from "../../../../lib/part-scraper"
 
 export async function POST(request: NextRequest) {
   try {
