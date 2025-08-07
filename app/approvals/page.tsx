@@ -236,6 +236,7 @@ export default function ApprovalsPage() {
     }
   }
 
+  // Function to determine display type and color for change badges
   const getDisplayChangeType = (change: PendingChange) => {
     const actionType = change.item_data?.action_type || change.change_type
     
