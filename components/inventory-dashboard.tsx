@@ -29,6 +29,7 @@ import {
   Download,
   RefreshCw,
   Database,
+  Lock,
 } from "lucide-react"
 import type { InventoryItem, PurchaseRequest, AlertSettings } from "@/types/inventory"
 import {
@@ -43,7 +44,6 @@ import FileUpload from "./file-upload"
 import AddInventoryItem from "./add-inventory-item"
 import { getExcelFileMetadata } from "@/lib/storage"
 import ProtectedUploadButton from "./protected-upload-button"
-import PendingChangesDisplay from "./pending-changes-display"
 
 export default function InventoryDashboard() {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
@@ -77,6 +77,7 @@ export default function InventoryDashboard() {
 
   // Add this with the other state declarations
   const [editDialogOpen, setEditDialogOpen] = useState<Record<string, boolean>>({})
+  const [pendingChangesCount, setPendingChangesCount] = useState<number>(0)
 
   // Load data from database on component mount
   useEffect(() => {
@@ -326,6 +327,10 @@ export default function InventoryDashboard() {
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
+          // Count pending changes
+          const pendingCount = result.data.filter((change: any) => change.status === "pending").length
+          setPendingChangesCount(pendingCount)
+          
           // Extract part numbers from pending changes
           const pendingPartNumbers = new Set<string>()
           result.data.forEach((change: any) => {
@@ -1408,9 +1413,9 @@ Please check your Slack configuration.`)
             onAddItem={addInventoryItem}
             packageTypes={packageTypes}
             suppliers={suppliers}
-            locations={uniqueLocations} // Updated here
+            locations={uniqueLocations}
             defaultReorderPoint={alertSettings.defaultReorderPoint}
-            inventory={inventory} // Add this line
+            inventory={inventory}
           />
           <Button onClick={handleDownloadExcel} variant="outline">
             <Download className="w-4 h-4 mr-2" />
@@ -1425,12 +1430,10 @@ Please check your Slack configuration.`)
             <Bell className="w-4 h-4 mr-2" />
             {slackConfigured ? "Send Alert Now" : "Send Alert (Not Configured)"}
           </Button>
-          {lowStockItems.length > 3 && (
-            <Button onClick={sendFullAlert} variant="outline" disabled={!slackConfigured}>
-              <List className="w-4 h-4 mr-2" />
-              {slackConfigured ? "Send Full Alert" : "Send Full Alert (Not Configured)"}
-            </Button>
-          )}
+          <Button onClick={sendFullAlert} variant="outline" disabled={!slackConfigured}>
+            <List className="w-4 h-4 mr-2" />
+            {slackConfigured ? "Send Full Alert" : "Send Full Alert (Not Configured)"}
+          </Button>
           <Dialog>
             <DialogTrigger asChild>
               <Button variant="outline">
@@ -1513,6 +1516,20 @@ Please check your Slack configuration.`)
               </div>
             </DialogContent>
           </Dialog>
+          <Button 
+            variant="outline"
+            onClick={() => {
+              const password = prompt("Enter password to access endpoints:");
+              if (password === "admin123") {
+                window.open('/debug', '_blank');
+              } else if (password !== null) {
+                alert("❌ Access denied. Incorrect password.");
+              }
+            }}
+          >
+            <Lock className="w-4 h-4 mr-2" />
+            All Endpoints
+          </Button>
         </div>
       </div>
 
@@ -1529,8 +1546,57 @@ Please check your Slack configuration.`)
         </Alert>
       )}
 
-      {/* Pending Changes Display */}
-      <PendingChangesDisplay />
+      {/* Dashboard Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{inventory.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">All inventory items</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Low Stock Items</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-500">{lowStockItems.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">≤ {alertSettings.defaultReorderPoint} units</p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full mt-3"
+              onClick={() => window.open('/low-stock', '_blank')}
+            >
+              View Low Stock Page
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending Changes</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-yellow-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-yellow-500">{pendingChangesCount}</div>
+            <p className="text-xs text-muted-foreground mt-1">Changes awaiting approval</p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full mt-3"
+              onClick={() => window.open('/approvals', '_blank')}
+            >
+              View Approvals Page
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Preview Environment Notice */}
       {slackConfigured === false && supabaseConfigured === false && (
