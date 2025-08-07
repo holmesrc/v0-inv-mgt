@@ -36,6 +36,8 @@ interface PartLookupResult {
   found: boolean
   source?: string
   error?: string
+  price?: string
+  availability?: string
 }
 
 export default function AddInventoryItem({
@@ -463,16 +465,28 @@ export default function AddInventoryItem({
                 
                 {/* Lookup Status */}
                 {lookupResult && (
-                  <div className="mt-2 p-2 rounded text-sm">
+                  <div className="mt-2 p-3 rounded text-sm border">
                     {lookupResult.found ? (
-                      <div className="flex items-center gap-2 text-green-700 bg-green-50 p-2 rounded">
-                        <CheckCircle className="w-4 h-4" />
-                        <span>Found on {lookupResult.source} - fields auto-populated</span>
+                      <div className="text-green-700 bg-green-50 border-green-200 p-3 rounded">
+                        <div className="flex items-center gap-2 mb-2">
+                          <CheckCircle className="w-4 h-4" />
+                          <span className="font-medium">Found on {lookupResult.source?.toUpperCase()}</span>
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <div><strong>MFG Part:</strong> {lookupResult.mfgPartNumber}</div>
+                          <div><strong>Description:</strong> {lookupResult.description}</div>
+                          <div><strong>Supplier:</strong> {lookupResult.supplier}</div>
+                          {lookupResult.price && <div><strong>Price:</strong> {lookupResult.price}</div>}
+                          {lookupResult.availability && <div><strong>Availability:</strong> {lookupResult.availability}</div>}
+                        </div>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 text-orange-700 bg-orange-50 p-2 rounded">
-                        <XCircle className="w-4 h-4" />
-                        <span>Not found on suppliers - enter manually</span>
+                      <div className="text-orange-700 bg-orange-50 border-orange-200 p-3 rounded">
+                        <div className="flex items-center gap-2 mb-1">
+                          <XCircle className="w-4 h-4" />
+                          <span className="font-medium">Not found on suppliers</span>
+                        </div>
+                        <div className="text-xs">Please enter part information manually</div>
                       </div>
                     )}
                   </div>
