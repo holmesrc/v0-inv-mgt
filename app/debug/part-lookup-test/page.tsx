@@ -224,9 +224,12 @@ export default function PartLookupTestPage() {
             <div><strong>Endpoint:</strong> /api/parts/lookup</div>
             <div><strong>Method:</strong> POST</div>
             <div><strong>Suppliers:</strong> Mouser Electronics, Digi-Key Electronics</div>
-            <div><strong>Status:</strong> <Badge variant="secondary">Simulated Data</Badge></div>
+            <div><strong>Environment:</strong> <Badge variant="secondary">Serverless Compatible</Badge></div>
             <div className="text-muted-foreground mt-2">
-              Currently using simulated data. Real Puppeteer scraping will be implemented next.
+              <strong>Scraping Mode:</strong> Uses real Puppeteer scraping when available, falls back to basic HTML parsing in serverless environments like Vercel.
+            </div>
+            <div className="text-muted-foreground">
+              <strong>Fallback Behavior:</strong> In serverless mode, performs basic page existence checks and returns generic component information when parts are found.
             </div>
           </div>
         </CardContent>
