@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Plus, AlertTriangle, Package, Zap } from "lucide-react"
+import { Plus, AlertTriangle, Package, Zap, Search, Loader2, CheckCircle, XCircle } from "lucide-react"
 import type { InventoryItem } from "@/types/inventory"
 
 interface AddInventoryItemProps {
@@ -26,6 +26,16 @@ interface AddInventoryItemProps {
   locations: string[]
   defaultReorderPoint: number
   inventory: InventoryItem[]
+}
+
+interface PartLookupResult {
+  partNumber: string
+  mfgPartNumber?: string
+  description?: string
+  supplier?: string
+  found: boolean
+  source?: string
+  error?: string
 }
 
 export default function AddInventoryItem({
@@ -48,6 +58,11 @@ export default function AddInventoryItem({
     reorderPoint: defaultReorderPoint.toString(),
     requester: "",
   })
+  
+  // Part lookup states
+  const [isLookingUp, setIsLookingUp] = useState(false)
+  const [lookupResult, setLookupResult] = useState<PartLookupResult | null>(null)
+  const [lookupError, setLookupError] = useState<string | null>(null)
   const [batchItems, setBatchItems] = useState<Array<Omit<InventoryItem, "id" | "lastUpdated">>>([])
   const [duplicateWarning, setDuplicateWarning] = useState<{
     type: "inventory" | "batch"
@@ -129,6 +144,55 @@ export default function AddInventoryItem({
     setDuplicateWarning(null)
     setQuickUpdateQuantity("")
     setError(null)
+    setLookupResult(null)
+    setLookupError(null)
+  }
+
+  // Part lookup function
+  const handlePartLookup = async () => {
+    if (!formData.partNumber.trim()) {
+      setLookupError("Please enter a part number first")
+      return
+    }
+
+    setIsLookingUp(true)
+    setLookupError(null)
+    setLookupResult(null)
+
+    try {
+      const response = await fetch('/api/parts/lookup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          partNumber: formData.partNumber.trim()
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        setLookupResult(result.data)
+        
+        // Auto-populate fields if part was found
+        if (result.data.found) {
+          setFormData(prev => ({
+            ...prev,
+            mfgPartNumber: result.data.mfgPartNumber || prev.mfgPartNumber,
+            description: result.data.description || prev.description,
+            supplier: result.data.supplier || prev.supplier,
+          }))
+        }
+      } else {
+        setLookupError(result.error || 'Failed to lookup part')
+      }
+    } catch (error) {
+      console.error('Part lookup error:', error)
+      setLookupError('Network error during part lookup')
+    } finally {
+      setIsLookingUp(false)
+    }
   }
 
   const handleAddToBatch = () => {
@@ -373,13 +437,52 @@ export default function AddInventoryItem({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="partNumber">Part Number *</Label>
-                <Input
-                  id="partNumber"
-                  value={formData.partNumber}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, partNumber: e.target.value }))}
-                  placeholder="Enter part number"
-                  className={duplicateWarning ? "border-orange-300 bg-orange-50" : ""}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="partNumber"
+                    value={formData.partNumber}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, partNumber: e.target.value }))}
+                    placeholder="Enter part number"
+                    className={duplicateWarning ? "border-orange-300 bg-orange-50" : ""}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePartLookup}
+                    disabled={isLookingUp || !formData.partNumber.trim()}
+                    className="px-3"
+                  >
+                    {isLookingUp ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Search className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+                
+                {/* Lookup Status */}
+                {lookupResult && (
+                  <div className="mt-2 p-2 rounded text-sm">
+                    {lookupResult.found ? (
+                      <div className="flex items-center gap-2 text-green-700 bg-green-50 p-2 rounded">
+                        <CheckCircle className="w-4 h-4" />
+                        <span>Found on {lookupResult.source} - fields auto-populated</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-orange-700 bg-orange-50 p-2 rounded">
+                        <XCircle className="w-4 h-4" />
+                        <span>Not found on suppliers - enter manually</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {lookupError && (
+                  <div className="mt-2 p-2 rounded text-sm text-red-700 bg-red-50">
+                    {lookupError}
+                  </div>
+                )}
               </div>
               <div>
                 <Label htmlFor="mfgPartNumber">MFG Part Number *</Label>
