@@ -2881,11 +2881,6 @@ export default function InventoryDashboard() {
 
                   setShowDuplicateDialog(false)
                   setDuplicatePartInfo(null)
-                  
-                  // Close dialog if not in batch mode
-                  if (!batchMode) {
-                    setAddItemDialogOpen(false)
-                  }
                 }
               }}
               className="bg-green-600 hover:bg-green-700"
