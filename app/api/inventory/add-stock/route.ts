@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
 
     // Create a pending change for stock addition
     const pendingChangeData = {
-      change_type: 'add_stock',
+      change_type: 'update',
       requested_by: requester,
       status: 'pending',
       item_data: {
