@@ -31,10 +31,10 @@ export async function POST(request: NextRequest) {
       .from('pending_changes')
       .insert({
         change_type: 'batch_add',
-        requester: requester,
+        requested_by: requester,
         status: 'pending',
-        batch_id: batchId,
         item_data: {
+          batch_id: batchId,
           batch_items: batch_items,
           item_count: batch_items.length
         }
