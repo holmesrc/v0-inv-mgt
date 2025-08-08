@@ -1823,6 +1823,14 @@ export default function InventoryDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">{pendingChanges.filter(change => change.status === 'pending').length}</div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="mt-2 w-full"
+              onClick={() => window.open('/approvals', '_blank')}
+            >
+              View Approvals Page
+            </Button>
           </CardContent>
         </Card>
       </div>
