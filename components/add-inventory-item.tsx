@@ -67,6 +67,8 @@ export default function AddInventoryItem({ onItemAdded, currentBatch, existingIn
   const [quickUpdateQty, setQuickUpdateQty] = useState("")
   const [isUpdating, setIsUpdating] = useState(false)
   const [updateSuccess, setUpdateSuccess] = useState(false)
+  const [suggestedLocation, setSuggestedLocation] = useState<string | null>(null)
+  const [isLoadingSuggestion, setIsLoadingSuggestion] = useState(false)
 
   // Check for duplicates when part number changes
   useEffect(() => {
@@ -97,6 +99,33 @@ export default function AddInventoryItem({ onItemAdded, currentBatch, existingIn
 
     setDuplicateInfo({ type: null, item: null })
   }, [formData.part_number, existingInventory, currentBatch])
+
+  // Fetch suggested location on component mount
+  useEffect(() => {
+    fetchSuggestedLocation()
+  }, [])
+
+  const fetchSuggestedLocation = async () => {
+    setIsLoadingSuggestion(true)
+    try {
+      const response = await fetch('/api/inventory/suggest-location')
+      const data = await response.json()
+      
+      if (data.success && data.suggestion) {
+        setSuggestedLocation(data.suggestion)
+      }
+    } catch (error) {
+      console.error('Error fetching suggested location:', error)
+    } finally {
+      setIsLoadingSuggestion(false)
+    }
+  }
+
+  const applySuggestedLocation = () => {
+    if (suggestedLocation) {
+      setFormData(prev => ({ ...prev, location: suggestedLocation }))
+    }
+  }
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -212,6 +241,9 @@ export default function AddInventoryItem({ onItemAdded, currentBatch, existingIn
     })
     setQuickUpdateQty("")
     setUpdateSuccess(false)
+    
+    // Refresh suggested location for next item
+    fetchSuggestedLocation()
   }
 
   return (
@@ -377,12 +409,35 @@ export default function AddInventoryItem({ onItemAdded, currentBatch, existingIn
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="location">Location</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="location">Location</Label>
+                {suggestedLocation && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      Suggested: {suggestedLocation}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={applySuggestedLocation}
+                      disabled={isLoadingSuggestion}
+                      className="h-6 px-2 text-xs"
+                    >
+                      {isLoadingSuggestion ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        "Use"
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
               <Input
                 id="location"
                 value={formData.location}
                 onChange={(e) => handleInputChange("location", e.target.value)}
-                placeholder="Enter location"
+                placeholder={suggestedLocation ? `Suggested: ${suggestedLocation}` : "Enter location"}
               />
             </div>
 
