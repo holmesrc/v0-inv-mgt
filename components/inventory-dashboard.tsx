@@ -1362,26 +1362,40 @@ export default function InventoryDashboard() {
 
   const handleAddStockToExisting = async (duplicateInfo: any, additionalQuantity: number) => {
     try {
+      console.log('handleAddStockToExisting called with:', { duplicateInfo, additionalQuantity })
+      
       if (duplicateInfo.source === 'inventory') {
+        console.log('Adding stock to inventory item:', duplicateInfo.data)
+        
         // Add stock to existing inventory item
+        const requestBody = {
+          itemId: duplicateInfo.data.id,
+          additionalQuantity: additionalQuantity,
+          requester: newItem.requester,
+          partNumber: duplicateInfo.data["Part number"] || newItem.partNumber
+        }
+        
+        console.log('Request body:', requestBody)
+        
         const response = await fetch("/api/inventory/add-stock", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            itemId: duplicateInfo.data.id,
-            additionalQuantity: additionalQuantity,
-            requester: newItem.requester,
-            partNumber: newItem.partNumber
-          }),
+          body: JSON.stringify(requestBody),
         })
 
+        console.log('Response status:', response.status)
+        
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
+          const errorText = await response.text()
+          console.error('Response error:', errorText)
+          throw new Error(`HTTP ${response.status}: ${errorText}`)
         }
 
         const result = await response.json()
+        console.log('Response result:', result)
+        
         if (!result.success) {
           throw new Error(result.error || "Unknown error occurred")
         }
