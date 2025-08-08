@@ -112,6 +112,7 @@ export default function InventoryDashboard() {
     duplicateSource: 'inventory' | 'pending' | 'batch'
     duplicateData?: any
   } | null>(null)
+  const [editableAdditionalQty, setEditableAdditionalQty] = useState<string>("")
   const [batchMode, setBatchMode] = useState(false)
   const [editingBatchQuantity, setEditingBatchQuantity] = useState<Record<number, string>>({})
   const [editingBatchFields, setEditingBatchFields] = useState<Record<number, {
@@ -912,6 +913,7 @@ export default function InventoryDashboard() {
         duplicateSource: duplicateCheck.source,
         duplicateData: duplicateCheck
       })
+      setEditableAdditionalQty(newItem.quantity || "0")
       setShowDuplicateDialog(true)
       return
     }
@@ -992,6 +994,7 @@ export default function InventoryDashboard() {
         duplicateSource: duplicateCheck.source,
         duplicateData: duplicateCheck
       })
+      setEditableAdditionalQty(newItem.quantity || "0")
       setShowDuplicateDialog(true)
       return
     }
@@ -1348,6 +1351,7 @@ export default function InventoryDashboard() {
             duplicateSource: duplicateCheck.source,
             duplicateData: duplicateCheck
           })
+          setEditableAdditionalQty(newItem.quantity || "0")
           setShowDuplicateDialog(true)
         }
       } catch (error) {
@@ -2807,10 +2811,21 @@ export default function InventoryDashboard() {
                 <h4 className="font-medium mb-2 text-blue-800">
                   ➕ New Stock to Add:
                 </h4>
-                <div className="text-sm space-y-1">
+                <div className="text-sm space-y-2">
                   <div><strong>Part Number:</strong> {duplicatePartInfo.partNumber}</div>
                   <div><strong>Description:</strong> {duplicatePartInfo.description}</div>
-                  <div><strong>Additional Quantity:</strong> {duplicatePartInfo.newQuantity} units</div>
+                  <div className="flex items-center gap-2">
+                    <strong>Additional Quantity:</strong>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={editableAdditionalQty}
+                      onChange={(e) => setEditableAdditionalQty(e.target.value)}
+                      className="w-20 h-8"
+                      placeholder="0"
+                    />
+                    <span>units</span>
+                  </div>
                   <div><strong>Location:</strong> {duplicatePartInfo.location}</div>
                   <div><strong>Supplier:</strong> {duplicatePartInfo.supplier}</div>
                   <div><strong>Package:</strong> {duplicatePartInfo.package}</div>
@@ -2829,7 +2844,7 @@ export default function InventoryDashboard() {
                       : duplicatePartInfo.duplicateSource === 'pending'
                       ? (duplicatePartInfo.existingItem.item_data?.quantity || duplicatePartInfo.existingItem.item_data?.QTY || 0)
                       : parseInt(duplicatePartInfo.existingItem.quantity) || 0
-                    ) + duplicatePartInfo.newQuantity
+                    ) + (parseInt(editableAdditionalQty) || 0)
                   } units</div>
                 </div>
               </div>
@@ -2843,7 +2858,12 @@ export default function InventoryDashboard() {
             <Button 
               onClick={async () => {
                 if (duplicatePartInfo) {
-                  await handleAddStockToExisting(duplicatePartInfo.duplicateData, duplicatePartInfo.newQuantity)
+                  const additionalQty = parseInt(editableAdditionalQty) || 0
+                  if (additionalQty <= 0) {
+                    alert("Please enter a valid quantity greater than 0")
+                    return
+                  }
+                  await handleAddStockToExisting(duplicatePartInfo.duplicateData, additionalQty)
                   
                   // Clear form
                   const requesterName = newItem.requester
