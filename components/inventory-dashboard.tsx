@@ -1364,6 +1364,12 @@ export default function InventoryDashboard() {
     try {
       console.log('handleAddStockToExisting called with:', { duplicateInfo, additionalQuantity })
       
+      // Validate requester field
+      if (!newItem.requester.trim()) {
+        setShowRequesterWarning(true)
+        return
+      }
+      
       if (duplicateInfo.source === 'inventory') {
         console.log('Adding stock to inventory item:', duplicateInfo.data)
         
@@ -1371,7 +1377,7 @@ export default function InventoryDashboard() {
         const requestBody = {
           itemId: duplicateInfo.data.id,
           additionalQuantity: additionalQuantity,
-          requester: newItem.requester,
+          requester: newItem.requester.trim(),
           partNumber: duplicateInfo.data["Part number"] || newItem.partNumber
         }
         
@@ -1412,7 +1418,7 @@ export default function InventoryDashboard() {
           body: JSON.stringify({
             pendingId: duplicateInfo.data.id,
             additionalQuantity: additionalQuantity,
-            requester: newItem.requester,
+            requester: newItem.requester.trim(),
             partNumber: newItem.partNumber
           }),
         })
