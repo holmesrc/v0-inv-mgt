@@ -34,7 +34,23 @@ export default function DebugAlertsPage() {
     const cronMinute = parseInt(minutes)
     const cronHour = parseInt(hours) + 5 // Convert Eastern to UTC (approximate)
     
-    alert(`Would set cron to: ${cronMinute} ${cronHour} * * * (${testTime} Eastern)`)
+    setLoading(true)
+    try {
+      const response = await fetch('/api/alerts/schedule-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          time: testTime,
+          cronMinute,
+          cronHour 
+        })
+      })
+      const data = await response.json()
+      setResult(data)
+    } catch (error) {
+      setResult({ success: false, error: 'Failed to schedule test' })
+    }
+    setLoading(false)
   }
 
   return (

@@ -18,8 +18,8 @@ export async function GET(request: NextRequest) {
     const scheduleInfo = getScheduleDescription('America/New_York')
     console.log(`🕘 Cron triggered at ${scheduleInfo.currentTime}`)
 
-    // For testing, skip the time check
-    console.log(`✅ Running alert (time check bypassed for testing)`)
+    // Skip time check for now - run every time cron triggers
+    console.log(`✅ Running alert (time check disabled for testing)`)
 
     // Construct base URL more reliably
     const host = request.headers.get('host')
