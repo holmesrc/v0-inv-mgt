@@ -576,6 +576,7 @@ async function handleSingleItemApproval(pendingChange: any, action: string, appr
       )
     }
     inventoryResults.push(data)
+    }
   } else if (pendingChange.change_type === "delete") {
     // Delete item - also handle potential duplicates
     const originalPartNumber = pendingChange.original_data.part_number
