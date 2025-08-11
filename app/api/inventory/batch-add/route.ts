@@ -51,11 +51,11 @@ export async function POST(request: NextRequest) {
 
     // Insert individual items as part of the batch
     const pendingItems = batch_items.map((item: any) => ({
-      change_type: 'batch_item_add',
-      requester: requester,
+      change_type: 'add',
+      requested_by: requester,
       status: 'pending',
-      batch_id: batchId,
       item_data: {
+        batch_id: batchId,
         part_number: item.part_number,
         mfg_part_number: item.mfg_part_number,
         part_description: item.part_description,
