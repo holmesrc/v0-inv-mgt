@@ -72,6 +72,64 @@ export default function ApprovalsPage() {
     }
   }
 
+  const handleBatchApproveAll = async (batchId: string) => {
+    try {
+      setProcessingId(batchId)
+      setError(null)
+
+      const response = await fetch("/api/inventory/batch-approve-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          batchId,
+          approvedBy: "Admin User"
+        })
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        await loadPendingChanges()
+      } else {
+        setError(result.error || "Failed to approve batch")
+      }
+    } catch (error) {
+      console.error("Error approving batch:", error)
+      setError("Failed to approve batch")
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  const handleBatchRejectAll = async (batchId: string) => {
+    try {
+      setProcessingId(batchId)
+      setError(null)
+
+      const response = await fetch("/api/inventory/batch-reject-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          batchId,
+          approvedBy: "Admin User"
+        })
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        await loadPendingChanges()
+      } else {
+        setError(result.error || "Failed to reject batch")
+      }
+    } catch (error) {
+      console.error("Error rejecting batch:", error)
+      setError("Failed to reject batch")
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
   const handleBatchItemStatusChange = async (batchId: string, itemIndex: number, status: "approved" | "rejected") => {
     try {
       setProcessingId(`${batchId}-${itemIndex}`)
@@ -345,7 +403,7 @@ export default function ApprovalsPage() {
                   <Button
                     size="sm"
                     variant="default"
-                    onClick={() => handleApproval(change.id, "approve")}
+                    onClick={() => handleBatchApproveAll(change.item_data?.batch_id)}
                     disabled={processingId === change.id}
                   >
                     {processingId === change.id ? (
@@ -353,12 +411,12 @@ export default function ApprovalsPage() {
                     ) : (
                       <CheckCircle className="w-4 h-4" />
                     )}
-                    Approve Batch
+                    Approve All
                   </Button>
                   <Button
                     size="sm"
                     variant="destructive"
-                    onClick={() => handleApproval(change.id, "reject")}
+                    onClick={() => handleBatchRejectAll(change.item_data?.batch_id)}
                     disabled={processingId === change.id}
                   >
                     {processingId === change.id ? (
@@ -366,7 +424,7 @@ export default function ApprovalsPage() {
                     ) : (
                       <XCircle className="w-4 h-4" />
                     )}
-                    Reject Batch
+                    Reject All
                   </Button>
                 </div>
               </div>
