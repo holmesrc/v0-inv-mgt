@@ -1048,6 +1048,9 @@ export default function InventoryDashboard() {
       return
     }
 
+    alert("Batch submission is temporarily disabled. Please submit items individually.")
+    return
+
     try {
       const requesterName = batchEntryItems[0]?.requester
       if (!requesterName) {
