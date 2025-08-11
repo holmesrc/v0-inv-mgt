@@ -30,13 +30,14 @@ export async function POST(request: NextRequest) {
     const { data: batchData, error: batchError } = await supabase
       .from('pending_changes')
       .insert({
-        change_type: 'batch_add',
+        change_type: 'add',
         requested_by: requester,
         status: 'pending',
         item_data: {
           batch_id: batchId,
           batch_items: batch_items,
-          item_count: batch_items.length
+          item_count: batch_items.length,
+          is_batch: true
         }
       })
       .select()
