@@ -86,8 +86,46 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Send actual low stock alert
-    await sendFullLowStockAlert(lowStockItems, "#inventory-alerts")
+    // Send actual low stock alert directly to Slack
+    const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL
+    if (!slackWebhookUrl) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Slack webhook URL not configured' 
+      }, { status: 500 })
+    }
+
+    const message = {
+      text: `🚨 Low Stock Alert - ${lowStockItems.length} items need attention`,
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*🚨 Low Stock Alert*\n*Items needing attention:* ${lowStockItems.length}\n*Time:* ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })}`
+          }
+        },
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: lowStockItems.slice(0, 5).map((item: any, index: number) => 
+              `${index + 1}. *${item["Part number"]}* - ${item["Part description"]}\n   Current: ${item.QTY} | Reorder: ${item.reorderPoint || 10}`
+            ).join('\n\n')
+          }
+        }
+      ]
+    }
+
+    const slackResponse = await fetch(slackWebhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(message)
+    })
+
+    if (!slackResponse.ok) {
+      throw new Error(`Slack webhook failed: ${slackResponse.status}`)
+    }
     
     return NextResponse.json({ 
       success: true, 
