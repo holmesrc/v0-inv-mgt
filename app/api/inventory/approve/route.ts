@@ -461,19 +461,52 @@ async function handleSingleItemApproval(pendingChange: any, action: string, appr
     }
     inventoryResults.push(data)
   } else if (pendingChange.change_type === "update") {
-    // Update existing item with smart package type adjustment
-    const newQty = Number(pendingChange.item_data.qty) || 0
-    const correctPackageType = getCorrectPackageType(newQty)
+    // Check if this is a stock addition (has additional_quantity)
+    if (pendingChange.item_data?.additional_quantity) {
+      // Handle stock addition
+      const itemId = pendingChange.item_data.item_id
+      const newTotalQty = pendingChange.item_data.new_total_quantity
+      const correctPackageType = getCorrectPackageType(newTotalQty)
 
-    const updateData = {
-      qty: newQty,
-      reorder_point: Number(pendingChange.item_data.reorder_point) || 10,
-      location: String(pendingChange.item_data.location || "").trim(),
-      supplier: String(pendingChange.item_data.supplier || "").trim(),
-      package: correctPackageType, // Auto-update package based on new quantity
-      mfg_part_number: String(pendingChange.item_data.mfg_part_number || "").trim(),
-      part_description: String(pendingChange.item_data.part_description || "").trim(),
-    }
+      const updateData = {
+        qty: newTotalQty,
+        package: correctPackageType, // Auto-update package based on new quantity
+      }
+
+      console.log(`📦 Stock addition: updating item ${itemId} to ${newTotalQty} qty (${correctPackageType} package)`)
+
+      const { data, error } = await supabase
+        .from("inventory")
+        .update(updateData)
+        .eq("id", itemId)
+        .select()
+        .single()
+
+      if (error) {
+        console.error("Error updating inventory item:", error)
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Failed to update item: ${error.message}`,
+          },
+          { status: 500 },
+        )
+      }
+      inventoryResults.push(data)
+    } else {
+      // Regular update - existing logic
+      const newQty = Number(pendingChange.item_data.qty) || 0
+      const correctPackageType = getCorrectPackageType(newQty)
+
+      const updateData = {
+        qty: newQty,
+        reorder_point: Number(pendingChange.item_data.reorder_point) || 10,
+        location: String(pendingChange.item_data.location || "").trim(),
+        supplier: String(pendingChange.item_data.supplier || "").trim(),
+        package: correctPackageType, // Auto-update package based on new quantity
+        mfg_part_number: String(pendingChange.item_data.mfg_part_number || "").trim(),
+        part_description: String(pendingChange.item_data.part_description || "").trim(),
+      }
 
     console.log(`📦 Auto-updating package type: ${newQty} qty → ${correctPackageType} package`)
 

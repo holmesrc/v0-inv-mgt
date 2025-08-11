@@ -61,22 +61,22 @@ export async function POST(request: NextRequest) {
       item_data: {
         item_id: itemId,
         part_number: existingItem["Part number"] || partNumber,
-        part_description: existingItem["Part description"],
-        current_quantity: existingItem.QTY,
+        part_description: existingItem["Part description"] || existingItem["part_description"] || '',
+        current_quantity: existingItem.QTY || existingItem.qty || 0,
         additional_quantity: additionalQuantity,
-        new_total_quantity: existingItem.QTY + additionalQuantity,
-        location: existingItem.Location,
-        supplier: existingItem.Supplier,
-        package: existingItem.Package,
-        qty: existingItem.QTY + additionalQuantity // New total quantity
+        new_total_quantity: (existingItem.QTY || existingItem.qty || 0) + additionalQuantity,
+        location: existingItem.Location || existingItem.location || '',
+        supplier: existingItem.Supplier || existingItem.supplier || '',
+        package: existingItem.Package || existingItem.package || '',
+        qty: (existingItem.QTY || existingItem.qty || 0) + additionalQuantity // New total quantity
       },
       original_data: {
         part_number: existingItem["Part number"] || partNumber,
-        part_description: existingItem["Part description"],
-        qty: existingItem.QTY, // Original quantity
-        location: existingItem.Location,
-        supplier: existingItem.Supplier,
-        package: existingItem.Package
+        part_description: existingItem["Part description"] || existingItem["part_description"] || '',
+        qty: existingItem.QTY || existingItem.qty || 0, // Original quantity
+        location: existingItem.Location || existingItem.location || '',
+        supplier: existingItem.Supplier || existingItem.supplier || '',
+        package: existingItem.Package || existingItem.package || ''
       }
     }
 
