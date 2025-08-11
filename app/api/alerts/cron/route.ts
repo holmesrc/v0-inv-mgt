@@ -103,9 +103,52 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Send Slack alert
+    // Send Slack alert directly
     try {
-      await sendFullLowStockAlert(lowStockItems, "#inventory-alerts")
+      const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL
+      if (!slackWebhookUrl) {
+        throw new Error('Slack webhook URL not configured')
+      }
+
+      const message = {
+        text: `🚨 Weekly Low Stock Alert - ${lowStockItems.length} items need attention`,
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*🚨 Weekly Low Stock Alert*\n*Items needing attention:* ${lowStockItems.length}\n*Time:* ${scheduleInfo.currentTime}`
+            }
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: lowStockItems.slice(0, 5).map((item: any, index: number) => 
+                `${index + 1}. *${item["Part number"]}* - ${item["Part description"]}\n   Current: ${item.QTY} | Reorder: ${item.reorderPoint || alertSettings.defaultReorderPoint}`
+              ).join('\n\n')
+            }
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `📋 <https://v0-inv-k3e82hxmi-holmesrc-amazoncoms-projects.vercel.app/low-stock|View All ${lowStockItems.length} Low Stock Items>`
+            }
+          }
+        ]
+      }
+
+      const slackResponse = await fetch(slackWebhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(message)
+      })
+
+      if (!slackResponse.ok) {
+        throw new Error(`Slack webhook failed: ${slackResponse.status}`)
+      }
+
       console.log(`✅ Successfully sent low stock alert for ${lowStockItems.length} items`)
       
       return NextResponse.json({ 

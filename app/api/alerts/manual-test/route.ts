@@ -113,6 +113,13 @@ export async function POST(request: NextRequest) {
               `${index + 1}. *${item["Part number"]}* - ${item["Part description"]}\n   Current: ${item.QTY} | Reorder: ${item.reorderPoint || 10}`
             ).join('\n\n')
           }
+        },
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `📋 <https://v0-inv-k3e82hxmi-holmesrc-amazoncoms-projects.vercel.app/low-stock|View All ${lowStockItems.length} Low Stock Items>`
+          }
         }
       ]
     }
