@@ -1,36 +1,51 @@
 import { NextRequest, NextResponse } from "next/server"
 import { sendFullLowStockAlert } from "@/lib/slack"
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 export async function POST(request: NextRequest) {
   try {
     console.log('🧪 Manual alert test triggered')
 
-    // Construct base URL
-    const host = request.headers.get('host')
-    const protocol = request.headers.get('x-forwarded-proto') || 'https'
-    const baseUrl = `${protocol}://${host}`
-    
-    // Load current inventory
-    const inventoryResponse = await fetch(`${baseUrl}/api/inventory`, {
-      method: 'GET',
-      headers: { 'Cache-Control': 'no-cache' }
-    })
+    // Load inventory directly from database using service key
+    const { data: inventoryData, error: inventoryError } = await supabase
+      .from("inventory")
+      .select("*")
+      .order("part_number")
 
-    if (!inventoryResponse.ok) {
-      throw new Error(`Failed to load inventory: ${inventoryResponse.status}`)
-    }
-
-    const inventoryResult = await inventoryResponse.json()
-    
-    if (!inventoryResult.success || !inventoryResult.data) {
+    if (inventoryError) {
+      console.error("❌ Error loading inventory:", inventoryError)
       return NextResponse.json({ 
         success: false, 
-        error: 'No inventory data available',
-        details: inventoryResult
+        error: 'Failed to load inventory from database',
+        details: inventoryError.message
+      }, { status: 500 })
+    }
+
+    if (!inventoryData || inventoryData.length === 0) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'No inventory data found' 
       }, { status: 400 })
     }
 
-    const inventory = inventoryResult.data
+    // Transform data to expected format
+    const inventory = inventoryData.map((item) => ({
+      id: item.id,
+      "Part number": item.part_number,
+      "MFG Part number": item.mfg_part_number,
+      QTY: item.qty,
+      "Part description": item.part_description,
+      Location: item.location,
+      Supplier: item.supplier,
+      Package: item.package,
+      reorderPoint: item.reorder_point
+    }))
+
+    console.log(`📊 Loaded ${inventory.length} inventory items`)
 
     // Find low stock items (using default reorder point of 10)
     const lowStockItems = inventory.filter((item: any) => {
