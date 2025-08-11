@@ -4,17 +4,18 @@ import { getScheduleDescription, isCorrectAlertTime } from "@/lib/timezone"
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify this is a legitimate cron request (Vercel cron jobs or manual with auth)
+    // Verify this is a legitimate cron request (Vercel cron jobs, GitHub Actions, or manual with auth)
     const authHeader = request.headers.get('authorization')
     const userAgent = request.headers.get('user-agent')
     const isVercelCron = userAgent?.includes('vercel-cron') || request.headers.get('x-vercel-cron')
+    const isGitHubActions = userAgent?.includes('github-actions')
     
-    if (!isVercelCron && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (!isVercelCron && !isGitHubActions && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
       console.log('❌ Unauthorized cron request')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('✅ Authorized cron request detected')
+    console.log('✅ Authorized cron request detected (source:', isGitHubActions ? 'GitHub Actions' : isVercelCron ? 'Vercel' : 'Manual', ')')
     const scheduleInfo = getScheduleDescription('America/New_York')
     console.log(`🕘 Cron triggered at ${scheduleInfo.currentTime}`)
 

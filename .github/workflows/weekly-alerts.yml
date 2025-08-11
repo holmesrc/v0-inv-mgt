@@ -1,0 +1,18 @@
+name: Weekly Low Stock Alerts
+
+on:
+  schedule:
+    # Run every Monday at 9:00 AM Eastern Time (14:00 UTC in winter, 13:00 UTC in summer)
+    # Using 13:00 UTC to account for daylight saving time
+    - cron: '0 13 * * 1'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  send-alert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Low Stock Alert
+        run: |
+          curl -X GET "https://v0-inv-k3e82hxmi-holmesrc-amazoncoms-projects.vercel.app/api/alerts/cron" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET || 'github-actions-trigger' }}" \
+            -H "User-Agent: github-actions-cron"

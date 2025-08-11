@@ -1,8 +1,1 @@
-{
-  "crons": [
-    {
-      "path": "/api/alerts/simple-cron-test",
-      "schedule": "22 16 * * *"
-    }
-  ]
-}
+{}
