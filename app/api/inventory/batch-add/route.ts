@@ -5,6 +5,38 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+// Slack notification function
+async function sendSlackNotification(batchId: string, itemCount: number, requester: string) {
+  try {
+    const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL
+    if (!slackWebhookUrl) {
+      console.log('No Slack webhook URL configured')
+      return
+    }
+
+    const message = {
+      text: `📦 New Batch Submission for Approval`,
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*📦 New Batch Submission*\n*Batch ID:* ${batchId}\n*Items:* ${itemCount}\n*Requested by:* ${requester}\n*Status:* Pending Approval`
+          }
+        }
+      ]
+    }
+
+    await fetch(slackWebhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(message)
+    })
+  } catch (error) {
+    console.error('Failed to send Slack notification:', error)
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log('Batch add API called')
@@ -61,6 +93,10 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('Batch submission successful')
+    
+    // Send Slack notification
+    await sendSlackNotification(batchId, batch_items.length, requester)
+    
     return NextResponse.json({
       success: true,
       message: `Batch of ${batch_items.length} items submitted for approval`,
