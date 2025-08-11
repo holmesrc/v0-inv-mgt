@@ -4,30 +4,22 @@ import { getScheduleDescription, isCorrectAlertTime } from "@/lib/timezone"
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify this is a legitimate cron request
+    // Verify this is a legitimate cron request (Vercel cron jobs or manual with auth)
     const authHeader = request.headers.get('authorization')
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    const userAgent = request.headers.get('user-agent')
+    const isVercelCron = userAgent?.includes('vercel-cron') || request.headers.get('x-vercel-cron')
+    
+    if (!isVercelCron && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      console.log('❌ Unauthorized cron request')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    console.log('✅ Authorized cron request detected')
     const scheduleInfo = getScheduleDescription('America/New_York')
     console.log(`🕘 Cron triggered at ${scheduleInfo.currentTime}`)
 
-    // Check if this is the correct time to run (9:00 AM Eastern, accounting for DST)
-    const shouldRun = isCorrectAlertTime()
-    
-    if (!shouldRun) {
-      console.log(`⏰ Not the correct time to run alert. Current: ${scheduleInfo.currentTime}`)
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Cron triggered but not correct time for alert',
-        timestamp: scheduleInfo.currentTime,
-        timezone: 'America/New_York',
-        isDST: scheduleInfo.isDST
-      })
-    }
-
-    console.log(`✅ Correct time detected for alert: ${scheduleInfo.currentTime}`)
+    // For testing, skip the time check
+    console.log(`✅ Running alert (time check bypassed for testing)`)
 
     // Construct base URL more reliably
     const host = request.headers.get('host')
