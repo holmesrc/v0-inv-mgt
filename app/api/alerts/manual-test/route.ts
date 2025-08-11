@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     const baseUrl = `${protocol}://${host}`
     
     // Load current inventory
-    const inventoryResponse = await fetch(`${baseUrl}/api/inventory/load-from-db`, {
+    const inventoryResponse = await fetch(`${baseUrl}/api/inventory`, {
       method: 'GET',
       headers: { 'Cache-Control': 'no-cache' }
     })
@@ -25,7 +25,8 @@ export async function POST(request: NextRequest) {
     if (!inventoryResult.success || !inventoryResult.data) {
       return NextResponse.json({ 
         success: false, 
-        error: 'No inventory data available' 
+        error: 'No inventory data available',
+        details: inventoryResult
       }, { status: 400 })
     }
 
