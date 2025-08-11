@@ -747,7 +747,7 @@ export default function ApprovalsPage() {
               <div className="font-medium text-gray-700">Quantity:</div>
               <div className="flex items-center gap-2 text-xs">
                 <span className="bg-red-100 text-red-800 px-2 py-1 rounded">
-                  Current: {item_data?.current_quantity || 0}
+                  Current: {item_data?.current_quantity || original_data?.qty || 0}
                 </span>
                 <span className="text-gray-400">+</span>
                 <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
@@ -755,14 +755,14 @@ export default function ApprovalsPage() {
                 </span>
                 <span className="text-gray-400">=</span>
                 <span className="bg-green-100 text-green-800 px-2 py-1 rounded">
-                  New Total: {item_data?.new_total_quantity || 0}
+                  New Total: {item_data?.new_total_quantity || (item_data?.current_quantity || original_data?.qty || 0) + (item_data?.additional_quantity || 0)}
                 </span>
               </div>
             </div>
             <div className="text-xs text-gray-500 mt-2">
-              <p><strong>Description:</strong> {item_data?.part_description || "N/A"}</p>
-              <p><strong>Location:</strong> {item_data?.location || "N/A"}</p>
-              <p><strong>Supplier:</strong> {item_data?.supplier || "N/A"}</p>
+              <p><strong>Description:</strong> {item_data?.part_description || original_data?.part_description || "N/A"}</p>
+              <p><strong>Location:</strong> {item_data?.location || original_data?.location || "N/A"}</p>
+              <p><strong>Supplier:</strong> {item_data?.supplier || original_data?.supplier || "N/A"}</p>
             </div>
           </div>
         )
