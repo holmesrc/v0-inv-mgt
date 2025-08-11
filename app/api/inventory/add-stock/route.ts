@@ -67,6 +67,15 @@ export async function POST(request: NextRequest) {
         new_total_quantity: existingItem.QTY + additionalQuantity,
         location: existingItem.Location,
         supplier: existingItem.Supplier,
+        package: existingItem.Package,
+        qty: existingItem.QTY + additionalQuantity // New total quantity
+      },
+      original_data: {
+        part_number: existingItem["Part number"] || partNumber,
+        part_description: existingItem["Part description"],
+        qty: existingItem.QTY, // Original quantity
+        location: existingItem.Location,
+        supplier: existingItem.Supplier,
         package: existingItem.Package
       }
     }

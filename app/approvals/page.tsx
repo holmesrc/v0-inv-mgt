@@ -736,6 +736,39 @@ export default function ApprovalsPage() {
     }
 
     if (change_type === "update") {
+      // Check if this is a stock addition (has additional_quantity)
+      if (item_data?.additional_quantity) {
+        return (
+          <div className="space-y-2 text-sm">
+            <div className="font-medium text-blue-800 mb-2">
+              Stock Addition for: {item_data?.part_number || "Unknown Part"}
+            </div>
+            <div className="border-l-2 border-blue-200 pl-3 py-1">
+              <div className="font-medium text-gray-700">Quantity:</div>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="bg-red-100 text-red-800 px-2 py-1 rounded">
+                  Current: {item_data?.current_quantity || 0}
+                </span>
+                <span className="text-gray-400">+</span>
+                <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                  Adding: {item_data?.additional_quantity || 0}
+                </span>
+                <span className="text-gray-400">=</span>
+                <span className="bg-green-100 text-green-800 px-2 py-1 rounded">
+                  New Total: {item_data?.new_total_quantity || 0}
+                </span>
+              </div>
+            </div>
+            <div className="text-xs text-gray-500 mt-2">
+              <p><strong>Description:</strong> {item_data?.part_description || "N/A"}</p>
+              <p><strong>Location:</strong> {item_data?.location || "N/A"}</p>
+              <p><strong>Supplier:</strong> {item_data?.supplier || "N/A"}</p>
+            </div>
+          </div>
+        )
+      }
+
+      // Regular update - show field changes
       const changes = []
       const fields = [
         { key: "part_number", label: "Part Number" },
@@ -746,7 +779,6 @@ export default function ApprovalsPage() {
         { key: "package", label: "Package" },
         { key: "location", label: "Location" },
         { key: "reorder_point", label: "Reorder Point" },
-        { key: "requester", label: "Requester" },
       ]
 
       fields.forEach((field) => {

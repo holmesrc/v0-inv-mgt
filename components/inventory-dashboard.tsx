@@ -1898,7 +1898,10 @@ export default function InventoryDashboard() {
                         </span>
                       </div>
                       <p className="text-sm text-gray-600 mb-1">
-                        {change.item_data?.part_description || 'No description'}
+                        {change.change_type === 'update' && change.item_data?.additional_quantity ? 
+                          `Stock Addition: +${change.item_data.additional_quantity} (${change.item_data.current_quantity} → ${change.item_data.new_total_quantity})` :
+                          change.item_data?.part_description || 'No description'
+                        }
                       </p>
                       <div className="flex items-center gap-4 text-xs text-gray-500">
                         <span>👤 {change.requested_by || change.requester || 'Unknown'}</span>
