@@ -194,9 +194,15 @@ export default function InventoryDashboard() {
   }
 
   const smartSearch = (item: InventoryItem, searchTerm: string): boolean => {
-    if (!searchTerm.trim()) return true
+    if (!searchTerm) return true
     
-    const normalizedSearchTerm = normalizeSearchTerm(searchTerm)
+    // Check if search term ends with space - this indicates exact match request
+    const exactMatchRequested = searchTerm.endsWith(' ')
+    const cleanSearchTerm = searchTerm.trim()
+    
+    if (!cleanSearchTerm) return true
+    
+    const normalizedSearchTerm = normalizeSearchTerm(cleanSearchTerm)
     
     // Fields to search in
     const searchFields = [
@@ -208,17 +214,18 @@ export default function InventoryDashboard() {
       { field: item["MFG Part number"] || "", type: 'text' }
     ]
     
-    // Check for matches with different strategies based on field type
+    // Check for matches with different strategies based on field type and exact match request
     return searchFields.some(({ field, type }) => {
       if (!field) return false
       const normalizedField = normalizeSearchTerm(field.toString())
       
-      if (type === 'location') {
-        // For location searches, try both exact match and starts-with match
+      if (exactMatchRequested) {
+        // If trailing space detected, only do exact matching
+        return normalizedField === normalizedSearchTerm
+      } else if (type === 'location') {
+        // For location searches without trailing space, try exact match first, then starts-with
         return normalizedField === normalizedSearchTerm || 
-               normalizedField.startsWith(normalizedSearchTerm) ||
-               // Also allow partial matching if the search term is very short (1-2 chars)
-               (normalizedSearchTerm.length <= 2 && normalizedField.includes(normalizedSearchTerm))
+               normalizedField.startsWith(normalizedSearchTerm)
       } else {
         // For other fields, use substring matching (existing behavior)
         return normalizedField.includes(normalizedSearchTerm)
@@ -1963,7 +1970,7 @@ export default function InventoryDashboard() {
       <div className="flex gap-4">
         <div className="flex-1">
           <Input
-            placeholder="Search parts (supports electrical units: 1 OHM = 1Ω, 10uF = 10μF, etc.)..."
+            placeholder="Search parts (add space after term for exact match: 'H3-15 ')..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full"
