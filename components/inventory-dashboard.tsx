@@ -200,19 +200,29 @@ export default function InventoryDashboard() {
     
     // Fields to search in
     const searchFields = [
-      item["Part number"],
-      item["Part description"], 
-      item.Location,
-      item.Supplier,
-      item.Package,
-      item["MFG Part number"] || ""
+      { field: item["Part number"], type: 'text' },
+      { field: item["Part description"], type: 'text' }, 
+      { field: item.Location, type: 'location' },
+      { field: item.Supplier, type: 'text' },
+      { field: item.Package, type: 'text' },
+      { field: item["MFG Part number"] || "", type: 'text' }
     ]
     
-    // Normalize all search fields and check for matches
-    return searchFields.some(field => {
+    // Check for matches with different strategies based on field type
+    return searchFields.some(({ field, type }) => {
       if (!field) return false
       const normalizedField = normalizeSearchTerm(field.toString())
-      return normalizedField.includes(normalizedSearchTerm)
+      
+      if (type === 'location') {
+        // For location searches, try both exact match and starts-with match
+        return normalizedField === normalizedSearchTerm || 
+               normalizedField.startsWith(normalizedSearchTerm) ||
+               // Also allow partial matching if the search term is very short (1-2 chars)
+               (normalizedSearchTerm.length <= 2 && normalizedField.includes(normalizedSearchTerm))
+      } else {
+        // For other fields, use substring matching (existing behavior)
+        return normalizedField.includes(normalizedSearchTerm)
+      }
     })
   }
 
@@ -360,7 +370,7 @@ export default function InventoryDashboard() {
       const nextLocation = getNextLocation(lastLocation)
       console.log("📍 Suggested next location:", nextLocation)
       
-      setSuggestedLocation(nextLocation)
+      setSuggestedLocation(nextLocation || "H1-1")
     } catch (error) {
       console.error("📍 Error generating location suggestion:", error)
       setSuggestedLocation("H1-1")
@@ -498,8 +508,23 @@ export default function InventoryDashboard() {
       if (response.ok) {
         const result = await response.json()
         if (result.success && Array.isArray(result.data)) {
-          setInventory(result.data)
-          setShowUpload(result.data.length === 0)
+          // Check for items with empty QTY and log them
+          const itemsWithEmptyQty = result.data.filter(item => 
+            item.QTY === null || item.QTY === undefined || item.QTY === '' || isNaN(item.QTY)
+          )
+          
+          if (itemsWithEmptyQty.length > 0) {
+            console.warn(`⚠️ Found ${itemsWithEmptyQty.length} items with empty/invalid QTY:`, itemsWithEmptyQty)
+          }
+          
+          // Clean the data by ensuring QTY is always a number
+          const cleanedData = result.data.map(item => ({
+            ...item,
+            QTY: item.QTY && !isNaN(item.QTY) ? Number(item.QTY) : 0
+          }))
+          
+          setInventory(cleanedData)
+          setShowUpload(cleanedData.length === 0)
         } else {
           setInventory([])
           setShowUpload(true)
@@ -1188,7 +1213,7 @@ export default function InventoryDashboard() {
         partNumber: item["Part number"],
         mfgPartNumber: item["MFG Part number"] || "",
         description: item["Part description"],
-        quantity: item.QTY.toString(),
+        quantity: (item.QTY || 0).toString(),
         location: item.Location,
         supplier: item.Supplier,
         package: item.Package,
@@ -2263,9 +2288,11 @@ export default function InventoryDashboard() {
                     <SelectValue placeholder="Select or enter location" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={suggestedLocation}>
-                      🎯 {suggestedLocation} (Suggested)
-                    </SelectItem>
+                    {suggestedLocation && (
+                      <SelectItem value={suggestedLocation}>
+                        🎯 {suggestedLocation} (Suggested)
+                      </SelectItem>
+                    )}
                     <Separator />
                     {uniqueLocations.map((location) => (
                       <SelectItem key={location} value={location}>
