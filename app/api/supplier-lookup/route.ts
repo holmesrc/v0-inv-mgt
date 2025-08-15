@@ -36,12 +36,18 @@ interface SupplierLookupResult {
 
 // Get Digi-Key access token
 async function getDigikeyToken(): Promise<string | null> {
+  console.log('🔑 Getting Digi-Key token...')
+  console.log('🔑 Client ID configured:', !!DIGIKEY_CLIENT_ID)
+  console.log('🔑 Client Secret configured:', !!DIGIKEY_CLIENT_SECRET)
+  
   if (!DIGIKEY_CLIENT_ID || !DIGIKEY_CLIENT_SECRET) {
-    console.log('Digi-Key credentials not configured')
+    console.log('❌ Digi-Key credentials not configured')
     return null
   }
 
   try {
+    console.log('🔑 Making token request to:', `${DIGIKEY_API_URL}/v1/oauth2/token`)
+    
     const response = await fetch(`${DIGIKEY_API_URL}/v1/oauth2/token`, {
       method: 'POST',
       headers: {
@@ -54,23 +60,33 @@ async function getDigikeyToken(): Promise<string | null> {
       })
     })
 
+    console.log('🔑 Token response status:', response.status)
+    console.log('🔑 Token response ok:', response.ok)
+
     if (!response.ok) {
-      console.error('Failed to get Digi-Key token:', response.status)
+      const errorText = await response.text()
+      console.error('❌ Failed to get Digi-Key token:', response.status, errorText)
       return null
     }
 
     const data = await response.json()
+    console.log('✅ Token received successfully')
     return data.access_token
   } catch (error) {
-    console.error('Error getting Digi-Key token:', error)
+    console.error('❌ Error getting Digi-Key token:', error)
     return null
   }
 }
 
 // Search Digi-Key for parts
 async function searchDigikey(partNumber: string, token: string): Promise<SupplierLookupResult[]> {
+  console.log('🔍 Searching Digi-Key for:', partNumber)
+  
   try {
-    const response = await fetch(`${DIGIKEY_API_URL}/products/v4/search/${encodeURIComponent(partNumber)}/productdetails`, {
+    const searchUrl = `${DIGIKEY_API_URL}/products/v4/search/${encodeURIComponent(partNumber)}/productdetails`
+    console.log('🔍 Search URL:', searchUrl)
+    
+    const response = await fetch(searchUrl, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -79,15 +95,26 @@ async function searchDigikey(partNumber: string, token: string): Promise<Supplie
       }
     })
 
+    console.log('🔍 Search response status:', response.status)
+    console.log('🔍 Search response ok:', response.ok)
+
     if (!response.ok) {
-      console.error('Digi-Key search failed:', response.status)
+      const errorText = await response.text()
+      console.error('❌ Digi-Key search failed:', response.status, errorText)
       return []
     }
 
     const data = await response.json()
+    console.log('🔍 Search response data keys:', Object.keys(data))
+    console.log('🔍 Products found:', data.Products?.length || 0)
+    
+    if (data.Products && data.Products.length > 0) {
+      console.log('🔍 First product sample:', JSON.stringify(data.Products[0], null, 2))
+    }
+
     const products: DigikeyProduct[] = data.Products || []
 
-    return products.slice(0, 5).map(product => ({
+    const results = products.slice(0, 5).map(product => ({
       supplier: 'Digi-Key',
       partNumber: product.DigiKeyPartNumber,
       manufacturerPartNumber: product.ManufacturerPartNumber,
@@ -99,8 +126,11 @@ async function searchDigikey(partNumber: string, token: string): Promise<Supplie
       productUrl: product.ProductUrl,
       packageType: product.PackageType?.Name
     }))
+
+    console.log('✅ Processed results:', results.length)
+    return results
   } catch (error) {
-    console.error('Error searching Digi-Key:', error)
+    console.error('❌ Error searching Digi-Key:', error)
     return []
   }
 }
