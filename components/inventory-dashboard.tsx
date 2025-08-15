@@ -16,12 +16,13 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { AlertTriangle, Package, TrendingDown, Upload, Settings, RefreshCw, Download, Plus, Edit, Trash2, Check, X, Search, Filter, ArrowUpDown } from "lucide-react"
+import { AlertTriangle, Package, TrendingDown, Upload, Settings, RefreshCw, Download, Plus, Edit, Trash2, Check, X, Search, Filter, ArrowUpDown, Globe } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import FileUpload from "./file-upload"
+import SupplierLookup from "./supplier-lookup"
 
 // Types
 interface InventoryItem {
@@ -124,6 +125,8 @@ export default function InventoryDashboard() {
   const [suppliers, setSuppliers] = useState<string[]>([])
   const [showCustomSupplierInput, setShowCustomSupplierInput] = useState(false)
   const [customSupplierValue, setCustomSupplierValue] = useState("")
+  const [showSupplierLookup, setShowSupplierLookup] = useState(false)
+  const [supplierLookupPartNumber, setSupplierLookupPartNumber] = useState("")
 
   // Natural sort function for locations like H1-1, H1-2, etc.
   const naturalLocationSort = (str1: string, str2: string) => {
@@ -1740,6 +1743,23 @@ export default function InventoryDashboard() {
     )
   }
 
+  const handleSupplierLookupResult = (result: any) => {
+    // Pre-fill the add item form with supplier data
+    setNewItem(prev => ({
+      ...prev,
+      partNumber: result.manufacturerPartNumber || result.partNumber || "",
+      mfgPartNumber: result.manufacturerPartNumber || "",
+      description: result.description || "",
+      supplier: result.manufacturer || result.supplier || "",
+      package: result.packageType || ""
+    }))
+    
+    // Close supplier lookup and open add item dialog
+    setShowSupplierLookup(false)
+    setAddItemDialogOpen(true)
+    setAddItemFormModified(true)
+  }
+
   // Show loading screen
   if (loading) {
     return (
@@ -1769,6 +1789,10 @@ export default function InventoryDashboard() {
           <Button onClick={() => handleAddItemDialogOpen(true)} className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
             Add Item
+          </Button>
+          <Button variant="outline" onClick={() => setShowSupplierLookup(true)} className="flex items-center gap-2">
+            <Globe className="h-4 w-4" />
+            Supplier Lookup
           </Button>
           <Button variant="outline" onClick={handleDownloadExcel} className="flex items-center gap-2">
             <Download className="h-4 w-4" />
@@ -3243,6 +3267,14 @@ export default function InventoryDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Supplier Lookup Dialog */}
+      <SupplierLookup
+        open={showSupplierLookup}
+        onOpenChange={setShowSupplierLookup}
+        initialPartNumber={supplierLookupPartNumber}
+        onSelectResult={handleSupplierLookupResult}
+      />
     </div>
   )
 }
