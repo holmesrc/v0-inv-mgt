@@ -36,10 +36,88 @@ export default function SupplierLookup({ open, onOpenChange, initialPartNumber =
   const [results, setResults] = useState<SupplierResult[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [copiedField, setCopiedField] = useState<string | null>(null)
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     console.log('🔍 handleSearch called with partNumber:', partNumber)
-    alert('Search function called! Part: ' + partNumber)
+    
+    if (!partNumber.trim()) {
+      console.log('❌ No part number entered')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    setResults([])
+    
+    console.log('🚀 Starting supplier lookup for:', partNumber.trim())
+
+    try {
+      console.log('📡 Making API request to /api/supplier-lookup')
+      
+      const response = await fetch('/api/supplier-lookup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          partNumber: partNumber.trim(),
+          suppliers: ['digikey']
+        })
+      })
+
+      console.log('📡 API response status:', response.status)
+      console.log('📡 API response ok:', response.ok)
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log('📡 API response data:', data)
+
+      if (!data.success) {
+        console.error('❌ API returned error:', data.error)
+        setError(data.error || 'Search failed')
+        return
+      }
+
+      console.log('✅ Search successful, results:', data.results?.length || 0)
+      setResults(data.results || [])
+      
+      if (!data.results || data.results.length === 0) {
+        setError('No results found for this part number')
+      }
+
+    } catch (error) {
+      console.error('❌ Search error:', error)
+      setError(`Failed to search suppliers: ${error}`)
+    } finally {
+      setLoading(false)
+      console.log('🏁 Search completed')
+    }
+  }
+
+  const copyToClipboard = async (text: string, field: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedField(field)
+      setTimeout(() => setCopiedField(null), 2000)
+    } catch (error) {
+      console.error('Failed to copy:', error)
+    }
+  }
+
+  const formatPrice = (price?: number) => {
+    if (!price) return 'N/A'
+    return `$${price.toFixed(2)}`
+  }
+
+  const formatAvailability = (qty?: number) => {
+    if (qty === undefined || qty === null) return 'N/A'
+    if (qty === 0) return 'Out of Stock'
+    if (qty > 10000) return '10,000+'
+    return qty.toLocaleString()
   }
 
   const copyToClipboard = async (text: string, field: string) => {
