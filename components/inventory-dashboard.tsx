@@ -127,6 +127,8 @@ export default function InventoryDashboard() {
   const [customSupplierValue, setCustomSupplierValue] = useState("")
   const [showSupplierLookup, setShowSupplierLookup] = useState(false)
   const [supplierLookupPartNumber, setSupplierLookupPartNumber] = useState("")
+  const [autoLookupTimeout, setAutoLookupTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [isAutoLookingUp, setIsAutoLookingUp] = useState(false)
 
   // Natural sort function for locations like H1-1, H1-2, etc.
   const naturalLocationSort = (str1: string, str2: string) => {
@@ -1535,6 +1537,12 @@ export default function InventoryDashboard() {
         setDuplicateCheckTimeout(null)
       }
       
+      // Clear auto-lookup timeout
+      if (autoLookupTimeout) {
+        clearTimeout(autoLookupTimeout)
+        setAutoLookupTimeout(null)
+      }
+      
       // Reset all form state when closing
       setShowCustomLocationInput(false)
       setCustomLocationValue("")
@@ -1549,6 +1557,7 @@ export default function InventoryDashboard() {
       setEditingBatchQuantity({})
       setEditingBatchFields({})
       setIsCheckingDuplicate(false)
+      setIsAutoLookingUp(false)
       
       // Reset form data
       setNewItem({
@@ -1577,6 +1586,8 @@ export default function InventoryDashboard() {
     // Trigger real-time duplicate check for part number
     if (field === 'partNumber') {
       handleRealTimeDuplicateCheck(value)
+      // Also trigger auto-lookup for supplier data
+      handleAutoLookup(value)
     }
   }
 
@@ -1741,6 +1752,61 @@ export default function InventoryDashboard() {
         (change.item_data?.part_number === item["Part number"])
       )
     )
+  }
+
+  const handleAutoLookup = async (partNumber: string) => {
+    if (!partNumber.trim() || partNumber.length < 3) {
+      return // Don't lookup very short part numbers
+    }
+
+    // Clear existing timeout
+    if (autoLookupTimeout) {
+      clearTimeout(autoLookupTimeout)
+    }
+
+    // Set new timeout for debounced lookup
+    const timeout = setTimeout(async () => {
+      setIsAutoLookingUp(true)
+      try {
+        console.log('🔍 Auto-looking up part:', partNumber)
+        
+        const response = await fetch('/api/supplier-lookup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            partNumber: partNumber.trim(),
+            suppliers: ['digikey']
+          })
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success && data.results && data.results.length > 0) {
+            const firstResult = data.results[0]
+            console.log('✅ Auto-lookup found result:', firstResult)
+            
+            // Auto-populate fields if they're empty
+            setNewItem(prev => ({
+              ...prev,
+              mfgPartNumber: prev.mfgPartNumber || firstResult.manufacturerPartNumber || "",
+              description: prev.description || firstResult.description || "",
+              supplier: prev.supplier || firstResult.manufacturer || firstResult.supplier || "",
+              package: prev.package || firstResult.packageType || ""
+            }))
+            
+            setAddItemFormModified(true)
+          }
+        }
+      } catch (error) {
+        console.error('Auto-lookup error:', error)
+      } finally {
+        setIsAutoLookingUp(false)
+      }
+    }, 1000) // 1 second delay after user stops typing
+
+    setAutoLookupTimeout(timeout)
   }
 
   const handleSupplierLookupResult = (result: any) => {
@@ -2220,10 +2286,10 @@ export default function InventoryDashboard() {
                   id="part-number"
                   value={newItem.partNumber}
                   onChange={(e) => handleFormFieldChange('partNumber', e.target.value)}
-                  placeholder="Enter part number"
-                  className={isCheckingDuplicate ? "pr-8" : ""}
+                  placeholder="Enter part number (auto-lookup enabled)"
+                  className={isCheckingDuplicate || isAutoLookingUp ? "pr-8" : ""}
                 />
-                {isCheckingDuplicate && (
+                {(isCheckingDuplicate || isAutoLookingUp) && (
                   <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
                     <RefreshCw className="h-4 w-4 animate-spin text-gray-400" />
                   </div>
@@ -2232,6 +2298,11 @@ export default function InventoryDashboard() {
               {isCheckingDuplicate && (
                 <p className="text-xs text-blue-600 mt-1">
                   Checking for duplicates...
+                </p>
+              )}
+              {isAutoLookingUp && (
+                <p className="text-xs text-green-600 mt-1">
+                  Looking up part information...
                 </p>
               )}
             </div>
