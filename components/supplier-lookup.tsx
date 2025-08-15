@@ -30,6 +30,8 @@ interface SupplierLookupProps {
 }
 
 export default function SupplierLookup({ open, onOpenChange, initialPartNumber = "", onSelectResult }: SupplierLookupProps) {
+  console.log('🔧 SupplierLookup component loaded, open:', open)
+  
   const [partNumber, setPartNumber] = useState(initialPartNumber)
   const [results, setResults] = useState<SupplierResult[]>([])
   const [loading, setLoading] = useState(false)
@@ -37,13 +39,22 @@ export default function SupplierLookup({ open, onOpenChange, initialPartNumber =
   const [copiedField, setCopiedField] = useState<string | null>(null)
 
   const handleSearch = async () => {
-    if (!partNumber.trim()) return
+    console.log('🔍 Search button clicked, part number:', partNumber)
+    
+    if (!partNumber.trim()) {
+      console.log('❌ No part number entered')
+      return
+    }
 
     setLoading(true)
     setError(null)
     setResults([])
+    
+    console.log('🚀 Starting supplier lookup for:', partNumber.trim())
 
     try {
+      console.log('📡 Making API request to /api/supplier-lookup')
+      
       const response = await fetch('/api/supplier-lookup', {
         method: 'POST',
         headers: {
@@ -51,17 +62,23 @@ export default function SupplierLookup({ open, onOpenChange, initialPartNumber =
         },
         body: JSON.stringify({
           partNumber: partNumber.trim(),
-          suppliers: ['digikey'] // Start with Digi-Key only
+          suppliers: ['digikey']
         })
       })
 
+      console.log('📡 API response status:', response.status)
+      console.log('📡 API response ok:', response.ok)
+
       const data = await response.json()
+      console.log('📡 API response data:', data)
 
       if (!data.success) {
+        console.error('❌ API returned error:', data.error)
         setError(data.error || 'Search failed')
         return
       }
 
+      console.log('✅ Search successful, results:', data.results?.length || 0)
       setResults(data.results || [])
       
       if (data.results.length === 0) {
@@ -69,10 +86,11 @@ export default function SupplierLookup({ open, onOpenChange, initialPartNumber =
       }
 
     } catch (error) {
-      console.error('Search error:', error)
+      console.error('❌ Search error:', error)
       setError('Failed to search suppliers. Please try again.')
     } finally {
       setLoading(false)
+      console.log('🏁 Search completed')
     }
   }
 
