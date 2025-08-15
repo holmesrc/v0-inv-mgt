@@ -2,12 +2,16 @@ import { type NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, channel = "#inventory-alerts", dryRun = false } = await request.json()
+    const body = await request.json()
+    console.log('🔔 Slack API called with:', JSON.stringify(body, null, 2))
+    
+    const { message, channel = "#inventory-alerts", dryRun = false } = body
 
     // Check if this is a dry run (configuration test)
     if (dryRun) {
       // Just check if the webhook URL is configured without sending
       const webhookUrl = process.env.SLACK_WEBHOOK_URL
+      console.log('🔔 Dry run - webhook configured:', !!webhookUrl)
 
       if (!webhookUrl) {
         return NextResponse.json(
@@ -41,8 +45,11 @@ export async function POST(request: NextRequest) {
 
     // Regular message sending logic
     const webhookUrl = process.env.SLACK_WEBHOOK_URL
+    console.log('🔔 Webhook URL configured:', !!webhookUrl)
+    console.log('🔔 Webhook URL format valid:', webhookUrl?.startsWith("https://hooks.slack.com/"))
 
     if (!webhookUrl) {
+      console.log('❌ No webhook URL configured')
       return NextResponse.json(
         {
           success: false,
@@ -57,6 +64,8 @@ export async function POST(request: NextRequest) {
       text: message,
       channel: channel,
     }
+    
+    console.log('🔔 Sending payload to Slack:', JSON.stringify(payload, null, 2))
 
     const response = await fetch(webhookUrl, {
       method: "POST",
@@ -66,9 +75,12 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(payload),
     })
 
+    console.log('🔔 Slack response status:', response.status)
+    console.log('🔔 Slack response ok:', response.ok)
+
     if (!response.ok) {
       const errorText = await response.text()
-      console.error("Slack webhook error:", response.status, errorText)
+      console.error('❌ Slack webhook error:', response.status, errorText)
 
       if (response.status === 404) {
         return NextResponse.json(
@@ -91,12 +103,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    console.log('✅ Slack message sent successfully')
     return NextResponse.json({
       success: true,
       message: "Message sent successfully",
     })
   } catch (error) {
-    console.error("Error in Slack send API:", error)
+    console.error("❌ Error in Slack send API:", error)
     return NextResponse.json(
       {
         success: false,
