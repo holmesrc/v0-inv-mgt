@@ -137,7 +137,10 @@ export default function SupplierLookup({ open, onOpenChange, initialPartNumber =
               className="flex-1"
             />
             <Button 
-              onClick={handleSearch} 
+              onClick={() => {
+                console.log('🔍 Search button clicked!')
+                handleSearch()
+              }} 
               disabled={loading || !partNumber.trim()}
               className="flex items-center gap-2"
             >
