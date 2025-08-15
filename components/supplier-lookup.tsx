@@ -120,28 +120,6 @@ export default function SupplierLookup({ open, onOpenChange, initialPartNumber =
     return qty.toLocaleString()
   }
 
-  const copyToClipboard = async (text: string, field: string) => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopiedField(field)
-      setTimeout(() => setCopiedField(null), 2000)
-    } catch (error) {
-      console.error('Failed to copy:', error)
-    }
-  }
-
-  const formatPrice = (price?: number) => {
-    if (!price) return 'N/A'
-    return `$${price.toFixed(2)}`
-  }
-
-  const formatAvailability = (qty?: number) => {
-    if (qty === undefined || qty === null) return 'N/A'
-    if (qty === 0) return 'Out of Stock'
-    if (qty > 10000) return '10,000+'
-    return qty.toLocaleString()
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
