@@ -83,16 +83,30 @@ async function searchDigikey(partNumber: string, token: string): Promise<Supplie
   console.log('🔍 Searching Digi-Key for:', partNumber)
   
   try {
-    const searchUrl = `${DIGIKEY_API_URL}/products/v4/search/${encodeURIComponent(partNumber)}/productdetails`
+    // Use keyword search endpoint instead of exact part lookup
+    const searchUrl = `${DIGIKEY_API_URL}/products/v4/search/keyword`
     console.log('🔍 Search URL:', searchUrl)
     
+    const requestBody = {
+      Keywords: partNumber,
+      RecordCount: 10,
+      RecordStartPosition: 0,
+      Sort: {
+        SortOption: "SortByUnitPrice",
+        Direction: "Ascending"
+      }
+    }
+    
+    console.log('🔍 Request body:', JSON.stringify(requestBody, null, 2))
+    
     const response = await fetch(searchUrl, {
-      method: 'GET',
+      method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'X-DIGIKEY-Client-Id': DIGIKEY_CLIENT_ID!,
         'Content-Type': 'application/json'
-      }
+      },
+      body: JSON.stringify(requestBody)
     })
 
     console.log('🔍 Search response status:', response.status)
