@@ -24,10 +24,12 @@ export async function POST(request: NextRequest) {
       })
       
       if (lowStockItems.length > 10) {
-        message += `... and ${lowStockItems.length - 10} more items\n\n`
+        message += `...and ${lowStockItems.length - 10} more items need attention\n\n`
       }
       
-      message += `Please reorder these items soon! 📋`
+      // Add clickable link to low stock page
+      message += `📋 <${process.env.NEXT_PUBLIC_APP_URL || 'https://your-app-url.vercel.app'}/low-stock|View All ${lowStockItems.length} Low Stock Items>\n\n`
+      message += `📋 *Next Steps:*\n• Review all low stock items\n• Create purchase requests\n• Reorder critical components`
     } else {
       console.log('❌ Invalid message format')
       return NextResponse.json(
