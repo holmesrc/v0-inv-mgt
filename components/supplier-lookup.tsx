@@ -36,62 +36,10 @@ export default function SupplierLookup({ open, onOpenChange, initialPartNumber =
   const [results, setResults] = useState<SupplierResult[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [copiedField, setCopiedField] = useState<string | null>(null)
 
-  const handleSearch = async () => {
-    console.log('🔍 Search button clicked, part number:', partNumber)
-    
-    if (!partNumber.trim()) {
-      console.log('❌ No part number entered')
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-    setResults([])
-    
-    console.log('🚀 Starting supplier lookup for:', partNumber.trim())
-
-    try {
-      console.log('📡 Making API request to /api/supplier-lookup')
-      
-      const response = await fetch('/api/supplier-lookup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          partNumber: partNumber.trim(),
-          suppliers: ['digikey']
-        })
-      })
-
-      console.log('📡 API response status:', response.status)
-      console.log('📡 API response ok:', response.ok)
-
-      const data = await response.json()
-      console.log('📡 API response data:', data)
-
-      if (!data.success) {
-        console.error('❌ API returned error:', data.error)
-        setError(data.error || 'Search failed')
-        return
-      }
-
-      console.log('✅ Search successful, results:', data.results?.length || 0)
-      setResults(data.results || [])
-      
-      if (data.results.length === 0) {
-        setError('No results found for this part number')
-      }
-
-    } catch (error) {
-      console.error('❌ Search error:', error)
-      setError('Failed to search suppliers. Please try again.')
-    } finally {
-      setLoading(false)
-      console.log('🏁 Search completed')
-    }
+  const handleSearch = () => {
+    console.log('🔍 handleSearch called with partNumber:', partNumber)
+    alert('Search function called! Part: ' + partNumber)
   }
 
   const copyToClipboard = async (text: string, field: string) => {
