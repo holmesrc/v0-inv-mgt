@@ -5,7 +5,42 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     console.log('🔔 Slack API called with:', JSON.stringify(body, null, 2))
     
-    const { message, channel = "#inventory-alerts", dryRun = false } = body
+    let message: string
+    let channel = "#inventory-alerts"
+    
+    // Handle different message formats
+    if (body.message) {
+      // Direct message format
+      message = body.message
+      channel = body.channel || channel
+    } else if (body.type === "low_stock" && body.items) {
+      // Low stock alert format
+      const lowStockItems = body.items
+      message = `🚨 *Low Stock Alert* 🚨\n\n${lowStockItems.length} items are running low:\n\n`
+      
+      lowStockItems.slice(0, 10).forEach((item: any) => {
+        message += `• *${item["Part number"]}* - ${item["Part description"]}\n`
+        message += `  📍 Location: ${item.Location} | 📦 Qty: ${item.QTY} | ⚠️ Reorder at: ${item.reorderPoint || 10}\n\n`
+      })
+      
+      if (lowStockItems.length > 10) {
+        message += `... and ${lowStockItems.length - 10} more items\n\n`
+      }
+      
+      message += `Please reorder these items soon! 📋`
+    } else {
+      console.log('❌ Invalid message format')
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid message format",
+          details: "Expected either 'message' field or 'type' and 'items' fields",
+        },
+        { status: 400 },
+      )
+    }
+    
+    const { dryRun = false } = body
 
     // Check if this is a dry run (configuration test)
     if (dryRun) {
