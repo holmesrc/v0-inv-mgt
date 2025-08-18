@@ -1764,7 +1764,7 @@ export default function InventoryDashboard() {
       clearTimeout(autoLookupTimeout)
     }
 
-    // Set new timeout for debounced lookup
+    // Set new timeout for debounced lookup (reduced to 500ms for faster response)
     const timeout = setTimeout(async () => {
       setIsAutoLookingUp(true)
       try {
@@ -1787,24 +1787,36 @@ export default function InventoryDashboard() {
             const firstResult = data.results[0]
             console.log('✅ Auto-lookup found result:', firstResult)
             
-            // Auto-populate fields if they're empty
+            // Always overwrite fields with Digi-Key data
             setNewItem(prev => ({
               ...prev,
-              mfgPartNumber: prev.mfgPartNumber || firstResult.manufacturerPartNumber || "",
-              description: prev.description || firstResult.description || "",
-              supplier: prev.supplier || firstResult.manufacturer || firstResult.supplier || "",
-              package: prev.package || firstResult.packageType || ""
+              mfgPartNumber: firstResult.manufacturerPartNumber || "",
+              description: firstResult.description || "",
+              supplier: "Digi-Key", // Always set to the vendor/source, not manufacturer
+              package: firstResult.packageType || prev.package // Keep existing if no package info
             }))
             
             setAddItemFormModified(true)
+            
+            // Show success feedback
+            console.log('✅ Auto-populated fields:', {
+              mfgPartNumber: firstResult.manufacturerPartNumber,
+              description: firstResult.description,
+              supplier: "Digi-Key",
+              package: firstResult.packageType
+            })
+          } else {
+            console.log('⚠️ No results found for part:', partNumber)
           }
+        } else {
+          console.error('❌ Auto-lookup API error:', response.status)
         }
       } catch (error) {
-        console.error('Auto-lookup error:', error)
+        console.error('❌ Auto-lookup error:', error)
       } finally {
         setIsAutoLookingUp(false)
       }
-    }, 1000) // 1 second delay after user stops typing
+    }, 500) // Reduced from 1000ms to 500ms for faster response
 
     setAutoLookupTimeout(timeout)
   }
@@ -2286,7 +2298,7 @@ export default function InventoryDashboard() {
                   id="part-number"
                   value={newItem.partNumber}
                   onChange={(e) => handleFormFieldChange('partNumber', e.target.value)}
-                  placeholder="Enter part number (auto-lookup enabled)"
+                  placeholder="Enter part number (auto-fills from Digi-Key)"
                   className={isCheckingDuplicate || isAutoLookingUp ? "pr-8" : ""}
                 />
                 {(isCheckingDuplicate || isAutoLookingUp) && (
@@ -2301,8 +2313,9 @@ export default function InventoryDashboard() {
                 </p>
               )}
               {isAutoLookingUp && (
-                <p className="text-xs text-green-600 mt-1">
-                  Looking up part information...
+                <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                  Searching Digi-Key for part info...
                 </p>
               )}
             </div>
