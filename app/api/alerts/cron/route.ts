@@ -104,10 +104,35 @@ export async function GET(request: NextRequest) {
     // Find low stock items
     const lowStockItems = inventory.filter((item: any) => {
       const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint
-      return item.QTY <= reorderPoint
+      const isLowStock = item.QTY <= reorderPoint
+      
+      // Debug first few items
+      if (inventory.indexOf(item) < 3) {
+        console.log(`🔍 Item ${item["Part number"]}: QTY=${item.QTY}, reorderPoint=${reorderPoint}, isLowStock=${isLowStock}`)
+      }
+      
+      return isLowStock
     })
 
-    console.log(`📊 Found ${lowStockItems.length} low stock items`)
+    console.log(`📊 Found ${lowStockItems.length} low stock items out of ${inventory.length} total`)
+    console.log(`📊 Using default reorder point: ${alertSettings.defaultReorderPoint}`)
+    
+    // Log a few sample items for debugging
+    if (lowStockItems.length > 0) {
+      console.log(`📊 Sample low stock items:`, lowStockItems.slice(0, 3).map((item: any) => ({
+        partNumber: item["Part number"],
+        qty: item.QTY,
+        reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint
+      })))
+    } else {
+      // Log some sample items to see their structure
+      console.log(`📊 Sample inventory items:`, inventory.slice(0, 3).map((item: any) => ({
+        partNumber: item["Part number"],
+        qty: item.QTY,
+        reorderPoint: item.reorderPoint,
+        keys: Object.keys(item)
+      })))
+    }
 
     if (lowStockItems.length === 0) {
       console.log('✅ No low stock items found')
