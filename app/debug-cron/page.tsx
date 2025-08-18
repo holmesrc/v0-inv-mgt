@@ -37,7 +37,16 @@ export default function DebugCronPage() {
       if (response.ok) {
         setResult(data)
       } else {
+        // Show more detailed error information
+        const errorDetails = {
+          status: response.status,
+          statusText: response.statusText,
+          error: data.error || 'Unknown error',
+          details: data.details || 'No additional details',
+          timestamp: data.timestamp || 'No timestamp'
+        }
         setError(`HTTP ${response.status}: ${data.error || 'Unknown error'}`)
+        setResult({ error: true, ...errorDetails })
       }
     } catch (err) {
       console.error('❌ Error triggering cron:', err)
