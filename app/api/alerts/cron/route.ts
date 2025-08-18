@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { sendFullLowStockAlert } from "@/lib/slack"
 import { getScheduleDescription, isCorrectAlertTime } from "@/lib/timezone"
-
-import { NextRequest, NextResponse } from "next/server"
-import { sendFullLowStockAlert } from "@/lib/slack"
-import { getScheduleDescription, isCorrectAlertTime } from "@/lib/timezone"
 import { createClient } from '@supabase/supabase-js'
 
 export async function GET(request: NextRequest) {
