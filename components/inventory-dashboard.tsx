@@ -1787,23 +1787,29 @@ export default function InventoryDashboard() {
             const firstResult = data.results[0]
             console.log('✅ Auto-lookup found result:', firstResult)
             
+            // Extract fields with fallbacks
+            const mfgPartNumber = firstResult.manufacturerPartNumber || firstResult.partNumber || ""
+            const description = firstResult.description || ""
+            const packageType = firstResult.packageType || firstResult.package || ""
+            
             // Always overwrite fields with Digi-Key data
             setNewItem(prev => ({
               ...prev,
-              mfgPartNumber: firstResult.manufacturerPartNumber || "",
-              description: firstResult.description || "",
+              mfgPartNumber: mfgPartNumber,
+              description: description,
               supplier: "Digi-Key", // Always set to the vendor/source, not manufacturer
-              package: firstResult.packageType || prev.package // Keep existing if no package info
+              package: packageType || prev.package // Keep existing if no package info
             }))
             
             setAddItemFormModified(true)
             
             // Show success feedback
             console.log('✅ Auto-populated fields:', {
-              mfgPartNumber: firstResult.manufacturerPartNumber,
-              description: firstResult.description,
+              mfgPartNumber: mfgPartNumber,
+              description: description,
               supplier: "Digi-Key",
-              package: firstResult.packageType
+              package: packageType,
+              allAvailableFields: Object.keys(firstResult)
             })
           } else {
             console.log('⚠️ No results found for part:', partNumber)
