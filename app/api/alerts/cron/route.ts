@@ -103,12 +103,12 @@ export async function GET(request: NextRequest) {
 
     // Find low stock items
     const lowStockItems = inventory.filter((item: any) => {
-      const reorderPoint = item.reorderPoint || alertSettings.defaultReorderPoint
-      const isLowStock = item.QTY <= reorderPoint
+      const reorderPoint = item.reorder_point || alertSettings.defaultReorderPoint
+      const isLowStock = item.qty <= reorderPoint
       
       // Debug first few items
       if (inventory.indexOf(item) < 3) {
-        console.log(`🔍 Item ${item["Part number"]}: QTY=${item.QTY}, reorderPoint=${reorderPoint}, isLowStock=${isLowStock}`)
+        console.log(`🔍 Item ${item.part_number}: qty=${item.qty}, reorder_point=${reorderPoint}, isLowStock=${isLowStock}`)
       }
       
       return isLowStock
@@ -120,17 +120,9 @@ export async function GET(request: NextRequest) {
     // Log a few sample items for debugging
     if (lowStockItems.length > 0) {
       console.log(`📊 Sample low stock items:`, lowStockItems.slice(0, 3).map((item: any) => ({
-        partNumber: item["Part number"],
-        qty: item.QTY,
-        reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint
-      })))
-    } else {
-      // Log some sample items to see their structure
-      console.log(`📊 Sample inventory items:`, inventory.slice(0, 3).map((item: any) => ({
-        partNumber: item["Part number"],
-        qty: item.QTY,
-        reorderPoint: item.reorderPoint,
-        keys: Object.keys(item)
+        partNumber: item.part_number,
+        qty: item.qty,
+        reorderPoint: item.reorder_point || alertSettings.defaultReorderPoint
       })))
     }
 
@@ -166,7 +158,7 @@ export async function GET(request: NextRequest) {
             text: {
               type: "mrkdwn",
               text: lowStockItems.slice(0, 5).map((item: any, index: number) => 
-                `${index + 1}. *${item["Part number"]}* - ${item["Part description"]}\n   Current: ${item.QTY} | Reorder: ${item.reorderPoint || alertSettings.defaultReorderPoint}`
+                `${index + 1}. *${item.part_number}* - ${item.part_description}\n   Current: ${item.qty} | Reorder: ${item.reorder_point || alertSettings.defaultReorderPoint}`
               ).join('\n\n')
             }
           },
@@ -200,10 +192,10 @@ export async function GET(request: NextRequest) {
         timezone: 'America/New_York',
         isDST: scheduleInfo.isDST,
         items: lowStockItems.map((item: any) => ({
-          partNumber: item["Part number"],
-          description: item["Part description"],
-          currentQty: item.QTY,
-          reorderPoint: item.reorderPoint || alertSettings.defaultReorderPoint
+          partNumber: item.part_number,
+          description: item.part_description,
+          currentQty: item.qty,
+          reorderPoint: item.reorder_point || alertSettings.defaultReorderPoint
         }))
       })
     } catch (slackError) {
