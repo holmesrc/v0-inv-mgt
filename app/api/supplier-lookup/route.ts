@@ -131,18 +131,21 @@ async function searchDigikey(partNumber: string, token: string): Promise<Supplie
 
     const results = products.slice(0, 5).map(product => ({
       supplier: 'Digi-Key',
-      partNumber: product.DigiKeyPartNumber,
-      manufacturerPartNumber: product.ManufacturerPartNumber,
-      description: product.ProductDescription,
-      price: product.UnitPrice,
-      availability: product.QuantityAvailable,
-      manufacturer: product.Manufacturer?.Name,
-      datasheet: product.DatasheetUrl,
-      productUrl: product.ProductUrl,
-      packageType: product.PackageType?.Name
+      partNumber: product.DigiKeyPartNumber || product.PartNumber,
+      manufacturerPartNumber: product.ManufacturerPartNumber || product.MfrPartNumber || product.PartNumber,
+      description: product.ProductDescription || product.Description || product.DetailedDescription,
+      price: product.UnitPrice || product.Price,
+      availability: product.QuantityAvailable || product.Quantity,
+      manufacturer: product.Manufacturer?.Name || product.ManufacturerName,
+      datasheet: product.DatasheetUrl || product.Datasheet,
+      productUrl: product.ProductUrl || product.Url,
+      packageType: product.PackageType?.Name || product.Package
     }))
 
     console.log('✅ Processed results:', results.length)
+    if (results.length > 0) {
+      console.log('🔍 First processed result:', JSON.stringify(results[0], null, 2))
+    }
     return results
   } catch (error) {
     console.error('❌ Error searching Digi-Key:', error)
