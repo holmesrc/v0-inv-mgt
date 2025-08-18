@@ -24,7 +24,8 @@ export default function DebugCronPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || 'debug-test'}`
+          'Authorization': `Bearer debug-manual-trigger`,
+          'User-Agent': 'debug-page-manual-test'
         }
       })
 

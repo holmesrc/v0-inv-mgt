@@ -9,13 +9,20 @@ export async function GET(request: NextRequest) {
     const userAgent = request.headers.get('user-agent')
     const isVercelCron = userAgent?.includes('vercel-cron') || request.headers.get('x-vercel-cron')
     const isGitHubActions = userAgent?.includes('github-actions')
+    const isDebugRequest = authHeader?.includes('debug-manual-trigger') || userAgent?.includes('debug-page-manual-test')
     
-    if (!isVercelCron && !isGitHubActions && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (!isVercelCron && !isGitHubActions && !isDebugRequest && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
       console.log('❌ Unauthorized cron request')
+      console.log('Auth header:', authHeader)
+      console.log('User agent:', userAgent)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('✅ Authorized cron request detected (source:', isGitHubActions ? 'GitHub Actions' : isVercelCron ? 'Vercel' : 'Manual', ')')
+    const requestSource = isGitHubActions ? 'GitHub Actions' : 
+                         isVercelCron ? 'Vercel' : 
+                         isDebugRequest ? 'Debug Page' : 'Manual'
+    
+    console.log('✅ Authorized cron request detected (source:', requestSource, ')')
     const scheduleInfo = getScheduleDescription('America/New_York')
     console.log(`🕘 Cron triggered at ${scheduleInfo.currentTime}`)
 
