@@ -123,6 +123,7 @@ async function searchDigikey(partNumber: string, token: string): Promise<Supplie
     console.log('🔍 Products found:', data.Products?.length || 0)
     
     if (data.Products && data.Products.length > 0) {
+      console.log('🔍 First product keys:', Object.keys(data.Products[0]))
       console.log('🔍 First product sample:', JSON.stringify(data.Products[0], null, 2))
     }
 
