@@ -1789,7 +1789,9 @@ export default function InventoryDashboard() {
             
             // Extract fields with fallbacks
             const mfgPartNumber = firstResult.manufacturerPartNumber || firstResult.partNumber || ""
-            const description = firstResult.description || ""
+            const description = typeof firstResult.description === 'object' 
+              ? (firstResult.description.ProductDescription || firstResult.description.DetailedDescription || "")
+              : (firstResult.description || "")
             const packageType = firstResult.packageType || firstResult.package || ""
             
             // Always overwrite fields with Digi-Key data

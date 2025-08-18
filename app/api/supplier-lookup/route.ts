@@ -129,18 +129,30 @@ async function searchDigikey(partNumber: string, token: string): Promise<Supplie
 
     const products: DigikeyProduct[] = data.Products || []
 
-    const results = products.slice(0, 5).map(product => ({
-      supplier: 'Digi-Key',
-      partNumber: product.DigiKeyPartNumber || product.PartNumber,
-      manufacturerPartNumber: product.ManufacturerPartNumber || product.MfrPartNumber || product.PartNumber,
-      description: product.ProductDescription || product.Description || product.DetailedDescription,
-      price: product.UnitPrice || product.Price,
-      availability: product.QuantityAvailable || product.Quantity,
-      manufacturer: product.Manufacturer?.Name || product.ManufacturerName,
-      datasheet: product.DatasheetUrl || product.Datasheet,
-      productUrl: product.ProductUrl || product.Url,
-      packageType: product.PackageType?.Name || product.Package
-    }))
+    const results = products.slice(0, 5).map(product => {
+      // Handle description properly - it might be an object
+      let description = ""
+      if (product.ProductDescription) {
+        description = product.ProductDescription
+      } else if (product.Description) {
+        description = product.Description
+      } else if (product.DetailedDescription) {
+        description = product.DetailedDescription
+      }
+
+      return {
+        supplier: 'Digi-Key',
+        partNumber: product.DigiKeyPartNumber || product.PartNumber,
+        manufacturerPartNumber: product.ManufacturerPartNumber || product.MfrPartNumber || product.PartNumber,
+        description: description,
+        price: product.UnitPrice || product.Price,
+        availability: product.QuantityAvailable || product.Quantity,
+        manufacturer: product.Manufacturer?.Name || product.ManufacturerName,
+        datasheet: product.DatasheetUrl || product.Datasheet,
+        productUrl: product.ProductUrl || product.Url,
+        packageType: product.PackageType?.Name || product.Package
+      }
+    })
 
     console.log('✅ Processed results:', results.length)
     if (results.length > 0) {
