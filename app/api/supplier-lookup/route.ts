@@ -140,10 +140,21 @@ async function searchDigikey(partNumber: string, token: string): Promise<Supplie
         description = product.DetailedDescription
       }
 
+      // Extract manufacturer part number from URL if not available directly
+      let manufacturerPartNumber = product.ManufacturerPartNumber || product.MfrPartNumber
+      
+      if (!manufacturerPartNumber && product.ProductUrl) {
+        // Extract from URL like: https://www.digikey.com/en/products/detail/yageo/RC0402JR-0710KL/726418
+        const urlMatch = product.ProductUrl.match(/\/detail\/[^\/]+\/([^\/]+)\//)
+        if (urlMatch && urlMatch[1]) {
+          manufacturerPartNumber = urlMatch[1]
+        }
+      }
+
       return {
         supplier: 'Digi-Key',
         partNumber: product.DigiKeyPartNumber || product.PartNumber,
-        manufacturerPartNumber: product.ManufacturerPartNumber || product.MfrPartNumber || product.PartNumber,
+        manufacturerPartNumber: manufacturerPartNumber || "",
         description: description,
         price: product.UnitPrice || product.Price,
         availability: product.QuantityAvailable || product.Quantity,
