@@ -129,6 +129,17 @@ export default function InventoryDashboard() {
   const [supplierLookupPartNumber, setSupplierLookupPartNumber] = useState("")
   const [autoLookupTimeout, setAutoLookupTimeout] = useState<NodeJS.Timeout | null>(null)
   const [isAutoLookingUp, setIsAutoLookingUp] = useState(false)
+  
+  // Reorder dialog state
+  const [showReorderDialog, setShowReorderDialog] = useState(false)
+  const [reorderItem, setReorderItem] = useState<InventoryItem | null>(null)
+  const [reorderFormData, setReorderFormData] = useState({
+    quantity: "",
+    timeframe: "1-2 weeks",
+    urgency: "normal",
+    notes: "",
+    requester: ""
+  })
 
   // Natural sort function for locations like H1-1, H1-2, etc.
   const naturalLocationSort = (str1: string, str2: string) => {
@@ -1846,6 +1857,79 @@ export default function InventoryDashboard() {
     setAddItemFormModified(true)
   }
 
+  const handleReorderClick = (item: InventoryItem) => {
+    setReorderItem(item)
+    setReorderFormData({
+      quantity: (item.reorderPoint || alertSettings.defaultReorderPoint || 10).toString(),
+      timeframe: "1-2 weeks",
+      urgency: item.QTY === 0 ? "urgent" : "normal",
+      notes: "",
+      requester: ""
+    })
+    setShowReorderDialog(true)
+  }
+
+  const handleReorderSubmit = async () => {
+    if (!reorderItem || !reorderFormData.requester.trim()) {
+      alert("Please fill in all required fields")
+      return
+    }
+
+    try {
+      const response = await fetch("/api/reorder-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          partNumber: reorderItem["Part number"],
+          description: reorderItem["Part description"],
+          currentQty: reorderItem.QTY,
+          reorderPoint: reorderItem.reorderPoint || alertSettings.defaultReorderPoint || 10,
+          supplier: reorderItem.Supplier,
+          location: reorderItem.Location,
+          quantity: parseInt(reorderFormData.quantity) || 0,
+          timeframe: reorderFormData.timeframe,
+          urgency: reorderFormData.urgency,
+          requester: reorderFormData.requester,
+          notes: reorderFormData.notes
+        })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        
+        // Send Slack notification
+        try {
+          await fetch("/api/slack/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message: `🛒 **Reorder Request Submitted**\n\n**Part:** ${reorderItem["Part number"]} - ${reorderItem["Part description"]}\n**Current Stock:** ${reorderItem.QTY}\n**Requested Qty:** ${reorderFormData.quantity}\n**Urgency:** ${reorderFormData.urgency.toUpperCase()}\n**Timeframe:** ${reorderFormData.timeframe}\n**Requester:** ${reorderFormData.requester}\n**Notes:** ${reorderFormData.notes || "None"}\n\n**Request ID:** ${result.requestId}`,
+              channel: "#inventory-alerts"
+            })
+          })
+        } catch (slackError) {
+          console.error("Failed to send Slack notification:", slackError)
+        }
+
+        alert("Reorder request submitted successfully!")
+        setShowReorderDialog(false)
+        setReorderItem(null)
+        setReorderFormData({
+          quantity: "",
+          timeframe: "1-2 weeks", 
+          urgency: "normal",
+          notes: "",
+          requester: ""
+        })
+      } else {
+        throw new Error("Failed to submit reorder request")
+      }
+    } catch (error) {
+      console.error("Reorder request failed:", error)
+      alert("Failed to submit reorder request")
+    }
+  }
+
   // Show loading screen
   if (loading) {
     return (
@@ -2211,24 +2295,7 @@ export default function InventoryDashboard() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => {
-                              const requesterName = prompt("Enter your name for reorder request:")
-                              if (requesterName) {
-                                // Handle reorder request
-                                fetch("/api/reorder-requests", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({
-                                    item: item,
-                                    requester: requesterName
-                                  })
-                                }).then(() => {
-                                  alert("Reorder request submitted!")
-                                }).catch(() => {
-                                  alert("Failed to submit reorder request")
-                                })
-                              }
-                            }}
+                            onClick={() => handleReorderClick(item)}
                             className="h-6 px-1 text-xs"
                             title="Request reorder"
                           >
@@ -3367,6 +3434,107 @@ export default function InventoryDashboard() {
         initialPartNumber={supplierLookupPartNumber}
         onSelectResult={handleSupplierLookupResult}
       />
+
+      {/* Reorder Request Dialog */}
+      <Dialog open={showReorderDialog} onOpenChange={setShowReorderDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Request Reorder</DialogTitle>
+            <DialogDescription>
+              Submit a reorder request for {reorderItem?.["Part number"]}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {reorderItem && (
+            <div className="space-y-4">
+              {/* Part Info */}
+              <div className="bg-gray-50 p-3 rounded">
+                <div className="text-sm font-medium">{reorderItem["Part number"]}</div>
+                <div className="text-xs text-gray-600">{reorderItem["Part description"]}</div>
+                <div className="text-xs text-red-600 mt-1">
+                  Current Stock: {reorderItem.QTY} | Reorder Point: {reorderItem.reorderPoint || alertSettings.defaultReorderPoint || 10}
+                </div>
+              </div>
+
+              {/* Form Fields */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="reorder-quantity">Quantity to Order *</Label>
+                  <Input
+                    id="reorder-quantity"
+                    type="number"
+                    value={reorderFormData.quantity}
+                    onChange={(e) => setReorderFormData(prev => ({ ...prev, quantity: e.target.value }))}
+                    placeholder="Enter quantity"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="reorder-urgency">Urgency *</Label>
+                  <Select value={reorderFormData.urgency} onValueChange={(value) => setReorderFormData(prev => ({ ...prev, urgency: value }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low - Can wait</SelectItem>
+                      <SelectItem value="normal">Normal - Standard delivery</SelectItem>
+                      <SelectItem value="high">High - Expedite if possible</SelectItem>
+                      <SelectItem value="urgent">Urgent - Rush order needed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="reorder-timeframe">Timeframe *</Label>
+                <Select value={reorderFormData.timeframe} onValueChange={(value) => setReorderFormData(prev => ({ ...prev, timeframe: value }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ASAP">ASAP - Rush delivery</SelectItem>
+                    <SelectItem value="1 week">1 week</SelectItem>
+                    <SelectItem value="1-2 weeks">1-2 weeks</SelectItem>
+                    <SelectItem value="2-4 weeks">2-4 weeks</SelectItem>
+                    <SelectItem value="1 month+">1 month or more</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="reorder-requester">Your Name *</Label>
+                <Input
+                  id="reorder-requester"
+                  value={reorderFormData.requester}
+                  onChange={(e) => setReorderFormData(prev => ({ ...prev, requester: e.target.value }))}
+                  placeholder="Enter your name"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="reorder-notes">Notes (Optional)</Label>
+                <textarea
+                  id="reorder-notes"
+                  className="w-full p-2 border rounded-md resize-none"
+                  rows={3}
+                  value={reorderFormData.notes}
+                  onChange={(e) => setReorderFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Any special instructions or notes..."
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={() => setShowReorderDialog(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleReorderSubmit}>
+                  Submit Reorder Request
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
