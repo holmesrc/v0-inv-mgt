@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { sendFullLowStockAlert } from "@/lib/slack"
 import { getScheduleDescription, isCorrectAlertTime } from "@/lib/timezone"
 
+import { NextRequest, NextResponse } from "next/server"
+import { sendFullLowStockAlert } from "@/lib/slack"
+import { getScheduleDescription, isCorrectAlertTime } from "@/lib/timezone"
+import { createClient } from '@supabase/supabase-js'
+
 export async function GET(request: NextRequest) {
   try {
     // Verify this is a legitimate cron request (Vercel cron jobs, GitHub Actions, or manual with auth)
@@ -29,28 +34,27 @@ export async function GET(request: NextRequest) {
     // Skip time check for now - run every time cron triggers
     console.log(`✅ Running alert (time check disabled for testing)`)
 
-    // Construct base URL more reliably
-    const host = request.headers.get('host')
-    const protocol = request.headers.get('x-forwarded-proto') || 'https'
-    const baseUrl = `${protocol}://${host}`
+    // Load inventory directly from Supabase using service role
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     
-    console.log(`🔗 Using base URL: ${baseUrl}`)
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Supabase configuration missing')
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    
+    console.log('📖 Loading inventory directly from database...')
+    const { data: inventory, error: inventoryError } = await supabase
+      .from('inventory')
+      .select('*')
+      .order('created_at', { ascending: true })
 
-    // Load current inventory from database
-    const inventoryResponse = await fetch(`${baseUrl}/api/inventory/load-from-db`, {
-      method: 'GET',
-      headers: {
-        'Cache-Control': 'no-cache'
-      }
-    })
-
-    if (!inventoryResponse.ok) {
-      throw new Error(`Failed to load inventory data: ${inventoryResponse.status}`)
+    if (inventoryError) {
+      throw new Error(`Failed to load inventory: ${inventoryError.message}`)
     }
 
-    const inventoryResult = await inventoryResponse.json()
-    
-    if (!inventoryResult.success || !inventoryResult.data) {
+    if (!inventory || inventory.length === 0) {
       console.log('⚠️ No inventory data available for alert check')
       return NextResponse.json({ 
         success: true, 
@@ -59,16 +63,13 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const inventory = inventoryResult.data
+    console.log(`📊 Loaded ${inventory.length} inventory items`)
 
-    // Load alert settings
-    const settingsResponse = await fetch(`${baseUrl}/api/settings`, {
-      method: 'GET',
-      headers: {
-        'Cache-Control': 'no-cache'
-      }
-    })
-
+    // Load alert settings (try API, fallback to defaults)
+    const host = request.headers.get('host')
+    const protocol = request.headers.get('x-forwarded-proto') || 'https'
+    const baseUrl = `${protocol}://${host}`
+    
     let alertSettings = {
       enabled: true,
       dayOfWeek: 1, // Monday
@@ -76,11 +77,22 @@ export async function GET(request: NextRequest) {
       defaultReorderPoint: 10
     }
 
-    if (settingsResponse.ok) {
-      const settingsResult = await settingsResponse.json()
-      if (settingsResult.success && settingsResult.settings) {
-        alertSettings = { ...alertSettings, ...settingsResult.settings }
+    try {
+      const settingsResponse = await fetch(`${baseUrl}/api/settings`, {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      })
+
+      if (settingsResponse.ok) {
+        const settingsResult = await settingsResponse.json()
+        if (settingsResult.success && settingsResult.settings) {
+          alertSettings = { ...alertSettings, ...settingsResult.settings }
+        }
       }
+    } catch (settingsError) {
+      console.log('⚠️ Could not load settings, using defaults:', settingsError)
     }
 
     // Check if alerts are enabled
@@ -141,7 +153,7 @@ export async function GET(request: NextRequest) {
             type: "section",
             text: {
               type: "mrkdwn",
-              text: `📋 <https://v0-inv-k3e82hxmi-holmesrc-amazoncoms-projects.vercel.app/low-stock|View All ${lowStockItems.length} Low Stock Items>`
+              text: `📋 <${baseUrl}/low-stock|View All ${lowStockItems.length} Low Stock Items>`
             }
           }
         ]
