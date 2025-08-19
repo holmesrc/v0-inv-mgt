@@ -62,7 +62,7 @@ export default function SupplierLookup({ open, onOpenChange, initialPartNumber =
         },
         body: JSON.stringify({
           partNumber: partNumber.trim(),
-          suppliers: ['digikey']
+          suppliers: ['digikey', 'mouser']
         })
       })
 
