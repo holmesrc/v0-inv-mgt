@@ -199,14 +199,18 @@ async function searchDigikey(partNumber: string): Promise<SupplierResult[]> {
   console.log('🔍 Digi-Key search response:', JSON.stringify(data, null, 2))
 
   const results = products.slice(0, 5).map(product => {
-    // Handle description properly
+    // Handle description properly - it's nested in a Description object
     let description = ""
-    if (product.ProductDescription) {
+    if (product.Description?.ProductDescription) {
+      description = product.Description.ProductDescription
+    } else if (product.Description?.DetailedDescription) {
+      description = product.Description.DetailedDescription
+    } else if (product.ProductDescription) {
       description = product.ProductDescription
     }
 
-    // Extract manufacturer part number from URL if not available directly
-    let manufacturerPartNumber = product.ManufacturerPartNumber
+    // Extract manufacturer part number
+    let manufacturerPartNumber = product.ManufacturerProductNumber || product.ManufacturerPartNumber
     
     if (!manufacturerPartNumber && product.ProductUrl) {
       const urlMatch = product.ProductUrl.match(/\/detail\/[^\/]+\/([^\/]+)\//)
