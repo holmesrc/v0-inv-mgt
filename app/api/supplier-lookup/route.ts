@@ -91,9 +91,19 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ Found ${results.length} total results across all suppliers`)
 
+    // Sort results to prioritize those with descriptions
+    const sortedResults = results.sort((a, b) => {
+      const aHasDescription = a.description && a.description.trim().length > 0
+      const bHasDescription = b.description && b.description.trim().length > 0
+      
+      if (aHasDescription && !bHasDescription) return -1
+      if (!aHasDescription && bHasDescription) return 1
+      return 0
+    })
+
     return NextResponse.json({
       success: true,
-      results: results,
+      results: sortedResults,
       searchTerm: partNumber,
       suppliersSearched: suppliers
     })
@@ -159,6 +169,8 @@ async function searchDigikey(partNumber: string): Promise<SupplierResult[]> {
 
   const data = await searchResponse.json()
   const products: DigikeyProduct[] = data.Products || []
+
+  console.log('🔍 Digi-Key search response:', JSON.stringify(data, null, 2))
 
   const results = products.slice(0, 5).map(product => {
     // Handle description properly
