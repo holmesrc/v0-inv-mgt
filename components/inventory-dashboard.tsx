@@ -1805,8 +1805,23 @@ export default function InventoryDashboard() {
               : (firstResult.description || "")
             const packageType = firstResult.packageType || firstResult.package || ""
             
+            // Determine supplier with fallbacks
+            let supplierName = firstResult.supplier
+            if (!supplierName) {
+              // Fallback: guess from part number format
+              if (partNumber.includes('-ND') || partNumber.includes('-CT') || partNumber.includes('-TR')) {
+                supplierName = 'Digi-Key'
+              } else if (partNumber.match(/^\d+-/)) {
+                supplierName = 'Mouser'
+              } else {
+                supplierName = 'Unknown'
+              }
+            }
+            
             console.log('🔧 About to set supplier field:', {
               supplierFromResult: firstResult.supplier,
+              supplierFallback: supplierName,
+              partNumber: partNumber,
               resultKeys: Object.keys(firstResult)
             })
             
@@ -1815,7 +1830,7 @@ export default function InventoryDashboard() {
               ...prev,
               mfgPartNumber: mfgPartNumber,
               description: description,
-              supplier: firstResult.supplier, // Use the actual supplier that found the part (Digi-Key or Mouser)
+              supplier: supplierName, // Use determined supplier name
               package: packageType || prev.package // Keep existing if no package info
             }))
             
@@ -1825,7 +1840,7 @@ export default function InventoryDashboard() {
             console.log('✅ Auto-populated fields:', {
               mfgPartNumber: mfgPartNumber,
               description: description,
-              supplier: firstResult.supplier, // Show the actual supplier
+              supplier: supplierName, // Show the determined supplier
               package: packageType,
               supplierFromResult: firstResult.supplier,
               allAvailableFields: Object.keys(firstResult)
