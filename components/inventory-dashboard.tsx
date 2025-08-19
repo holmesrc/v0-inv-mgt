@@ -1805,6 +1805,11 @@ export default function InventoryDashboard() {
               : (firstResult.description || "")
             const packageType = firstResult.packageType || firstResult.package || ""
             
+            console.log('🔧 About to set supplier field:', {
+              supplierFromResult: firstResult.supplier,
+              resultKeys: Object.keys(firstResult)
+            })
+            
             // Always overwrite fields with supplier data
             setNewItem(prev => ({
               ...prev,
@@ -1820,8 +1825,9 @@ export default function InventoryDashboard() {
             console.log('✅ Auto-populated fields:', {
               mfgPartNumber: mfgPartNumber,
               description: description,
-              supplier: "Digi-Key",
+              supplier: firstResult.supplier, // Show the actual supplier
               package: packageType,
+              supplierFromResult: firstResult.supplier,
               allAvailableFields: Object.keys(firstResult)
             })
           } else {
