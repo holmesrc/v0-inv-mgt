@@ -1,251 +1,246 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from "next/server"
 
-// Digi-Key API configuration
-const DIGIKEY_CLIENT_ID = process.env.DIGIKEY_CLIENT_ID
-const DIGIKEY_CLIENT_SECRET = process.env.DIGIKEY_CLIENT_SECRET
-const DIGIKEY_API_URL = 'https://api.digikey.com'
-
+// Digi-Key API types
 interface DigikeyProduct {
   DigiKeyPartNumber: string
   ManufacturerPartNumber: string
   ProductDescription: string
   UnitPrice: number
   QuantityAvailable: number
-  Manufacturer: {
+  Manufacturer?: {
     Name: string
   }
-  ProductUrl: string
   DatasheetUrl?: string
+  ProductUrl?: string
   PackageType?: {
     Name: string
   }
 }
 
-interface SupplierLookupResult {
+// Mouser API types
+interface MouserProduct {
+  MouserPartNumber: string
+  ManufacturerPartNumber: string
+  Description: string
+  PriceBreaks: Array<{
+    Quantity: number
+    Price: string
+  }>
+  Availability: string
+  Manufacturer: string
+  DataSheetUrl?: string
+  ProductDetailUrl?: string
+  Category?: string
+}
+
+interface MouserSearchResponse {
+  SearchResults: {
+    NumberOfResult: number
+    Parts: MouserProduct[]
+  }
+}
+
+// Unified result interface
+interface SupplierResult {
   supplier: string
   partNumber: string
   manufacturerPartNumber?: string
   description: string
   price?: number
-  availability?: number
+  availability?: number | string
   manufacturer?: string
   datasheet?: string
   productUrl?: string
   packageType?: string
 }
 
-// Get Digi-Key access token
-async function getDigikeyToken(): Promise<string | null> {
-  console.log('🔑 Getting Digi-Key token...')
-  console.log('🔑 Client ID configured:', !!DIGIKEY_CLIENT_ID)
-  console.log('🔑 Client Secret configured:', !!DIGIKEY_CLIENT_SECRET)
-  
-  if (!DIGIKEY_CLIENT_ID || !DIGIKEY_CLIENT_SECRET) {
-    console.log('❌ Digi-Key credentials not configured')
-    return null
-  }
-
-  try {
-    console.log('🔑 Making token request to:', `${DIGIKEY_API_URL}/v1/oauth2/token`)
-    
-    const response = await fetch(`${DIGIKEY_API_URL}/v1/oauth2/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        client_id: DIGIKEY_CLIENT_ID,
-        client_secret: DIGIKEY_CLIENT_SECRET,
-        grant_type: 'client_credentials'
-      })
-    })
-
-    console.log('🔑 Token response status:', response.status)
-    console.log('🔑 Token response ok:', response.ok)
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('❌ Failed to get Digi-Key token:', response.status, errorText)
-      return null
-    }
-
-    const data = await response.json()
-    console.log('✅ Token received successfully')
-    return data.access_token
-  } catch (error) {
-    console.error('❌ Error getting Digi-Key token:', error)
-    return null
-  }
-}
-
-// Search Digi-Key for parts
-async function searchDigikey(partNumber: string, token: string): Promise<SupplierLookupResult[]> {
-  console.log('🔍 Searching Digi-Key for:', partNumber)
-  
-  try {
-    // Use keyword search endpoint instead of exact part lookup
-    const searchUrl = `${DIGIKEY_API_URL}/products/v4/search/keyword`
-    console.log('🔍 Search URL:', searchUrl)
-    
-    const requestBody = {
-      Keywords: partNumber,
-      RecordCount: 10,
-      RecordStartPosition: 0,
-      Sort: {
-        SortOption: "SortByUnitPrice",
-        Direction: "Ascending"
-      }
-    }
-    
-    console.log('🔍 Request body:', JSON.stringify(requestBody, null, 2))
-    
-    const response = await fetch(searchUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'X-DIGIKEY-Client-Id': DIGIKEY_CLIENT_ID!,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
-    })
-
-    console.log('🔍 Search response status:', response.status)
-    console.log('🔍 Search response ok:', response.ok)
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('❌ Digi-Key search failed:', response.status, errorText)
-      return []
-    }
-
-    const data = await response.json()
-    console.log('🔍 Search response data keys:', Object.keys(data))
-    console.log('🔍 Products found:', data.Products?.length || 0)
-    
-    if (data.Products && data.Products.length > 0) {
-      console.log('🔍 First product keys:', Object.keys(data.Products[0]))
-      console.log('🔍 First product sample:', JSON.stringify(data.Products[0], null, 2))
-    }
-
-    const products: DigikeyProduct[] = data.Products || []
-
-    const results = products.slice(0, 5).map(product => {
-      // Handle description properly - it might be an object
-      let description = ""
-      if (product.ProductDescription) {
-        description = product.ProductDescription
-      } else if (product.Description) {
-        description = product.Description
-      } else if (product.DetailedDescription) {
-        description = product.DetailedDescription
-      }
-
-      // Extract manufacturer part number from URL if not available directly
-      let manufacturerPartNumber = product.ManufacturerPartNumber || product.MfrPartNumber
-      
-      if (!manufacturerPartNumber && product.ProductUrl) {
-        // Extract from URL like: https://www.digikey.com/en/products/detail/yageo/RC0402JR-0710KL/726418
-        const urlMatch = product.ProductUrl.match(/\/detail\/[^\/]+\/([^\/]+)\//)
-        if (urlMatch && urlMatch[1]) {
-          manufacturerPartNumber = urlMatch[1]
-        }
-      }
-
-      return {
-        supplier: 'Digi-Key',
-        partNumber: product.DigiKeyPartNumber || product.PartNumber,
-        manufacturerPartNumber: manufacturerPartNumber || "",
-        description: description,
-        price: product.UnitPrice || product.Price,
-        availability: product.QuantityAvailable || product.Quantity,
-        manufacturer: product.Manufacturer?.Name || product.ManufacturerName,
-        datasheet: product.DatasheetUrl || product.Datasheet,
-        productUrl: product.ProductUrl || product.Url,
-        packageType: product.PackageType?.Name || product.Package
-      }
-    })
-
-    console.log('✅ Processed results:', results.length)
-    if (results.length > 0) {
-      console.log('🔍 First processed result:', JSON.stringify(results[0], null, 2))
-    }
-    return results
-  } catch (error) {
-    console.error('❌ Error searching Digi-Key:', error)
-    return []
-  }
-}
-
-// Mouser API integration (placeholder for now)
-async function searchMouser(partNumber: string): Promise<SupplierLookupResult[]> {
-  // TODO: Implement Mouser API when we get API key
-  return []
-}
-
-// Octopart API integration (placeholder for now)  
-async function searchOctopart(partNumber: string): Promise<SupplierLookupResult[]> {
-  // TODO: Implement Octopart API when we get API key
-  return []
-}
-
 export async function POST(request: NextRequest) {
   try {
-    const { partNumber, suppliers = ['digikey'] } = await request.json()
+    const { partNumber, suppliers = ['digikey', 'mouser'] } = await request.json()
 
-    if (!partNumber || !partNumber.trim()) {
-      return NextResponse.json(
-        { success: false, error: 'Part number is required' },
-        { status: 400 }
-      )
+    if (!partNumber) {
+      return NextResponse.json({
+        success: false,
+        error: 'Part number is required'
+      }, { status: 400 })
     }
 
-    const results: SupplierLookupResult[] = []
+    console.log(`🔍 Searching for part: ${partNumber} across suppliers: ${suppliers.join(', ')}`)
 
-    // Search Digi-Key
+    const results: SupplierResult[] = []
+
+    // Search Digi-Key if requested
     if (suppliers.includes('digikey')) {
-      const token = await getDigikeyToken()
-      if (token) {
-        const digikeyResults = await searchDigikey(partNumber.trim(), token)
+      try {
+        const digikeyResults = await searchDigikey(partNumber)
         results.push(...digikeyResults)
+      } catch (error) {
+        console.error('❌ Digi-Key search failed:', error)
       }
     }
 
-    // Search Mouser (when implemented)
+    // Search Mouser if requested
     if (suppliers.includes('mouser')) {
-      const mouserResults = await searchMouser(partNumber.trim())
-      results.push(...mouserResults)
+      try {
+        const mouserResults = await searchMouser(partNumber)
+        results.push(...mouserResults)
+      } catch (error) {
+        console.error('❌ Mouser search failed:', error)
+      }
     }
 
-    // Search Octopart (when implemented)
-    if (suppliers.includes('octopart')) {
-      const octopartResults = await searchOctopart(partNumber.trim())
-      results.push(...octopartResults)
-    }
+    console.log(`✅ Found ${results.length} total results across all suppliers`)
 
     return NextResponse.json({
       success: true,
-      partNumber: partNumber.trim(),
       results: results,
-      searchedSuppliers: suppliers
+      searchTerm: partNumber,
+      suppliersSearched: suppliers
     })
 
   } catch (error) {
-    console.error('Supplier lookup error:', error)
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error('❌ Supplier lookup error:', error)
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to search suppliers',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
 }
 
-export async function GET() {
-  return NextResponse.json({
-    success: true,
-    availableSuppliers: ['digikey', 'mouser', 'octopart'],
-    configured: {
-      digikey: !!(DIGIKEY_CLIENT_ID && DIGIKEY_CLIENT_SECRET),
-      mouser: false, // TODO: Check when implemented
-      octopart: false // TODO: Check when implemented
+async function searchDigikey(partNumber: string): Promise<SupplierResult[]> {
+  const clientId = process.env.DIGIKEY_CLIENT_ID
+  const clientSecret = process.env.DIGIKEY_CLIENT_SECRET
+
+  if (!clientId || !clientSecret) {
+    console.log('⚠️ Digi-Key credentials not configured, skipping')
+    return []
+  }
+
+  console.log('🔍 Searching Digi-Key...')
+
+  // Get access token
+  const tokenResponse = await fetch('https://api.digikey.com/v1/oauth2/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: 'client_credentials'
+    })
+  })
+
+  if (!tokenResponse.ok) {
+    throw new Error(`Digi-Key token request failed: ${tokenResponse.status}`)
+  }
+
+  const tokenData = await tokenResponse.json()
+  const accessToken = tokenData.access_token
+
+  // Search for products
+  const searchResponse = await fetch('https://api.digikey.com/products/v4/search/keyword', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'X-DIGIKEY-Client-Id': clientId
+    },
+    body: JSON.stringify({
+      Keywords: partNumber,
+      RecordCount: 5
+    })
+  })
+
+  if (!searchResponse.ok) {
+    throw new Error(`Digi-Key search failed: ${searchResponse.status}`)
+  }
+
+  const data = await searchResponse.json()
+  const products: DigikeyProduct[] = data.Products || []
+
+  const results = products.slice(0, 5).map(product => {
+    // Handle description properly
+    let description = ""
+    if (product.ProductDescription) {
+      description = product.ProductDescription
+    }
+
+    // Extract manufacturer part number from URL if not available directly
+    let manufacturerPartNumber = product.ManufacturerPartNumber
+    
+    if (!manufacturerPartNumber && product.ProductUrl) {
+      const urlMatch = product.ProductUrl.match(/\/detail\/[^\/]+\/([^\/]+)\//)
+      if (urlMatch && urlMatch[1]) {
+        manufacturerPartNumber = urlMatch[1]
+      }
+    }
+
+    return {
+      supplier: 'Digi-Key',
+      partNumber: product.DigiKeyPartNumber,
+      manufacturerPartNumber: manufacturerPartNumber || "",
+      description: description,
+      price: product.UnitPrice,
+      availability: product.QuantityAvailable,
+      manufacturer: product.Manufacturer?.Name,
+      datasheet: product.DatasheetUrl,
+      productUrl: product.ProductUrl,
+      packageType: product.PackageType?.Name
     }
   })
+
+  console.log('✅ Processed Digi-Key results:', results.length)
+  return results
+}
+
+async function searchMouser(partNumber: string): Promise<SupplierResult[]> {
+  const apiKey = process.env.MOUSER_API_KEY
+
+  if (!apiKey) {
+    console.log('⚠️ Mouser API key not configured, skipping')
+    return []
+  }
+
+  console.log('🔍 Searching Mouser...')
+
+  const searchResponse = await fetch(`https://api.mouser.com/api/v1/search/keyword?apiKey=${apiKey}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      SearchByKeywordRequest: {
+        keyword: partNumber,
+        records: 5,
+        startingRecord: 0
+      }
+    })
+  })
+
+  if (!searchResponse.ok) {
+    throw new Error(`Mouser search failed: ${searchResponse.status}`)
+  }
+
+  const data: MouserSearchResponse = await searchResponse.json()
+  console.log('🔍 Mouser search response:', JSON.stringify(data, null, 2))
+
+  const products = data.SearchResults?.Parts || []
+
+  const results = products.slice(0, 5).map(product => ({
+    supplier: 'Mouser',
+    partNumber: product.MouserPartNumber,
+    manufacturerPartNumber: product.ManufacturerPartNumber || "",
+    description: product.Description || "",
+    price: product.PriceBreaks?.[0] ? parseFloat(product.PriceBreaks[0].Price.replace('$', '')) : undefined,
+    availability: product.Availability || "",
+    manufacturer: product.Manufacturer || "",
+    datasheet: product.DataSheetUrl || "",
+    productUrl: product.ProductDetailUrl || "",
+    packageType: product.Category || ""
+  }))
+
+  console.log('✅ Processed Mouser results:', results.length)
+  return results
 }

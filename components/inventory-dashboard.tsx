@@ -1788,7 +1788,7 @@ export default function InventoryDashboard() {
           },
           body: JSON.stringify({
             partNumber: partNumber.trim(),
-            suppliers: ['digikey']
+            suppliers: ['digikey', 'mouser']
           })
         })
 
@@ -1805,12 +1805,12 @@ export default function InventoryDashboard() {
               : (firstResult.description || "")
             const packageType = firstResult.packageType || firstResult.package || ""
             
-            // Always overwrite fields with Digi-Key data
+            // Always overwrite fields with supplier data
             setNewItem(prev => ({
               ...prev,
               mfgPartNumber: mfgPartNumber,
               description: description,
-              supplier: "Digi-Key", // Always set to the vendor/source, not manufacturer
+              supplier: firstResult.supplier, // Use the actual supplier that found the part (Digi-Key or Mouser)
               package: packageType || prev.package // Keep existing if no package info
             }))
             
@@ -2373,7 +2373,7 @@ export default function InventoryDashboard() {
                   id="part-number"
                   value={newItem.partNumber}
                   onChange={(e) => handleFormFieldChange('partNumber', e.target.value)}
-                  placeholder="Enter part number (auto-fills from Digi-Key)"
+                  placeholder="Enter part number (auto-fills from Digi-Key & Mouser)"
                   className={isCheckingDuplicate || isAutoLookingUp ? "pr-8" : ""}
                 />
                 {(isCheckingDuplicate || isAutoLookingUp) && (
@@ -2390,7 +2390,7 @@ export default function InventoryDashboard() {
               {isAutoLookingUp && (
                 <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
                   <RefreshCw className="h-3 w-3 animate-spin" />
-                  Searching Digi-Key for part info...
+                  Searching Digi-Key & Mouser for part info...
                 </p>
               )}
             </div>
