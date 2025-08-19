@@ -91,13 +91,26 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ Found ${results.length} total results across all suppliers`)
 
-    // Sort results to prioritize those with descriptions
+    // Sort results to prioritize by part number pattern match first, then description quality
     const sortedResults = results.sort((a, b) => {
+      // Check if the part number matches the expected supplier pattern
+      const isDigikeyPN = partNumber.includes('-ND') || partNumber.includes('-CT') || partNumber.includes('-TR')
+      const isMouserPN = partNumber.match(/^\d+-/)
+      
+      const aMatchesPattern = (isDigikeyPN && a.supplier === 'Digi-Key') || (isMouserPN && a.supplier === 'Mouser')
+      const bMatchesPattern = (isDigikeyPN && b.supplier === 'Digi-Key') || (isMouserPN && b.supplier === 'Mouser')
+      
+      // First priority: part number pattern match
+      if (aMatchesPattern && !bMatchesPattern) return -1
+      if (!aMatchesPattern && bMatchesPattern) return 1
+      
+      // Second priority: description quality
       const aHasDescription = a.description && a.description.trim().length > 0
       const bHasDescription = b.description && b.description.trim().length > 0
       
       if (aHasDescription && !bHasDescription) return -1
       if (!aHasDescription && bHasDescription) return 1
+      
       return 0
     })
 
