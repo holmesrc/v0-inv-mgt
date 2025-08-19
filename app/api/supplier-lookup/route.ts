@@ -100,6 +100,17 @@ export async function POST(request: NextRequest) {
       const aMatchesPattern = (isDigikeyPN && a.supplier === 'Digi-Key') || (isMouserPN && a.supplier === 'Mouser')
       const bMatchesPattern = (isDigikeyPN && b.supplier === 'Digi-Key') || (isMouserPN && b.supplier === 'Mouser')
       
+      console.log(`🔍 Sorting debug for ${partNumber}:`, {
+        isDigikeyPN,
+        isMouserPN,
+        aSupplier: a.supplier,
+        bSupplier: b.supplier,
+        aMatchesPattern,
+        bMatchesPattern,
+        aDescription: a.description?.substring(0, 50) + '...',
+        bDescription: b.description?.substring(0, 50) + '...'
+      })
+      
       // First priority: part number pattern match
       if (aMatchesPattern && !bMatchesPattern) return -1
       if (!aMatchesPattern && bMatchesPattern) return 1
@@ -113,6 +124,8 @@ export async function POST(request: NextRequest) {
       
       return 0
     })
+
+    console.log(`🔍 Final sorted results:`, sortedResults.map(r => ({ supplier: r.supplier, hasDescription: !!r.description })))
 
     return NextResponse.json({
       success: true,
