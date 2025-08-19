@@ -1834,6 +1834,11 @@ export default function InventoryDashboard() {
               package: packageType || prev.package // Keep existing if no package info
             }))
             
+            // Add the supplier to the suppliers list if it's not already there
+            if (supplierName && !suppliers.includes(supplierName)) {
+              setSuppliers(prev => [...prev, supplierName].sort())
+            }
+            
             setAddItemFormModified(true)
             
             // Show success feedback
