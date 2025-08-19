@@ -1800,9 +1800,15 @@ export default function InventoryDashboard() {
             
             // Extract fields with fallbacks
             const mfgPartNumber = firstResult.manufacturerPartNumber || firstResult.partNumber || ""
-            const description = typeof firstResult.description === 'object' 
+            let description = typeof firstResult.description === 'object' 
               ? (firstResult.description.ProductDescription || firstResult.description.DetailedDescription || "")
               : (firstResult.description || "")
+            
+            // If description is empty, create one from manufacturer and part number
+            if (!description && firstResult.manufacturer && mfgPartNumber) {
+              description = `${firstResult.manufacturer} ${mfgPartNumber}`
+            }
+            
             const packageType = firstResult.packageType || firstResult.package || ""
             
             // Determine supplier with fallbacks
