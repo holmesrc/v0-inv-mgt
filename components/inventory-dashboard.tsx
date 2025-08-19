@@ -16,13 +16,16 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { AlertTriangle, Package, TrendingDown, Upload, Settings, RefreshCw, Download, Plus, Edit, Trash2, Check, X, Search, Filter, ArrowUpDown, Globe } from "lucide-react"
+import { AlertTriangle, Package, TrendingDown, Upload, Settings, RefreshCw, Download, Plus, Edit, Trash2, Check, X, Search, Filter, ArrowUpDown, Globe, HelpCircle, Play } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import FileUpload from "./file-upload"
 import SupplierLookup from "./supplier-lookup"
+import HelpModal from "./help-modal"
+import InteractiveTour from "./interactive-tour"
 
 // Types
 interface InventoryItem {
@@ -129,6 +132,8 @@ export default function InventoryDashboard() {
   const [supplierLookupPartNumber, setSupplierLookupPartNumber] = useState("")
   const [autoLookupTimeout, setAutoLookupTimeout] = useState<NodeJS.Timeout | null>(null)
   const [isAutoLookingUp, setIsAutoLookingUp] = useState(false)
+  const [showHelpModal, setShowHelpModal] = useState(false)
+  const [showTour, setShowTour] = useState(false)
   
   // Reorder dialog state
   const [showReorderDialog, setShowReorderDialog] = useState(false)
@@ -1980,7 +1985,8 @@ export default function InventoryDashboard() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <TooltipProvider>
+      <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -1988,13 +1994,25 @@ export default function InventoryDashboard() {
           <p className="text-muted-foreground">Managing {inventory.length} inventory items</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button onClick={() => handleAddItemDialogOpen(true)} className="flex items-center gap-2">
+          <Button onClick={() => handleAddItemDialogOpen(true)} className="flex items-center gap-2" data-tour="add-item-btn">
             <Plus className="h-4 w-4" />
             Add Item
           </Button>
-          <Button variant="outline" onClick={() => setShowSupplierLookup(true)} className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setShowSupplierLookup(true)} className="flex items-center gap-2" data-tour="supplier-lookup-btn">
             <Globe className="h-4 w-4" />
             Supplier Lookup
+          </Button>
+          <Button variant="outline" onClick={() => window.open('/help', '_blank')} className="flex items-center gap-2" data-tour="help-btn">
+            <HelpCircle className="h-4 w-4" />
+            Help
+          </Button>
+          <Button variant="outline" onClick={() => setShowHelpModal(true)} className="flex items-center gap-2">
+            <HelpCircle className="h-4 w-4" />
+            Quick Help
+          </Button>
+          <Button variant="outline" onClick={() => setShowTour(true)} className="flex items-center gap-2">
+            <Play className="h-4 w-4" />
+            Take Tour
           </Button>
           <Button variant="outline" onClick={handleDownloadExcel} className="flex items-center gap-2">
             <Download className="h-4 w-4" />
@@ -2071,7 +2089,7 @@ export default function InventoryDashboard() {
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-tour="stats-cards">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Items</CardTitle>
@@ -2200,6 +2218,7 @@ export default function InventoryDashboard() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full"
+            data-tour="search-bar"
           />
         </div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
@@ -2399,7 +2418,19 @@ export default function InventoryDashboard() {
               </p>
             </div>
             <div>
-              <Label htmlFor="part-number">Part Number *</Label>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="part-number">Part Number *</Label>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <HelpCircle className="h-3 w-3 text-gray-400" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Auto-populates from Digi-Key & Mouser</p>
+                    <p>Digi-Key: ends in -ND, -CT, -TR</p>
+                    <p>Mouser: starts with numbers</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
               <div className="relative">
                 <Input
                   id="part-number"
@@ -3467,6 +3498,19 @@ export default function InventoryDashboard() {
         onSelectResult={handleSupplierLookupResult}
       />
 
+      {/* Interactive Tour */}
+      <InteractiveTour
+        isActive={showTour}
+        onComplete={() => setShowTour(false)}
+        onSkip={() => setShowTour(false)}
+      />
+
+      {/* Help Modal */}
+      <HelpModal
+        open={showHelpModal}
+        onOpenChange={setShowHelpModal}
+      />
+
       {/* Reorder Request Dialog */}
       <Dialog open={showReorderDialog} onOpenChange={setShowReorderDialog}>
         <DialogContent className="sm:max-w-[500px]">
@@ -3568,5 +3612,6 @@ export default function InventoryDashboard() {
         </DialogContent>
       </Dialog>
     </div>
+    </TooltipProvider>
   )
 }
