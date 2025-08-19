@@ -2631,7 +2631,20 @@ export default function InventoryDashboard() {
               )}
             </div>
             <div>
-              <Label htmlFor="package">Package</Label>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="package">Package Type</Label>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <HelpCircle className="h-3 w-3 text-gray-400" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Quantity-based packaging:</p>
+                    <p>Exact: 1-100 pieces</p>
+                    <p>Estimated: 101-500 pieces</p>
+                    <p>Reel: 500+ pieces</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
               {showCustomPackageInput ? (
                 <div className="flex gap-2">
                   <Input

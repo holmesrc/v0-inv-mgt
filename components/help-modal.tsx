@@ -24,7 +24,8 @@ export default function HelpModal({ open, onOpenChange }: HelpModalProps) {
         "Enter part number and wait 0.5s for auto-populate",
         "Digi-Key parts: end in -ND, -CT, -TR",
         "Mouser parts: start with numbers",
-        "Fill remaining fields and submit"
+        "Fill remaining fields and submit",
+        "Package auto-suggests: Exact (1-100), Estimated (101-500), Reel (500+)"
       ]
     },
     {

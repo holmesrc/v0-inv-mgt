@@ -58,7 +58,7 @@ export default function HelpPage() {
             "6. Set **Quantity** (how many you have)",
             "7. Choose **Location** (where it's stored)",
             "8. Select **Supplier** (where you buy it from)",
-            "9. Pick **Package** type (0402, SOIC, etc.)",
+            "9. Pick **Package Type** (Exact: 1-100, Estimated: 101-500, Reel: 500+)",
             "10. Set **Reorder Point** (when to reorder, default is 10)"
           ]
         },
@@ -125,7 +125,7 @@ export default function HelpPage() {
             "**MFG Part Number**: Manufacturer's actual part number",
             "**Description**: Technical description of the component",
             "**Supplier**: Digi-Key or Mouser (based on where part was found)",
-            "**Package**: Component package type when available",
+            "**Package**: Quantity-based packaging type (auto-suggests based on quantity)",
             "**Not filled**: Quantity, Location, Reorder Point (you set these)"
           ]
         }
