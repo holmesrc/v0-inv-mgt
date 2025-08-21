@@ -266,15 +266,16 @@ export default function InventoryDashboard() {
       
       // Debug logging for problematic cases
       if (isH3Search && fieldMatches && (item.Location === 'H4-113' || item.Location === 'H4-16' || item.Location === 'H2-56' || item.Location === 'H4-64')) {
-        console.log(`🐛 DEBUG: H3 search matched item at ${item.Location}:`, {
-          searchTerm: cleanSearchTerm,
-          normalizedSearchTerm,
-          field: field?.toString(),
-          normalizedField,
-          fieldType: type,
-          fieldMatches,
-          partNumber: item["Part number"]
-        })
+        console.log(`🐛 DEBUG: H3 search matched item at ${item.Location}:`)
+        console.log('  - searchTerm:', cleanSearchTerm)
+        console.log('  - normalizedSearchTerm:', normalizedSearchTerm)
+        console.log('  - field:', field?.toString())
+        console.log('  - normalizedField:', normalizedField)
+        console.log('  - fieldType:', type)
+        console.log('  - fieldMatches:', fieldMatches)
+        console.log('  - partNumber:', item["Part number"])
+        console.log('  - description:', item["Part description"])
+        console.log('  - mfgPartNumber:', item["MFG Part number"])
       }
       
       return fieldMatches
