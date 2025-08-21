@@ -247,8 +247,10 @@ export default function InventoryDashboard() {
         // For location searches, be more precise - check if it looks like a location pattern
         const isLocationPattern = /^[A-Z]\d+(-\d+)?$/i.test(cleanSearchTerm)
         if (isLocationPattern) {
-          // Only match locations that start with the search term
-          return normalizedField.startsWith(normalizedSearchTerm)
+          // Only match locations that start with the search term followed by a dash or end of string
+          // This prevents H3 from matching H4-113 (which contains "113" not "H3-")
+          const locationRegex = new RegExp(`^${normalizedSearchTerm}(-|$)`, 'i')
+          return locationRegex.test(normalizedField)
         } else {
           // If not a location pattern, use regular substring matching
           return normalizedField.includes(normalizedSearchTerm)
