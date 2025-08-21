@@ -283,7 +283,9 @@ export default function InventoryDashboard() {
         .map(supplier => supplier.trim())
     )).sort()
     
-    setSuppliers(uniqueSuppliers)
+    // Remove any duplicates that might exist
+    const cleanSuppliers = Array.from(new Set(uniqueSuppliers))
+    setSuppliers(cleanSuppliers)
   }, [inventory])
 
   // Location suggestion logic
@@ -1839,6 +1841,7 @@ export default function InventoryDashboard() {
             // Always overwrite fields with supplier data
             setNewItem(prev => ({
               ...prev,
+              partNumber: firstResult.partNumber || partNumber.toUpperCase(), // Use API part number or uppercase input
               mfgPartNumber: mfgPartNumber,
               description: description,
               supplier: supplierName, // Use determined supplier name
@@ -1847,7 +1850,11 @@ export default function InventoryDashboard() {
             
             // Add the supplier to the suppliers list if it's not already there
             if (supplierName && !suppliers.includes(supplierName)) {
-              setSuppliers(prev => [...prev, supplierName].sort())
+              setSuppliers(prev => {
+                const updated = [...prev, supplierName]
+                // Remove duplicates and sort
+                return Array.from(new Set(updated)).sort()
+              })
             }
             
             setAddItemFormModified(true)
