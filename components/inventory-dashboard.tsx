@@ -244,9 +244,15 @@ export default function InventoryDashboard() {
         // If trailing space detected, only do exact matching
         return normalizedField === normalizedSearchTerm
       } else if (type === 'location') {
-        // For location searches without trailing space, try exact match first, then starts-with
-        return normalizedField === normalizedSearchTerm || 
-               normalizedField.startsWith(normalizedSearchTerm)
+        // For location searches, be more precise - check if it looks like a location pattern
+        const isLocationPattern = /^[A-Z]\d+(-\d+)?$/i.test(cleanSearchTerm)
+        if (isLocationPattern) {
+          // Only match locations that start with the search term
+          return normalizedField.startsWith(normalizedSearchTerm)
+        } else {
+          // If not a location pattern, use regular substring matching
+          return normalizedField.includes(normalizedSearchTerm)
+        }
       } else {
         // For other fields, use substring matching (existing behavior)
         return normalizedField.includes(normalizedSearchTerm)
