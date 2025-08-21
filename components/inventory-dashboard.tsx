@@ -454,10 +454,8 @@ export default function InventoryDashboard() {
     const qty = parseInt(value)
     if (!isNaN(qty) && qty > 0) {
       const suggestedPackage = getPackageTypeFromQuantity(qty)
-      // Only auto-update if user hasn't manually selected a package type
-      if (!newItem.package || newItem.package === "Exact" || newItem.package === "Estimated" || newItem.package === "Reel") {
-        handleFormFieldChange('package', suggestedPackage)
-      }
+      // Always update package type based on quantity (override any existing package)
+      handleFormFieldChange('package', suggestedPackage)
     }
   }
 
@@ -1845,7 +1843,8 @@ export default function InventoryDashboard() {
               mfgPartNumber: mfgPartNumber,
               description: description,
               supplier: supplierName, // Use determined supplier name
-              package: packageType || prev.package // Keep existing if no package info
+              // Don't override package - let quantity-based logic handle it
+              package: prev.package // Keep existing package (quantity-based)
             }))
             
             // Add the supplier to the suppliers list if it's not already there
