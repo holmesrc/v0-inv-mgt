@@ -225,10 +225,20 @@ export default function InventoryDashboard() {
     
     const normalizedSearchTerm = normalizeSearchTerm(cleanSearchTerm)
     
-    // Debug logging for H3 searches
-    const isH3Search = cleanSearchTerm.toLowerCase() === 'h3'
+    // Check if this looks like a location pattern (H3, A2, B4-15, etc.)
+    const isLocationPattern = /^[A-Z]\d+(-\d+)?$/i.test(cleanSearchTerm)
     
-    // Fields to search in
+    if (isLocationPattern) {
+      // For location patterns, ONLY search the location field
+      const locationField = item.Location
+      if (!locationField) return false
+      
+      const normalizedLocation = normalizeSearchTerm(locationField.toString())
+      const locationRegex = new RegExp(`^${normalizedSearchTerm}(-|$)`, 'i')
+      return locationRegex.test(normalizedLocation)
+    }
+    
+    // For non-location searches, search all fields as before
     const searchFields = [
       { field: item["Part number"], type: 'text' },
       { field: item["Part description"], type: 'text' }, 
@@ -239,49 +249,18 @@ export default function InventoryDashboard() {
     ]
     
     // Check for matches with different strategies based on field type and exact match request
-    const hasMatch = searchFields.some(({ field, type }) => {
+    return searchFields.some(({ field, type }) => {
       if (!field) return false
       const normalizedField = normalizeSearchTerm(field.toString())
       
-      let fieldMatches = false
-      
       if (exactMatchRequested) {
         // If trailing space detected, only do exact matching
-        fieldMatches = normalizedField === normalizedSearchTerm
-      } else if (type === 'location') {
-        // For location searches, be more precise - check if it looks like a location pattern
-        const isLocationPattern = /^[A-Z]\d+(-\d+)?$/i.test(cleanSearchTerm)
-        if (isLocationPattern) {
-          // Only match locations that start with the search term followed by a dash or end of string
-          const locationRegex = new RegExp(`^${normalizedSearchTerm}(-|$)`, 'i')
-          fieldMatches = locationRegex.test(normalizedField)
-        } else {
-          // If not a location pattern, use regular substring matching
-          fieldMatches = normalizedField.includes(normalizedSearchTerm)
-        }
+        return normalizedField === normalizedSearchTerm
       } else {
         // For other fields, use substring matching (existing behavior)
-        fieldMatches = normalizedField.includes(normalizedSearchTerm)
+        return normalizedField.includes(normalizedSearchTerm)
       }
-      
-      // Debug logging for problematic cases
-      if (isH3Search && fieldMatches && (item.Location === 'H4-113' || item.Location === 'H4-16' || item.Location === 'H2-56' || item.Location === 'H4-64')) {
-        console.log(`🐛 DEBUG: H3 search matched item at ${item.Location}:`)
-        console.log('  - searchTerm:', cleanSearchTerm)
-        console.log('  - normalizedSearchTerm:', normalizedSearchTerm)
-        console.log('  - field:', field?.toString())
-        console.log('  - normalizedField:', normalizedField)
-        console.log('  - fieldType:', type)
-        console.log('  - fieldMatches:', fieldMatches)
-        console.log('  - partNumber:', item["Part number"])
-        console.log('  - description:', item["Part description"])
-        console.log('  - mfgPartNumber:', item["MFG Part number"])
-      }
-      
-      return fieldMatches
     })
-    
-    return hasMatch
   }
 
   // Form state for adding new items
