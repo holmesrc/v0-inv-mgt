@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
 
     // Find low stock items
     const lowStockItems = inventory.filter(item => {
-      const quantity = parseInt(item.quantity) || 0
+      const quantity = parseInt(item.QTY) || 0
       const reorderPoint = item.reorder_point || defaultReorderPoint
       return quantity <= reorderPoint
     })
@@ -60,13 +60,13 @@ export async function GET(request: NextRequest) {
     const itemList = lowStockItems
       .slice(0, 10) // Limit to first 10 items
       .map(item => {
-        const quantity = parseInt(item.quantity) || 0
+        const quantity = parseInt(item.QTY) || 0
         const reorderPoint = item.reorder_point || defaultReorderPoint
         const status = quantity === 0 ? '🔴 OUT OF STOCK' : 
                       quantity <= Math.floor(reorderPoint * 0.5) ? '🟠 CRITICALLY LOW' : 
                       '🟡 LOW STOCK'
         
-        return `• *${item.part_number}* - ${item.description}\n  📍 ${item.location} | 📦 Qty: ${quantity} | ⚠️ Reorder at: ${reorderPoint} | ${status}`
+        return `• *${item["Part number"]}* - ${item["Part description"]}\n  📍 ${item.Location} | 📦 Qty: ${quantity} | ⚠️ Reorder at: ${reorderPoint} | ${status}`
       })
       .join('\n\n')
 
