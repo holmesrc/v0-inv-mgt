@@ -116,10 +116,13 @@ Electronic component inventory management system with supplier integration, auto
 - Package type clarification
 - User testing preparation
 
-### **Phase 5: Bug Fixes & Polish (August 21)**
+### **Phase 5: Bug Fixes & Polish (August 21-25)**
 - **Part number case correction**: Auto-formats to proper case (e.g., `81-grm1555c1er20wa1d` → `81-GRM1555C1ER20WA1D`)
 - **Duplicate supplier prevention**: Fixed "MouserMouser" display issue and duplicate dropdown entries
 - **Enhanced data validation**: Improved supplier list deduplication and sorting
+- **Search precision fix**: Fixed location searches (H3) matching MFG part numbers instead of actual locations
+- **Automatic weekly alerts**: Implemented Vercel Cron job for Monday 10 AM EST low stock notifications
+- **Cron job cleanup**: Removed daily alerts, kept only weekly Monday schedule
 
 ---
 
@@ -133,6 +136,8 @@ Electronic component inventory management system with supplier integration, auto
 - User testing checklist prepared
 - **Part number formatting**: Auto-corrects case for consistency
 - **Data validation**: Prevents duplicate suppliers and maintains clean dropdowns
+- **Precise search**: Location searches only match actual locations, not MFG part numbers
+- **Automatic weekly alerts**: Vercel Cron job sends low stock reports every Monday 10 AM EST
 
 ### **🔄 Ready for Testing**
 - System is feature-complete
@@ -154,8 +159,9 @@ Electronic component inventory management system with supplier integration, auto
 ### **Database Performance**
 - **Real-time sync** with Supabase
 - **Duplicate detection**: <100ms response
-- **Search performance**: Instant results
+- **Search performance**: Instant results with precise location matching
 - **Data persistence**: 100% reliable
+- **Automated alerts**: Weekly Vercel Cron job (Mondays 10 AM EST)
 
 ### **User Experience**
 - **Help system**: 4 different access methods
@@ -189,6 +195,7 @@ Electronic component inventory management system with supplier integration, auto
 - **USER_TESTING_CHECKLIST.md**: Comprehensive testing guide
 - **SUPPLIER_API_SETUP.md**: API configuration guide
 - **SLACK_WORKFLOW_SETUP.md**: Notification setup
+- **WEEKLY_ALERTS_SETUP.md**: Automatic cron job configuration
 - **Help system**: In-app documentation
 - **Code comments**: Inline documentation
 
@@ -215,13 +222,14 @@ Electronic component inventory management system with supplier integration, auto
 - **Guided onboarding**: Interactive tour for new users
 
 ### **Business Value**
-- **Automated reordering**: Reduces stockouts
+- **Automated reordering**: Reduces stockouts with weekly Monday alerts
 - **Dual supplier pricing**: Enables cost optimization
 - **Real-time alerts**: Proactive inventory management
 - **Data export**: Supports business analysis
+- **Precise search**: Eliminates false matches and improves efficiency
 
 ---
 
-**Last Updated**: August 21, 2025  
+**Last Updated**: August 25, 2025  
 **Status**: ✅ Ready for Production  
 **Next Phase**: 🧪 User Testing
