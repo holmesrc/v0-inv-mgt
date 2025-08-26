@@ -7,7 +7,7 @@
   "crons": [
     {
       "path": "/api/cron/weekly-alert",
-      "schedule": "8 16 * * 1"
+      "schedule": "40 16 * * 1"
     }
   ]
 }
