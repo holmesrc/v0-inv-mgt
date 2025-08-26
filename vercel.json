@@ -2,12 +2,19 @@
   "functions": {
     "app/api/cron/weekly-alert/route.ts": {
       "maxDuration": 30
+    },
+    "app/api/cron/test/route.ts": {
+      "maxDuration": 10
     }
   },
   "crons": [
     {
       "path": "/api/cron/weekly-alert",
       "schedule": "40 16 * * 1"
+    },
+    {
+      "path": "/api/cron/test",
+      "schedule": "30 17 * * 1"
     }
   ]
 }
