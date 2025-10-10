@@ -3,11 +3,5 @@
     "app/api/cron/weekly-alert/route.ts": {
       "maxDuration": 30
     }
-  },
-  "crons": [
-    {
-      "path": "/api/cron/weekly-alert",
-      "schedule": "58 17 * * 1"
-    }
-  ]
+  }
 }

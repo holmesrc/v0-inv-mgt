@@ -209,12 +209,6 @@ export default function EndpointsPage() {
       path: "/approvals",
       description: "Approve or deny inventory changes",
       icon: FileText
-    },
-    {
-      title: "Test Cron Browser",
-      path: "/test-cron-browser",
-      description: "Browser-based cron testing",
-      icon: Clock
     }
   ]
 

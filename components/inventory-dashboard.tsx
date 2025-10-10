@@ -902,6 +902,30 @@ export default function InventoryDashboard() {
     }
   }
 
+  const handleUploadAccess = async () => {
+    const password = prompt("Enter password to upload new Excel file:")
+    if (!password) return
+
+    try {
+      const response = await fetch("/api/auth/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password, type: "approval" })
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        setShowUpload(true)
+      } else {
+        alert("❌ Incorrect password")
+      }
+    } catch (error) {
+      console.error("Authentication error:", error)
+      alert("❌ Authentication failed")
+    }
+  }
+
   const handleCustomQuantityChange = (itemId: string, customAmount: string) => {
     const amount = parseInt(customAmount)
     if (!isNaN(amount) && amount !== 0) {
@@ -2033,7 +2057,7 @@ export default function InventoryDashboard() {
             <Download className="h-4 w-4" />
             Download Excel
           </Button>
-          <Button variant="outline" onClick={() => setShowUpload(true)} className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleUploadAccess} className="flex items-center gap-2">
             <Upload className="h-4 w-4" />
             Upload New File
           </Button>
