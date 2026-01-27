@@ -219,9 +219,9 @@ export default function InventoryDashboard() {
       .replace(/\s*khz\s*/g, " khz ")
       .replace(/\s*mhz\s*/g, " mhz ")
       .replace(/\s*ghz\s*/g, " ghz ")
-      // Normalize power units (handle partial typing: wat -> w, watt -> w)
+      // Normalize power units (handle partial typing: wa -> w, wat -> w, watt -> w)
       .replace(/\s*watts?\s*/g, " w ")
-      .replace(/\s*wat+\s*/g, " w ")  // Handles "wat", "watt" while typing
+      .replace(/\s*wa+t*\s*/g, " w ")  // Handles "wa", "wat", "watt" while typing
       .replace(/\s*milliwatts?\s*/g, " mw ")
       // Clean up multiple spaces
       .replace(/\s+/g, " ")
