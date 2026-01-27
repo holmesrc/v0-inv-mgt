@@ -243,13 +243,20 @@ export default function InventoryDashboard() {
       { field: item["MFG Part number"] || "", type: 'text' }
     ]
     
-    // Bidirectional substring matching - check if either contains the other
+    // Bidirectional substring matching
     return searchFields.some(({ field }) => {
       if (!field) return false
       const normalizedField = normalizeSearchTerm(field.toString())
-      // Match if field contains search term OR if search term starts with field value
-      return normalizedField.includes(normalizedSearchTerm) || 
-             (normalizedField.length >= 3 && normalizedSearchTerm.includes(normalizedField))
+      
+      // Direct substring match (existing behavior: "cap" finds "capacitor")
+      if (normalizedField.includes(normalizedSearchTerm)) return true
+      
+      // Reverse match: check if any word in the field matches the search term
+      // This allows "capacitor" to find items with "cap" in them
+      const fieldWords = normalizedField.split(/\s+/)
+      return fieldWords.some(word => 
+        word.length >= 3 && normalizedSearchTerm.includes(word)
+      )
     })
   }
 
