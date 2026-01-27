@@ -17,6 +17,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { AlertTriangle, Package, TrendingDown, Upload, Settings, RefreshCw, Download, Plus, Edit, Trash2, Check, X, Search, Filter, ArrowUpDown, Globe, HelpCircle, Play } from "lucide-react"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Switch } from "@/components/ui/switch"
@@ -2058,12 +2059,12 @@ export default function InventoryDashboard() {
 
   return (
     <TooltipProvider>
-      <div className="container mx-auto p-6 space-y-6">
+      <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Inventory Management System</h1>
-          <p className="text-muted-foreground">Managing {inventory.length} inventory items</p>
+          <h1 className="text-2xl md:text-3xl font-bold">Inventory Management System</h1>
+          <p className="text-muted-foreground text-sm md:text-base">Managing {inventory.length} inventory items</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button onClick={() => handleAddItemDialogOpen(true)} className="flex items-center gap-2" data-tour="add-item-btn">
@@ -2086,6 +2087,7 @@ export default function InventoryDashboard() {
             <Play className="h-4 w-4" />
             Take Tour
           </Button>
+          <ThemeToggle />
           <Button variant="outline" onClick={handleDownloadExcel} className="flex items-center gap-2">
             <Download className="h-4 w-4" />
             Download Excel
@@ -2283,7 +2285,7 @@ export default function InventoryDashboard() {
       )}
 
       {/* Search and Filter */}
-      <div className="flex gap-4">
+      <div className="flex flex-col md:flex-row gap-4">
         <div className="flex-1 relative">
           <Input
             placeholder="Search parts... (⌘K / Ctrl+K)"
@@ -2301,7 +2303,7 @@ export default function InventoryDashboard() {
           {searchTerm && (
             <button
               onClick={() => setSearchTerm("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
               aria-label="Clear search"
             >
               <X className="h-4 w-4" />
@@ -2309,7 +2311,7 @@ export default function InventoryDashboard() {
           )}
         </div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-48">
+          <SelectTrigger className="w-full md:w-48">
             <SelectValue placeholder="Filter by category" />
           </SelectTrigger>
           <SelectContent>
@@ -2319,7 +2321,7 @@ export default function InventoryDashboard() {
           </SelectContent>
         </Select>
         <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
-          <SelectTrigger className="w-48">
+          <SelectTrigger className="w-full md:w-48">
             <SelectValue placeholder="Sort by" />
           </SelectTrigger>
           <SelectContent>
