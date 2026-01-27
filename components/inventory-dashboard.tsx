@@ -193,6 +193,8 @@ export default function InventoryDashboard() {
       .replace(/\beight\b/g, "8")
       .replace(/\bnine\b/g, "9")
       .replace(/\bten\b/g, "10")
+      // Add space between numbers and units (5W -> 5 W)
+      .replace(/(\d+)(w|v|a|ohm|hz|khz|mhz|ghz|uf|pf|nf|ma|mw)\b/g, "$1 $2")
       // Normalize resistance units
       .replace(/\s*ω\s*/g, " ohm ")
       .replace(/\s*ohms?\s*/g, " ohm ")
