@@ -219,8 +219,9 @@ export default function InventoryDashboard() {
       .replace(/\s*khz\s*/g, " khz ")
       .replace(/\s*mhz\s*/g, " mhz ")
       .replace(/\s*ghz\s*/g, " ghz ")
-      // Normalize power units
+      // Normalize power units (handle partial typing: wat -> w, watt -> w)
       .replace(/\s*watts?\s*/g, " w ")
+      .replace(/\s*wat+\s*/g, " w ")  // Handles "wat", "watt" while typing
       .replace(/\s*milliwatts?\s*/g, " mw ")
       // Clean up multiple spaces
       .replace(/\s+/g, " ")
@@ -261,11 +262,11 @@ export default function InventoryDashboard() {
       if (!field) return false
       const normalizedField = normalizeSearchTerm(field.toString())
       
-      // Check if search looks like a unit value (number + unit)
-      const isUnitSearch = /^\d+\s*[a-z]+$/.test(normalizedSearchTerm)
+      // Check if search looks like a complete unit value (number + recognized unit)
+      const isCompleteUnitSearch = /^\d+\s+(w|v|a|ma|mw|ohm|hz|khz|mhz|ghz|uf|pf|nf)$/.test(normalizedSearchTerm)
       
-      if (isUnitSearch) {
-        // For unit searches, use word boundary matching to avoid "1 w" matching "10 w"
+      if (isCompleteUnitSearch) {
+        // For complete unit searches, use exact word matching to avoid "1 w" matching "10 w"
         const searchWords = normalizedSearchTerm.split(/\s+/)
         const fieldWords = normalizedField.split(/\s+/)
         return searchWords.every(searchWord => fieldWords.includes(searchWord))
