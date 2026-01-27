@@ -2286,7 +2286,7 @@ export default function InventoryDashboard() {
       <div className="flex gap-4">
         <div className="flex-1 relative">
           <Input
-            placeholder="Search parts..."
+            placeholder="Search parts... (⌘K / Ctrl+K)"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             onKeyDown={(e) => {
