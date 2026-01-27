@@ -215,12 +215,7 @@ export default function InventoryDashboard() {
   }
 
   const smartSearch = (item: InventoryItem, searchTerm: string): boolean => {
-    if (!searchTerm) return true
-    
-    // Check if search term ends with space - this indicates exact match request
-    const exactMatchRequested = searchTerm.endsWith(' ')
     const cleanSearchTerm = searchTerm.trim()
-    
     if (!cleanSearchTerm) return true
     
     const normalizedSearchTerm = normalizeSearchTerm(cleanSearchTerm)
@@ -238,7 +233,7 @@ export default function InventoryDashboard() {
       return locationRegex.test(normalizedLocation)
     }
     
-    // For non-location searches, search all fields as before
+    // For non-location searches, search all fields
     const searchFields = [
       { field: item["Part number"], type: 'text' },
       { field: item["Part description"], type: 'text' }, 
@@ -248,18 +243,11 @@ export default function InventoryDashboard() {
       { field: item["MFG Part number"] || "", type: 'text' }
     ]
     
-    // Check for matches with different strategies based on field type and exact match request
-    return searchFields.some(({ field, type }) => {
+    // Bidirectional substring matching
+    return searchFields.some(({ field }) => {
       if (!field) return false
       const normalizedField = normalizeSearchTerm(field.toString())
-      
-      if (exactMatchRequested) {
-        // If trailing space detected, only do exact matching
-        return normalizedField === normalizedSearchTerm
-      } else {
-        // For other fields, use substring matching (existing behavior)
-        return normalizedField.includes(normalizedSearchTerm)
-      }
+      return normalizedField.includes(normalizedSearchTerm) || normalizedSearchTerm.includes(normalizedField)
     })
   }
 
