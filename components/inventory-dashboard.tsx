@@ -261,6 +261,16 @@ export default function InventoryDashboard() {
       if (!field) return false
       const normalizedField = normalizeSearchTerm(field.toString())
       
+      // Check if search looks like a unit value (number + unit)
+      const isUnitSearch = /^\d+\s*[a-z]+$/.test(normalizedSearchTerm)
+      
+      if (isUnitSearch) {
+        // For unit searches, use word boundary matching to avoid "1 w" matching "10 w"
+        const searchWords = normalizedSearchTerm.split(/\s+/)
+        const fieldWords = normalizedField.split(/\s+/)
+        return searchWords.every(searchWord => fieldWords.includes(searchWord))
+      }
+      
       // Direct substring match (existing behavior: "cap" finds "capacitor")
       if (normalizedField.includes(normalizedSearchTerm)) return true
       
