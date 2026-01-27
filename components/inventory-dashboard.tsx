@@ -2059,6 +2059,11 @@ export default function InventoryDashboard() {
 
   return (
     <TooltipProvider>
+      {/* Theme Toggle - Fixed Top Right */}
+      <div className="fixed top-4 right-4 z-50">
+        <ThemeToggle />
+      </div>
+      
       <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
@@ -2087,7 +2092,6 @@ export default function InventoryDashboard() {
             <Play className="h-4 w-4" />
             Take Tour
           </Button>
-          <ThemeToggle />
           <Button variant="outline" onClick={handleDownloadExcel} className="flex items-center gap-2">
             <Download className="h-4 w-4" />
             Download Excel
