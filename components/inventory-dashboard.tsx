@@ -182,6 +182,17 @@ export default function InventoryDashboard() {
     return text
       .toLowerCase()
       .trim()
+      // Convert number words to digits
+      .replace(/\bone\b/g, "1")
+      .replace(/\btwo\b/g, "2")
+      .replace(/\bthree\b/g, "3")
+      .replace(/\bfour\b/g, "4")
+      .replace(/\bfive\b/g, "5")
+      .replace(/\bsix\b/g, "6")
+      .replace(/\bseven\b/g, "7")
+      .replace(/\beight\b/g, "8")
+      .replace(/\bnine\b/g, "9")
+      .replace(/\bten\b/g, "10")
       // Normalize resistance units
       .replace(/\s*ω\s*/g, " ohm ")
       .replace(/\s*ohms?\s*/g, " ohm ")
