@@ -883,8 +883,7 @@ export default function InventoryDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          inventory: inventory,
-          lowStockItems: lowStockItems
+          items: lowStockItems
         })
       })
 
