@@ -304,6 +304,19 @@ export default function InventoryDashboard() {
     checkSlackConfiguration()
   }, [])
 
+  // Global keyboard shortcut for search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        const searchInput = document.querySelector('[data-tour="search-bar"]') as HTMLInputElement
+        searchInput?.focus()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   // Extract unique suppliers from inventory
   useEffect(() => {
     const uniqueSuppliers = Array.from(new Set(
@@ -2271,14 +2284,29 @@ export default function InventoryDashboard() {
 
       {/* Search and Filter */}
       <div className="flex gap-4">
-        <div className="flex-1">
+        <div className="flex-1 relative">
           <Input
-            placeholder="Search parts (add space after term for exact match: 'H3-15 ')..."
+            placeholder="Search parts..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full"
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault()
+                e.currentTarget.focus()
+              }
+            }}
+            className="w-full pr-8"
             data-tour="search-bar"
           />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
           <SelectTrigger className="w-48">
