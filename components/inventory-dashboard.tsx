@@ -243,11 +243,13 @@ export default function InventoryDashboard() {
       { field: item["MFG Part number"] || "", type: 'text' }
     ]
     
-    // Bidirectional substring matching
+    // Bidirectional substring matching - check if either contains the other
     return searchFields.some(({ field }) => {
       if (!field) return false
       const normalizedField = normalizeSearchTerm(field.toString())
-      return normalizedField.includes(normalizedSearchTerm) || normalizedSearchTerm.includes(normalizedField)
+      // Match if field contains search term OR if search term starts with field value
+      return normalizedField.includes(normalizedSearchTerm) || 
+             (normalizedField.length >= 3 && normalizedSearchTerm.includes(normalizedField))
     })
   }
 
