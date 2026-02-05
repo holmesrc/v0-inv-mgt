@@ -10,17 +10,23 @@ export async function GET() {
       .select('id')
       .limit(1);
     
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error:', error);
+      throw error;
+    }
     
     return NextResponse.json({ 
       success: true, 
       timestamp: new Date().toISOString(),
-      message: 'Keepalive successful'
+      message: 'Keepalive successful',
+      recordCount: data?.length || 0
     });
   } catch (error) {
+    console.error('Keepalive error:', error);
     return NextResponse.json({ 
       success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
+      details: error instanceof Error ? error.stack : String(error)
     }, { status: 500 });
   }
 }
