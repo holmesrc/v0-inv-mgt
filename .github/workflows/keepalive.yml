@@ -1,0 +1,15 @@
+yaml
+name: Supabase Keepalive
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping keepalive endpoint
+        run: |
+          curl -f https://v0-inv-mgt.vercel.app/api/keepalive || exit 1
