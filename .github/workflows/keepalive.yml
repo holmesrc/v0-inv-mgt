@@ -1,9 +1,10 @@
+yaml
 name: Supabase Keepalive
 
 on:
   schedule:
-    - cron: '0 */12 * * *'  # Every 12 hours
-  workflow_dispatch:  # Allow manual trigger
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
 
 jobs:
   keepalive:
