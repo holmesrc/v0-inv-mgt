@@ -2096,10 +2096,6 @@ export default function InventoryDashboard() {
             <Download className="h-4 w-4" />
             Download Excel
           </Button>
-          <Button variant="outline" onClick={handleUploadAccess} className="flex items-center gap-2">
-            <Upload className="h-4 w-4" />
-            Upload New File
-          </Button>
           <Button 
             variant="outline" 
             onClick={handleManualSync}
@@ -3382,6 +3378,21 @@ export default function InventoryDashboard() {
                 />
               </div>
             )}
+            <Separator />
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Admin Actions</Label>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowSettings(false)
+                  handleUploadAccess()
+                }} 
+                className="w-full flex items-center justify-center gap-2"
+              >
+                <Upload className="h-4 w-4" />
+                Upload New File
+              </Button>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSettings(false)}>
