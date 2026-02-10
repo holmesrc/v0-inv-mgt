@@ -2096,7 +2096,8 @@ export default function InventoryDashboard() {
             <Download className="h-4 w-4" />
             Download Excel
           </Button>
-          <Button 
+          <Button
+ 
             variant="outline" 
             onClick={handleManualSync}
             disabled={syncing}
