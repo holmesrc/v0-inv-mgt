@@ -2376,14 +2376,14 @@ export default function InventoryDashboard() {
                   const awaitingApproval = hasPendingApproval(item)
                   
                   return (
-                    <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="border border-gray-300 p-2 font-mono text-sm">
+                    <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <td className="border border-gray-300 dark:border-gray-600 p-2 font-mono text-sm text-gray-900 dark:text-gray-100">
                         {item["Part number"]}
                       </td>
-                      <td className="border border-gray-300 p-2">
+                      <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-gray-100">
                         {item["Part description"]}
                       </td>
-                      <td className="border border-gray-300 p-2">
+                      <td className="border border-gray-300 dark:border-gray-600 p-2">
                         <div className="flex items-center gap-2">
                           <span className={hasChanges ? "line-through text-gray-500" : ""}>
                             {item.QTY}
