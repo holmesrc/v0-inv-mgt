@@ -2356,16 +2356,16 @@ export default function InventoryDashboard() {
             <div className="overflow-x-auto">
               <div className="max-h-[600px] overflow-y-auto">
                 <table className="w-full border-collapse">
-                  <thead className="bg-gray-50 sticky top-0 z-10">
+                  <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
                     <tr>
-                      <th className="border border-gray-300 p-2 text-left">Part Number</th>
-                      <th className="border border-gray-300 p-2 text-left">Description</th>
-                      <th className="border border-gray-300 p-2 text-left">Quantity</th>
-                      <th className="border border-gray-300 p-2 text-left">Location</th>
-                      <th className="border border-gray-300 p-2 text-left">Supplier</th>
-                      <th className="border border-gray-300 p-2 text-left">Package</th>
-                      <th className="border border-gray-300 p-2 text-left">Status</th>
-                      <th className="border border-gray-300 p-2 text-left">Actions</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-gray-900 dark:text-gray-100">Part Number</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-gray-900 dark:text-gray-100">Description</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-gray-900 dark:text-gray-100">Quantity</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-gray-900 dark:text-gray-100">Location</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-gray-900 dark:text-gray-100">Supplier</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-gray-900 dark:text-gray-100">Package</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-gray-900 dark:text-gray-100">Status</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-gray-900 dark:text-gray-100">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
