@@ -6,7 +6,7 @@ export async function GET() {
     const supabase = createServerSupabaseClient();
     
     const { data, error } = await supabase
-      .from('inventory_items')
+      .from('inventory')
       .select('id')
       .limit(1);
     
