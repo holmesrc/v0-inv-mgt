@@ -26,7 +26,7 @@ export async function GET() {
     return NextResponse.json({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error',
-      details: error instanceof Error ? error.stack : String(error)
+      details: error instanceof Error ? error.stack : JSON.stringify(error, null, 2)
     }, { status: 500 });
   }
 }
