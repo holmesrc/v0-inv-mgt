@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -344,9 +344,9 @@ export default function ApprovalsPage() {
     })
 
     return (
-      <>
+      <React.Fragment key={change.id}>
         {/* Batch Summary Row */}
-        <TableRow key={change.id} className={change.status === "pending" ? "bg-yellow-50" : ""}>
+        <TableRow className={change.status === "pending" ? "bg-yellow-50" : ""}>
           <TableCell>
             {change.status === "pending" && (
               <Checkbox checked={selectedIds.has(change.id)} onCheckedChange={() => handleSelectItem(change.id)} />
@@ -533,7 +533,7 @@ export default function ApprovalsPage() {
               </TableRow>
             )
           })}
-      </>
+      </React.Fragment>
     )
   }
 
