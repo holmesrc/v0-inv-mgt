@@ -59,8 +59,10 @@ function ApprovalsContent({ accessLevel }: { accessLevel: "master" | "lab" }) {
   const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    loadPendingChanges()
-  }, [])
+    if (accessLevel === "master" || lab?.id) {
+      loadPendingChanges()
+    }
+  }, [lab?.id])
 
   const loadPendingChanges = async () => {
     try {
