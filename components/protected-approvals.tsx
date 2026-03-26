@@ -7,12 +7,14 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Lock, Shield } from "lucide-react"
+import { useLab } from "@/lib/lab-context"
 
 interface ProtectedApprovalsProps {
   children: React.ReactNode
 }
 
 export default function ProtectedApprovals({ children }: ProtectedApprovalsProps) {
+  const { lab } = useLab()
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [password, setPassword] = useState("")
@@ -52,7 +54,7 @@ export default function ProtectedApprovals({ children }: ProtectedApprovalsProps
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ password, type: "approval" }),
+        body: JSON.stringify({ password, type: "approval", labSlug: lab?.slug }),
       })
 
       const result = await response.json()

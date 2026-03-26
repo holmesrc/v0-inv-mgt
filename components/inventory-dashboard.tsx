@@ -2213,7 +2213,7 @@ export default function InventoryDashboard() {
               variant="outline" 
               size="sm"
               className="mt-2 w-full"
-              onClick={() => window.open('/approvals', '_blank')}
+              onClick={() => window.open(`/${lab?.slug}/approvals`, '_blank')}
             >
               View Approvals Page
             </Button>
@@ -2232,7 +2232,7 @@ export default function InventoryDashboard() {
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => window.open('/approvals', '_blank')}
+              onClick={() => window.open(`/${lab?.slug}/approvals`, '_blank')}
             >
               View Approvals Page
             </Button>
@@ -2284,7 +2284,7 @@ export default function InventoryDashboard() {
                   <Button 
                     variant="ghost" 
                     size="sm"
-                    onClick={() => window.open('/approvals', '_blank')}
+                    onClick={() => window.open(`/${lab?.slug}/approvals`, '_blank')}
                     className="text-blue-600 hover:text-blue-700"
                   >
                     View {pendingChanges.filter(change => change.status === 'pending').length - 10} more pending changes...
@@ -3597,7 +3597,7 @@ export default function InventoryDashboard() {
             <Button variant="outline" onClick={() => setShowPendingChanges(false)}>
               Close
             </Button>
-            <Button onClick={() => window.open('/approvals', '_blank')}>
+            <Button onClick={() => window.open(`/${lab?.slug}/approvals`, '_blank')}>
               Open Approvals Page
             </Button>
           </DialogFooter>

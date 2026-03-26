@@ -1,32 +1,49 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { createServerSupabaseClient } from "@/lib/supabase"
 
-const UPLOAD_PASSWORD = process.env.UPLOAD_PASSWORD || "PHL10"
+const MASTER_PASSWORD = process.env.MASTER_PASSWORD || "MASTER2026"
+const FALLBACK_PASSWORD = process.env.UPLOAD_PASSWORD || "PHL10"
 
 export async function POST(request: NextRequest) {
   try {
-    const { password, type } = await request.json()
+    const { password, type, labSlug } = await request.json()
 
-    if (password === UPLOAD_PASSWORD) {
-      // Set a session cookie for authentication
-      const response = NextResponse.json({ success: true })
+    // Master password always works
+    let authenticated = password === MASTER_PASSWORD
 
-      if (type === "approval") {
-        response.cookies.set("approval-auth", "authenticated", {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
-          maxAge: 60 * 60 * 24, // 24 hours
-        })
-      } else {
-        // Default to upload auth
-        response.cookies.set("upload-auth", "authenticated", {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
-          maxAge: 60 * 60 * 24, // 24 hours
-        })
+    // Try lab-specific password if not master
+    if (!authenticated && labSlug) {
+      try {
+        const supabase = createServerSupabaseClient()
+        const { data: lab } = await supabase
+          .from("labs")
+          .select("config")
+          .eq("slug", labSlug)
+          .single()
+
+        const labPassword = lab?.config?.password
+        if (labPassword) {
+          authenticated = password === labPassword
+        }
+      } catch {
+        // Fall through to fallback
       }
+    }
 
+    // Fallback to env var password
+    if (!authenticated) {
+      authenticated = password === FALLBACK_PASSWORD
+    }
+
+    if (authenticated) {
+      const response = NextResponse.json({ success: true })
+      const cookieName = type === "approval" ? "approval-auth" : "upload-auth"
+      response.cookies.set(cookieName, "authenticated", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24,
+      })
       return response
     } else {
       return NextResponse.json({ success: false, error: "Invalid password" }, { status: 401 })
