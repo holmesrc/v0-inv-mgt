@@ -54,6 +54,15 @@ export default function ProtectedApprovals({ children }: ProtectedApprovalsProps
     }
   }, [isAuthenticated, resetTimer])
 
+  // Clear auth when leaving the approvals page
+  useEffect(() => {
+    return () => {
+      if (lab?.slug) {
+        fetch(`/api/auth/logout-approval?lab=${lab.slug}`, { method: "POST" })
+      }
+    }
+  }, [lab?.slug])
+
   useEffect(() => {
     if (lab?.slug) checkAuthentication()
   }, [lab?.slug])
