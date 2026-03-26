@@ -3,13 +3,16 @@ import { type NextRequest, NextResponse } from "next/server"
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     if (!SUPABASE_URL || !SERVICE_KEY) {
       return NextResponse.json({ success: false, error: "Database not configured", data: [] }, { status: 500 })
     }
 
-    const url = `${SUPABASE_URL}/rest/v1/pending_changes?select=*&order=created_at.desc`
+    const labId = request.nextUrl.searchParams.get("lab_id")
+    let url = `${SUPABASE_URL}/rest/v1/pending_changes?select=*&order=created_at.desc`
+    if (labId) url += `&lab_id=eq.${labId}`
+
     const resp = await fetch(url, {
       headers: {
         apikey: SERVICE_KEY,

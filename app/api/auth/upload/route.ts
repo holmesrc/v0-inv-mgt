@@ -8,10 +8,16 @@ export async function POST(request: NextRequest) {
   try {
     const { password, type, labSlug } = await request.json()
 
-    // Master password always works
-    let authenticated = password === MASTER_PASSWORD
+    let authenticated = false
+    let accessLevel: "master" | "lab" = "lab"
 
-    // Try lab-specific password if not master
+    // Master password
+    if (password === MASTER_PASSWORD) {
+      authenticated = true
+      accessLevel = "master"
+    }
+
+    // Try lab-specific password
     if (!authenticated && labSlug) {
       try {
         const supabase = createServerSupabaseClient()
@@ -22,28 +28,39 @@ export async function POST(request: NextRequest) {
           .single()
 
         const labPassword = lab?.config?.password
-        if (labPassword) {
-          authenticated = password === labPassword
+        if (labPassword && password === labPassword) {
+          authenticated = true
+          accessLevel = "lab"
         }
       } catch {
         // Fall through to fallback
       }
     }
 
-    // Fallback to env var password
-    if (!authenticated) {
-      authenticated = password === FALLBACK_PASSWORD
+    // Fallback password
+    if (!authenticated && password === FALLBACK_PASSWORD) {
+      authenticated = true
+      accessLevel = "lab"
     }
 
     if (authenticated) {
-      const response = NextResponse.json({ success: true })
+      const response = NextResponse.json({ success: true, accessLevel })
       const cookieName = type === "approval" ? "approval-auth" : "upload-auth"
+      // Store access level in a separate cookie
       response.cookies.set(cookieName, "authenticated", {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         maxAge: 60 * 60 * 24,
       })
+      if (type === "approval") {
+        response.cookies.set("approval-access-level", accessLevel, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 60 * 60 * 24,
+        })
+      }
       return response
     } else {
       return NextResponse.json({ success: false, error: "Invalid password" }, { status: 401 })

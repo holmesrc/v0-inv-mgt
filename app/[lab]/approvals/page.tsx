@@ -20,6 +20,8 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import { useLab } from "@/lib/lab-context"
+import { labApiUrl } from "@/lib/lab-utils"
 import ProtectedApprovals from "@/components/protected-approvals"
 
 interface PendingChange {
@@ -35,9 +37,19 @@ interface PendingChange {
   approved_at?: string
 }
 
-export default function ApprovalsPage() {
+export default function ApprovalsPageWrapper() {
+  return (
+    <ProtectedApprovals>
+      {(accessLevel) => <ApprovalsContent accessLevel={accessLevel} />}
+    </ProtectedApprovals>
+  )
+}
+
+function ApprovalsContent({ accessLevel }: { accessLevel: "master" | "lab" }) {
   const params = useParams()
   const labSlug = params.lab as string
+  const { lab } = useLab()
+  const api = (url: string) => accessLevel === "master" ? url : labApiUrl(lab?.id, url)
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -54,7 +66,7 @@ export default function ApprovalsPage() {
     try {
       setLoading(true)
       setError(null)
-      const response = await fetch("/api/inventory/pending")
+      const response = await fetch(api("/api/inventory/pending"))
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
@@ -879,14 +891,16 @@ export default function ApprovalsPage() {
   const pendingItems = pendingChanges.filter((c) => c.status === "pending")
 
   return (
-    <ProtectedApprovals>
       <div className="container mx-auto p-6 space-y-6">
-        {/* All existing content stays the same */}
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold">Approval Dashboard</h1>
-            <p className="text-muted-foreground">Manage pending inventory changes and approvals</p>
+            <p className="text-muted-foreground">
+              {accessLevel === "master" 
+                ? "Master view — showing all labs" 
+                : `${lab?.name || labSlug} — lab approvals only`}
+            </p>
           </div>
           <div className="flex gap-2">
             <Button onClick={loadPendingChanges} variant="outline" disabled={loading}>
@@ -1183,6 +1197,5 @@ export default function ApprovalsPage() {
           </CardContent>
         </Card>
       </div>
-    </ProtectedApprovals>
   )
 }
