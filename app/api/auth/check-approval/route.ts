@@ -2,11 +2,12 @@ import { type NextRequest, NextResponse } from "next/server"
 
 export async function GET(request: NextRequest) {
   try {
-    const authCookie = request.cookies.get("approval-auth")
-    const accessLevel = request.cookies.get("approval-access-level")?.value || "lab"
+    const labSlug = request.nextUrl.searchParams.get("lab") || "global"
+    const cookieName = `approval-auth-${labSlug}`
+    const authCookie = request.cookies.get(cookieName)
 
-    if (authCookie?.value === "authenticated") {
-      return NextResponse.json({ authenticated: true, accessLevel })
+    if (authCookie?.value) {
+      return NextResponse.json({ authenticated: true, accessLevel: authCookie.value })
     } else {
       return NextResponse.json({ authenticated: false }, { status: 401 })
     }

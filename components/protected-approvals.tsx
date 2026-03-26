@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -13,6 +13,8 @@ interface ProtectedApprovalsProps {
   children: (accessLevel: "master" | "lab") => React.ReactNode
 }
 
+const INACTIVITY_TIMEOUT = 10 * 60 * 1000 // 10 minutes
+
 export default function ProtectedApprovals({ children }: ProtectedApprovalsProps) {
   const { lab } = useLab()
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -22,14 +24,43 @@ export default function ProtectedApprovals({ children }: ProtectedApprovalsProps
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(true)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
+
+  const lockOut = useCallback(() => {
+    setIsAuthenticated(false)
+    setIsOpen(true)
+    setPassword("")
+    setError("Session expired due to inactivity. Please log in again.")
+  }, [])
+
+  const resetTimer = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    if (isAuthenticated) {
+      timerRef.current = setTimeout(lockOut, INACTIVITY_TIMEOUT)
+    }
+  }, [isAuthenticated, lockOut])
+
+  // Inactivity listeners
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    const events = ["mousedown", "keydown", "scroll", "touchstart", "mousemove"]
+    events.forEach((e) => window.addEventListener(e, resetTimer))
+    resetTimer()
+
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, resetTimer))
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [isAuthenticated, resetTimer])
 
   useEffect(() => {
-    checkAuthentication()
-  }, [])
+    if (lab?.slug) checkAuthentication()
+  }, [lab?.slug])
 
   const checkAuthentication = async () => {
     try {
-      const response = await fetch("/api/auth/check-approval")
+      const response = await fetch(`/api/auth/check-approval?lab=${lab?.slug}`)
       const result = await response.json()
 
       if (result.authenticated) {
@@ -38,7 +69,7 @@ export default function ProtectedApprovals({ children }: ProtectedApprovalsProps
       } else {
         setIsOpen(true)
       }
-    } catch (error) {
+    } catch {
       setIsOpen(true)
     } finally {
       setChecking(false)
@@ -67,7 +98,7 @@ export default function ProtectedApprovals({ children }: ProtectedApprovalsProps
       } else {
         setError("Invalid password")
       }
-    } catch (error) {
+    } catch {
       setError("Authentication failed")
     } finally {
       setLoading(false)
@@ -93,10 +124,10 @@ export default function ProtectedApprovals({ children }: ProtectedApprovalsProps
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Shield className="w-5 h-5 text-blue-600" />
-                Approval Dashboard Access
+                {lab?.name || "Lab"} — Approval Access
               </DialogTitle>
               <DialogDescription>
-                Enter your lab password for lab-specific approvals, or the master password for all labs.
+                Enter your lab password or master password to continue.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">

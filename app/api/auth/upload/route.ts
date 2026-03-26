@@ -37,24 +37,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Fallback password
-    if (!authenticated && password === FALLBACK_PASSWORD) {
+    // Fallback password (only for PA backwards compat)
+    if (!authenticated && labSlug === "pa" && password === FALLBACK_PASSWORD) {
       authenticated = true
       accessLevel = "lab"
     }
 
     if (authenticated) {
       const response = NextResponse.json({ success: true, accessLevel })
-      const cookieName = type === "approval" ? "approval-auth" : "upload-auth"
-      // Store access level in a separate cookie
-      response.cookies.set(cookieName, "authenticated", {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24,
-      })
       if (type === "approval") {
-        response.cookies.set("approval-access-level", accessLevel, {
+        // Lab-specific cookie name so each lab requires its own login
+        const cookieName = `approval-auth-${labSlug || "global"}`
+        response.cookies.set(cookieName, accessLevel, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 60 * 10, // 10 minutes
+        })
+      } else {
+        response.cookies.set("upload-auth", "authenticated", {
           httpOnly: true,
           secure: process.env.NODE_ENV === "production",
           sameSite: "lax",
