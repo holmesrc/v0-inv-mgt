@@ -2058,8 +2058,9 @@ export default function InventoryDashboard() {
     )
   }
 
-  // Show upload screen if no data
-  if (showUpload) {
+  // Show upload screen if no data and no lab context (legacy behavior)
+  // With lab context, always show dashboard so labs can use Add Item or upload
+  if (showUpload && !lab) {
     return <FileUpload onDataLoaded={handleDataLoaded} />
   }
 
@@ -2366,16 +2367,16 @@ export default function InventoryDashboard() {
             <div className="overflow-x-auto">
               <div className="max-h-[600px] overflow-y-auto">
                 <table className="w-full border-collapse">
-                  <thead className="bg-gray-50 sticky top-0 z-10">
+                  <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
                     <tr>
-                      <th className="border border-gray-300 p-2 text-left">Part Number</th>
-                      <th className="border border-gray-300 p-2 text-left">Description</th>
-                      <th className="border border-gray-300 p-2 text-left">Quantity</th>
-                      <th className="border border-gray-300 p-2 text-left">Location</th>
-                      <th className="border border-gray-300 p-2 text-left">Supplier</th>
-                      <th className="border border-gray-300 p-2 text-left">Package</th>
-                      <th className="border border-gray-300 p-2 text-left">Status</th>
-                      <th className="border border-gray-300 p-2 text-left">Actions</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Part Number</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Description</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Quantity</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Location</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Supplier</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Package</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Status</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2386,14 +2387,14 @@ export default function InventoryDashboard() {
                   const awaitingApproval = hasPendingApproval(item)
                   
                   return (
-                    <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="border border-gray-300 p-2 font-mono text-sm">
+                    <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <td className="border border-gray-300 dark:border-gray-600 p-2 font-mono text-sm">
                         {item["Part number"]}
                       </td>
-                      <td className="border border-gray-300 p-2">
+                      <td className="border border-gray-300 dark:border-gray-600 p-2">
                         {item["Part description"]}
                       </td>
-                      <td className="border border-gray-300 p-2">
+                      <td className="border border-gray-300 dark:border-gray-600 p-2">
                         <div className="flex items-center gap-2">
                           <span className={hasChanges ? "line-through text-gray-500" : ""}>
                             {item.QTY}
@@ -2405,10 +2406,10 @@ export default function InventoryDashboard() {
                           )}
                         </div>
                       </td>
-                      <td className="border border-gray-300 p-2">{item.Location}</td>
-                      <td className="border border-gray-300 p-2">{item.Supplier}</td>
-                      <td className="border border-gray-300 p-2">{item.Package}</td>
-                      <td className="border border-gray-300 p-2">
+                      <td className="border border-gray-300 dark:border-gray-600 p-2">{item.Location}</td>
+                      <td className="border border-gray-300 dark:border-gray-600 p-2">{item.Supplier}</td>
+                      <td className="border border-gray-300 dark:border-gray-600 p-2">{item.Package}</td>
+                      <td className="border border-gray-300 dark:border-gray-600 p-2">
                         {awaitingApproval ? (
                           <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300">
                             Awaiting Approval
@@ -2431,7 +2432,7 @@ export default function InventoryDashboard() {
                           </>
                         )}
                       </td>
-                      <td className="border border-gray-300 p-2">
+                      <td className="border border-gray-300 dark:border-gray-600 p-2">
                         <div className="flex gap-1 flex-wrap">
                           <Button
                             size="sm"
@@ -2952,7 +2953,7 @@ export default function InventoryDashboard() {
                           }
 
                           return (
-                            <tr key={index} className="border-t border-gray-200 hover:bg-gray-50">
+                            <tr key={index} className="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
                               {/* Part Number */}
                               <td className="p-3 border-r border-gray-200">
                                 {renderEditableCell('partNumber', item.partNumber, 'text', 'font-mono text-xs break-all')}
