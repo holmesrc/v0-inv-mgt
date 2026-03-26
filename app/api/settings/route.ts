@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient, canUseSupabase } from "@/lib/supabase"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     if (!canUseSupabase()) {
       return NextResponse.json({
@@ -19,8 +19,12 @@ export async function GET() {
     }
 
     const supabase = createServerSupabaseClient()
+    const labId = request.nextUrl.searchParams.get("lab_id")
 
-    const { data: settings, error } = await supabase.from("settings").select("*")
+    let query = supabase.from("settings").select("*")
+    if (labId) query = query.eq("lab_id", labId)
+
+    const { data: settings, error } = await query
 
     if (error) {
       console.error("Supabase error:", error)

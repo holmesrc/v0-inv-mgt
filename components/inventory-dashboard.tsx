@@ -27,6 +27,9 @@ import FileUpload from "./file-upload"
 import SupplierLookup from "./supplier-lookup"
 import HelpModal from "./help-modal"
 import InteractiveTour from "./interactive-tour"
+import { useLab } from "@/lib/lab-context"
+import { labApiUrl } from "@/lib/lab-utils"
+import Link from "next/link"
 
 // Types
 interface InventoryItem {
@@ -59,6 +62,8 @@ interface PendingChange {
 }
 
 export default function InventoryDashboard() {
+  const { lab } = useLab()
+  const api = (url: string) => labApiUrl(lab?.id, url)
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [packageNote, setPackageNote] = useState<string>("")
   const [searchTerm, setSearchTerm] = useState("")
@@ -94,7 +99,7 @@ export default function InventoryDashboard() {
   const [showSettings, setShowSettings] = useState(false)
   const [customQuantityInput, setCustomQuantityInput] = useState<Record<string, string>>({})
   const [showCustomInput, setShowCustomInput] = useState<Record<string, boolean>>({})
-  const [suggestedLocation, setSuggestedLocation] = useState<string>("H1-1")
+  const [suggestedLocation, setSuggestedLocation] = useState<string>(lab?.config?.locations?.defaultLocation || "H1-1")
   const [showCustomLocationInput, setShowCustomLocationInput] = useState(false)
   const [customLocationValue, setCustomLocationValue] = useState("")
   const [addItemFormModified, setAddItemFormModified] = useState(false)
@@ -318,19 +323,19 @@ export default function InventoryDashboard() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  // Extract unique suppliers from inventory
+  // Extract unique suppliers from inventory, merged with lab-configured suppliers
   useEffect(() => {
-    const uniqueSuppliers = Array.from(new Set(
+    const inventorySuppliers = Array.from(new Set(
       inventory
         .map(item => item.Supplier)
         .filter(supplier => supplier && supplier.trim() !== "")
         .map(supplier => supplier.trim())
-    )).sort()
+    ))
     
-    // Remove any duplicates that might exist
-    const cleanSuppliers = Array.from(new Set(uniqueSuppliers))
+    const labSuppliers = lab?.config?.suppliers || []
+    const cleanSuppliers = Array.from(new Set([...labSuppliers, ...inventorySuppliers])).sort()
     setSuppliers(cleanSuppliers)
-  }, [inventory])
+  }, [inventory, lab])
 
   // Location suggestion logic
   useEffect(() => {
@@ -350,7 +355,7 @@ export default function InventoryDashboard() {
       // Get all pending locations from pending changes
       let pendingLocations: string[] = []
       try {
-        const response = await fetch("/api/inventory/pending")
+        const response = await fetch(api("/api/inventory/pending"))
         if (response.ok) {
           const result = await response.json()
           if (result.success && Array.isArray(result.data)) {
@@ -400,8 +405,9 @@ export default function InventoryDashboard() {
       console.log("📍 Total unique locations found:", uniqueAllLocations.length)
 
       if (uniqueAllLocations.length === 0) {
-        console.log("📍 No locations found, defaulting to H1-1")
-        setSuggestedLocation("H1-1")
+        const defaultLoc = lab?.config?.locations?.defaultLocation || "H1-1"
+        console.log(`📍 No locations found, defaulting to ${defaultLoc}`)
+        setSuggestedLocation(defaultLoc)
         return
       }
 
@@ -444,10 +450,10 @@ export default function InventoryDashboard() {
       const nextLocation = getNextLocation(lastLocation)
       console.log("📍 Suggested next location:", nextLocation)
       
-      setSuggestedLocation(nextLocation || "H1-1")
+      setSuggestedLocation(nextLocation || lab?.config?.locations?.defaultLocation || "H1-1")
     } catch (error) {
       console.error("📍 Error generating location suggestion:", error)
-      setSuggestedLocation("H1-1")
+      setSuggestedLocation(lab?.config?.locations?.defaultLocation || "H1-1")
     }
   }
 
@@ -560,7 +566,7 @@ export default function InventoryDashboard() {
 
   const checkSlackConfiguration = async () => {
     try {
-      const response = await fetch("/api/slack/test")
+      const response = await fetch(api("/api/slack/test"))
       if (response.ok) {
         const result = await response.json()
         setSlackConfigured(result.configured)
@@ -576,7 +582,7 @@ export default function InventoryDashboard() {
   const loadInventoryFromDatabase = async () => {
     try {
       setLoading(true)
-      const response = await fetch("/api/inventory")
+      const response = await fetch(api("/api/inventory"))
       if (response.ok) {
         const result = await response.json()
         if (result.success && Array.isArray(result.data)) {
@@ -616,7 +622,7 @@ export default function InventoryDashboard() {
 
   const loadSettingsFromDatabase = async () => {
     try {
-      const response = await fetch("/api/settings")
+      const response = await fetch(api("/api/settings"))
       if (response.ok) {
         const result = await response.json()
         if (result.success && result.data) {
@@ -637,7 +643,7 @@ export default function InventoryDashboard() {
 
   const loadPendingChanges = async () => {
     try {
-      const response = await fetch("/api/inventory/pending")
+      const response = await fetch(api("/api/inventory/pending"))
       if (response.ok) {
         const result = await response.json()
         if (result.success && Array.isArray(result.data)) {
@@ -654,7 +660,7 @@ export default function InventoryDashboard() {
       setSyncing(true)
       setError(null)
 
-      const response = await fetch("/api/inventory", {
+      const response = await fetch(api("/api/inventory"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -690,7 +696,7 @@ export default function InventoryDashboard() {
 
   const saveSettingsToDatabase = async (settings: AlertSettings) => {
     try {
-      const response = await fetch("/api/settings", {
+      const response = await fetch(api("/api/settings"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -714,7 +720,7 @@ export default function InventoryDashboard() {
 
   const addInventoryItem = async (newItemData: Omit<InventoryItem, "id" | "lastUpdated">, requester: string) => {
     try {
-      const response = await fetch("/api/inventory/add-item", {
+      const response = await fetch(api("/api/inventory/add-item"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -744,7 +750,7 @@ export default function InventoryDashboard() {
 
   const updateItemQuantity = async (itemId: string, newQuantity: number, requester: string) => {
     try {
-      const response = await fetch("/api/inventory/update-quantity", {
+      const response = await fetch(api("/api/inventory/update-quantity"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -775,7 +781,7 @@ export default function InventoryDashboard() {
 
   const deleteInventoryItem = async (itemId: string, requester: string) => {
     try {
-      const response = await fetch("/api/inventory/delete", {
+      const response = await fetch(api("/api/inventory/delete"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -871,7 +877,7 @@ export default function InventoryDashboard() {
 
   const sendLowStockAlert = async () => {
     try {
-      const response = await fetch("/api/slack/send", {
+      const response = await fetch(api("/api/slack/send"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -893,7 +899,7 @@ export default function InventoryDashboard() {
 
   const sendFullAlert = async () => {
     try {
-      const response = await fetch("/api/slack/send-full-alert", {
+      const response = await fetch(api("/api/slack/send-full-alert"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -917,7 +923,7 @@ export default function InventoryDashboard() {
     if (!password) return
 
     try {
-      const response = await fetch("/api/auth/upload", {
+      const response = await fetch(api("/api/auth/upload"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password, type: "approval" })
@@ -941,7 +947,7 @@ export default function InventoryDashboard() {
     if (!password) return
 
     try {
-      const response = await fetch("/api/auth/upload", {
+      const response = await fetch(api("/api/auth/upload"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password, type: "approval" })
@@ -980,7 +986,7 @@ export default function InventoryDashboard() {
 
   const updateReorderPoint = async (itemId: string, newReorderPoint: number, requester: string) => {
     try {
-      const response = await fetch("/api/inventory/update-reorder-point", {
+      const response = await fetch(api("/api/inventory/update-reorder-point"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1176,7 +1182,7 @@ export default function InventoryDashboard() {
       }
 
       // Submit the entire batch as a single batch request
-      const response = await fetch("/api/inventory/batch-add", {
+      const response = await fetch(api("/api/inventory/batch-add"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1341,7 +1347,7 @@ export default function InventoryDashboard() {
     try {
       console.log('Submitting edit with data:', { itemId, formData, requesterName })
       
-      const response = await fetch("/api/inventory/edit-item", {
+      const response = await fetch(api("/api/inventory/edit-item"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1403,7 +1409,7 @@ export default function InventoryDashboard() {
 
     // Check pending approvals
     try {
-      const response = await fetch("/api/inventory/pending")
+      const response = await fetch(api("/api/inventory/pending"))
       if (response.ok) {
         const result = await response.json()
         if (result.success && Array.isArray(result.data)) {
@@ -1507,7 +1513,7 @@ export default function InventoryDashboard() {
         
         console.log('Request body:', requestBody)
         
-        const response = await fetch("/api/inventory/add-stock", {
+        const response = await fetch(api("/api/inventory/add-stock"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1534,7 +1540,7 @@ export default function InventoryDashboard() {
         
       } else if (duplicateInfo.source === 'pending') {
         // Add stock to pending approval item
-        const response = await fetch("/api/inventory/add-stock-pending", {
+        const response = await fetch(api("/api/inventory/add-stock-pending"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1986,7 +1992,7 @@ export default function InventoryDashboard() {
     }
 
     try {
-      const response = await fetch("/api/reorder-requests", {
+      const response = await fetch(api("/api/reorder-requests"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2009,7 +2015,7 @@ export default function InventoryDashboard() {
         
         // Send Slack notification
         try {
-          await fetch("/api/slack/send", {
+          await fetch(api("/api/slack/send"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -2068,7 +2074,8 @@ export default function InventoryDashboard() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Inventory Management System</h1>
+          <Link href="/" className="text-sm text-muted-foreground hover:text-primary mb-1 inline-block">← All Labs</Link>
+          <h1 className="text-2xl md:text-3xl font-bold">{lab?.name || "Inventory Management System"}</h1>
           <p className="text-muted-foreground text-sm md:text-base">Managing {inventory.length} inventory items</p>
         </div>
         <div className="flex gap-2 flex-wrap">
