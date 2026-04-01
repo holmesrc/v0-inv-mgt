@@ -1,10 +1,8 @@
 export interface LabConfig {
-  locations: {
-    prefix: string
-    defaultLocation: string
-  }
+  city: string
   suppliers: string[]
   slackWebhookUrl?: string
+  password?: string
   alertSettings?: {
     defaultReorderPoint: number
     lowStockThreshold: number

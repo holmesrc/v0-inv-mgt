@@ -99,7 +99,7 @@ export default function InventoryDashboard() {
   const [showSettings, setShowSettings] = useState(false)
   const [customQuantityInput, setCustomQuantityInput] = useState<Record<string, string>>({})
   const [showCustomInput, setShowCustomInput] = useState<Record<string, boolean>>({})
-  const [suggestedLocation, setSuggestedLocation] = useState<string>(lab?.config?.locations?.defaultLocation || "H1-1")
+  const [suggestedLocation, setSuggestedLocation] = useState<string>("H1-1")
   const [showCustomLocationInput, setShowCustomLocationInput] = useState(false)
   const [customLocationValue, setCustomLocationValue] = useState("")
   const [addItemFormModified, setAddItemFormModified] = useState(false)
@@ -405,7 +405,7 @@ export default function InventoryDashboard() {
       console.log("📍 Total unique locations found:", uniqueAllLocations.length)
 
       if (uniqueAllLocations.length === 0) {
-        const defaultLoc = lab?.config?.locations?.defaultLocation || "H1-1"
+        const defaultLoc = "H1-1"
         console.log(`📍 No locations found, defaulting to ${defaultLoc}`)
         setSuggestedLocation(defaultLoc)
         return
@@ -450,10 +450,10 @@ export default function InventoryDashboard() {
       const nextLocation = getNextLocation(lastLocation)
       console.log("📍 Suggested next location:", nextLocation)
       
-      setSuggestedLocation(nextLocation || lab?.config?.locations?.defaultLocation || "H1-1")
+      setSuggestedLocation(nextLocation || "H1-1")
     } catch (error) {
       console.error("📍 Error generating location suggestion:", error)
-      setSuggestedLocation(lab?.config?.locations?.defaultLocation || "H1-1")
+      setSuggestedLocation("H1-1")
     }
   }
 

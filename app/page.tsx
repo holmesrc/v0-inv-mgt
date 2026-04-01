@@ -49,7 +49,7 @@ export default function LabSelector() {
                       {lab.config.suppliers?.length || 0} suppliers configured
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Location prefix: {lab.config.locations?.prefix || "H"}
+                      {lab.config.city || ""}
                     </p>
                   </CardContent>
                 </Card>
