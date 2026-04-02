@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
   try {
-    const { items, channel } = await request.json()
+    const { items, channel, labName } = await request.json()
 
     const webhookUrl = process.env.SLACK_WEBHOOK_URL
 
@@ -12,7 +12,8 @@ export async function POST(request: NextRequest) {
 
     // Import the message creation function
     const { createFullLowStockMessage } = await import("@/lib/slack")
-    const message = createFullLowStockMessage(items)
+    const labLabel = labName ? ` — ${labName}` : ""
+    const message = createFullLowStockMessage(items).replace("Low Stock Alert", `Low Stock Alert${labLabel}`)
 
     const response = await fetch(webhookUrl, {
       method: "POST",

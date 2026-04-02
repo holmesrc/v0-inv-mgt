@@ -882,7 +882,8 @@ export default function InventoryDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "low_stock",
-          items: lowStockItems
+          items: lowStockItems,
+          labName: lab?.name
         })
       })
 
@@ -903,7 +904,8 @@ export default function InventoryDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: lowStockItems
+          items: lowStockItems,
+          labName: lab?.name
         })
       })
 

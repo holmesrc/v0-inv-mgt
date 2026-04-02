@@ -16,7 +16,8 @@ export async function POST(request: NextRequest) {
     } else if (body.type === "low_stock" && body.items) {
       // Low stock alert format
       const lowStockItems = body.items
-      message = `🚨 *Low Stock Alert* 🚨\n\n${lowStockItems.length} items are running low:\n\n`
+      const labLabel = body.labName ? ` — ${body.labName}` : ""
+      message = `🚨 *Low Stock Alert${labLabel}* 🚨\n\n${lowStockItems.length} items are running low:\n\n`
       
       lowStockItems.slice(0, 10).forEach((item: any) => {
         message += `• *${item["Part number"]}* - ${item["Part description"]}\n`
