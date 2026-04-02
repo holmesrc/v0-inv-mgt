@@ -180,6 +180,7 @@ async function handleBatchApproval(pendingChange: any, action: string, approvedB
           location: String(item.location || "").trim(),
           package: correctPackageType, // Auto-correct package type based on quantity
           reorder_point: Number(item.reorder_point) || 10,
+          ...(pendingChange.lab_id && { lab_id: pendingChange.lab_id }),
         }
 
         console.log(`📦 Batch item ${i + 1}: ${newQty} qty → ${correctPackageType} package`)
@@ -446,6 +447,7 @@ async function handleSingleItemApproval(pendingChange: any, action: string, appr
       location: String(pendingChange.item_data.location || "").trim(),
       package: String(pendingChange.item_data.package || "").trim(),
       reorder_point: Number(pendingChange.item_data.reorder_point) || 10,
+      ...(pendingChange.lab_id && { lab_id: pendingChange.lab_id }),
     }
 
     const { data, error } = await supabase.from("inventory").insert(inventoryItem).select().single()
