@@ -360,7 +360,7 @@ function ApprovalsContent({ accessLevel }: { accessLevel: "master" | "lab" }) {
     return (
       <React.Fragment key={change.id}>
         {/* Batch Summary Row */}
-        <TableRow className={change.status === "pending" ? "bg-yellow-50" : ""}>
+        <TableRow className={change.status === "pending" ? "bg-yellow-50 dark:bg-yellow-950" : ""}>
           <TableCell>
             {change.status === "pending" && (
               <Checkbox checked={selectedIds.has(change.id)} onCheckedChange={() => handleSelectItem(change.id)} />
@@ -466,7 +466,7 @@ function ApprovalsContent({ accessLevel }: { accessLevel: "master" | "lab" }) {
             const itemProcessingId = `${change.id}-${index}`
 
             return (
-              <TableRow key={`${change.id}-item-${index}`} className="bg-blue-50 border-l-4 border-l-blue-300">
+              <TableRow key={`${change.id}-item-${index}`} className="bg-blue-50 dark:bg-blue-950 border-l-4 border-l-blue-300 dark:border-l-blue-700">
                 <TableCell className="pl-8">
                   <div className="w-4 h-4 rounded-full bg-blue-200 flex items-center justify-center">
                     <span className="text-xs text-blue-600">{index + 1}</span>
@@ -932,7 +932,7 @@ function ApprovalsContent({ accessLevel }: { accessLevel: "master" | "lab" }) {
         )}
 
         {/* Batch Approval Instructions */}
-        <Card className="border-blue-200 bg-blue-50">
+        <Card className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950">
           <CardHeader>
             <CardTitle className="text-blue-800">Batch Approval Instructions</CardTitle>
           </CardHeader>
@@ -1095,7 +1095,7 @@ function ApprovalsContent({ accessLevel }: { accessLevel: "master" | "lab" }) {
 
                       // Regular non-batch items
                       return (
-                        <TableRow key={change.id} className={change.status === "pending" ? "bg-yellow-50" : ""}>
+                        <TableRow key={change.id} className={change.status === "pending" ? "bg-yellow-50 dark:bg-yellow-950" : ""}>
                           <TableCell>
                             {change.status === "pending" && (
                               <Checkbox

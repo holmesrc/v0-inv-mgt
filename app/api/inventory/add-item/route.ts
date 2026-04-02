@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient, canUseSupabase } from "@/lib/supabase"
+import { getLabId } from "@/lib/api-utils"
 
 export async function POST(request: NextRequest) {
   console.log("=== ADD ITEM API CALLED ===")
@@ -87,12 +88,14 @@ export async function POST(request: NextRequest) {
 
     // Step 6: Create pending change for approval instead of direct insert
     console.log("Step 6: Creating pending change for approval...")
+    const labId = getLabId(request)
     const { error: pendingError } = await supabase
       .from('pending_changes')
       .insert({
         change_type: 'add',
         requested_by: requester,
         status: 'pending',
+        ...(labId && { lab_id: labId }),
         item_data: {
           // Fields for display system
           part_number: transformedItem.part_number,
