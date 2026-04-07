@@ -883,7 +883,8 @@ export default function InventoryDashboard() {
         body: JSON.stringify({
           type: "low_stock",
           items: lowStockItems,
-          labName: lab?.name
+          labName: lab?.name,
+          labSlug: lab?.slug
         })
       })
 
@@ -905,7 +906,8 @@ export default function InventoryDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           items: lowStockItems,
-          labName: lab?.name
+          labName: lab?.name,
+          labSlug: lab?.slug
         })
       })
 
@@ -2127,7 +2129,7 @@ export default function InventoryDashboard() {
             <Package className="h-4 w-4" />
             Send Full Alert
           </Button>
-          <Button variant="outline" onClick={() => window.open('/reorder-status', '_blank')}>
+          <Button variant="outline" onClick={() => window.open(`/${lab?.slug}/reorder-status`, '_blank')}>
             Reorder Status
           </Button>
           <Button variant="outline" onClick={handleEndpointsAccess}>
@@ -2198,7 +2200,7 @@ export default function InventoryDashboard() {
               variant="outline" 
               size="sm"
               className="mt-2 w-full"
-              onClick={() => window.open('/low-stock', '_blank')}
+              onClick={() => window.open(`/${lab?.slug}/low-stock`, '_blank')}
             >
               View Low Stock Page
             </Button>

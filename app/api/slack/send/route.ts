@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
       // Low stock alert format
       const lowStockItems = body.items
       const labLabel = body.labName ? ` — ${body.labName}` : ""
+      const labPrefix = body.labSlug ? `/${body.labSlug}` : ""
       message = `🚨 *Low Stock Alert${labLabel}* 🚨\n\n${lowStockItems.length} items are running low:\n\n`
       
       lowStockItems.slice(0, 10).forEach((item: any) => {
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
       }
       
       // Add clickable link to low stock page
-      message += `📋 <${process.env.NEXT_PUBLIC_APP_URL || 'https://your-app-url.vercel.app'}/low-stock|View All ${lowStockItems.length} Low Stock Items>\n\n`
+      message += `📋 <${process.env.NEXT_PUBLIC_APP_URL || 'https://your-app-url.vercel.app'}${labPrefix}/low-stock|View All ${lowStockItems.length} Low Stock Items>\n\n`
       message += `📋 *Next Steps:*\n• Review all low stock items\n• Create purchase requests\n• Reorder critical components`
     } else {
       console.log('❌ Invalid message format')
