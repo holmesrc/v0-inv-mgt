@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const labLabel = labName ? ` — ${labName}` : ""
     const labPrefix = labSlug ? `/${labSlug}` : ""
     const message = createFullLowStockMessage(items)
-      .replace("Low Stock Alert", `Low Stock Alert${labLabel}`)
+      .replace("Complete Low Stock Report", `Complete Low Stock Report${labLabel}`)
       .replace(/\/low-stock/g, `${labPrefix}/low-stock`)
 
     const response = await fetch(webhookUrl, {
