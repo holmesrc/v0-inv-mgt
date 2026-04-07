@@ -1,40 +1,84 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Lock, Shield } from "lucide-react"
+import { useLab } from "@/lib/lab-context"
 
 interface ProtectedApprovalsProps {
-  children: React.ReactNode
+  children: (accessLevel: "master" | "lab") => React.ReactNode
 }
 
+const INACTIVITY_TIMEOUT = 10 * 60 * 1000 // 10 minutes
+
 export default function ProtectedApprovals({ children }: ProtectedApprovalsProps) {
+  const { lab } = useLab()
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [accessLevel, setAccessLevel] = useState<"master" | "lab">("lab")
   const [isOpen, setIsOpen] = useState(false)
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(true)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
+
+  const lockOut = useCallback(() => {
+    setIsAuthenticated(false)
+    setIsOpen(true)
+    setPassword("")
+    setError("Session expired due to inactivity. Please log in again.")
+  }, [])
+
+  const resetTimer = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    if (isAuthenticated) {
+      timerRef.current = setTimeout(lockOut, INACTIVITY_TIMEOUT)
+    }
+  }, [isAuthenticated, lockOut])
+
+  // Inactivity listeners
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    const events = ["mousedown", "keydown", "scroll", "touchstart", "mousemove"]
+    events.forEach((e) => window.addEventListener(e, resetTimer))
+    resetTimer()
+
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, resetTimer))
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [isAuthenticated, resetTimer])
+
+  // Clear auth when leaving the approvals page
+  useEffect(() => {
+    return () => {
+      if (lab?.slug) {
+        fetch(`/api/auth/logout-approval?lab=${lab.slug}`, { method: "POST" })
+      }
+    }
+  }, [lab?.slug])
 
   useEffect(() => {
-    checkAuthentication()
-  }, [])
+    if (lab?.slug) checkAuthentication()
+  }, [lab?.slug])
 
   const checkAuthentication = async () => {
     try {
-      const response = await fetch("/api/auth/check-approval")
+      const response = await fetch(`/api/auth/check-approval?lab=${lab?.slug}`)
       const result = await response.json()
 
       if (result.authenticated) {
         setIsAuthenticated(true)
+        setAccessLevel(result.accessLevel || "lab")
       } else {
         setIsOpen(true)
       }
-    } catch (error) {
+    } catch {
       setIsOpen(true)
     } finally {
       setChecking(false)
@@ -49,10 +93,8 @@ export default function ProtectedApprovals({ children }: ProtectedApprovalsProps
     try {
       const response = await fetch("/api/auth/upload", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ password, type: "approval" }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password, type: "approval", labSlug: lab?.slug }),
       })
 
       const result = await response.json()
@@ -61,10 +103,11 @@ export default function ProtectedApprovals({ children }: ProtectedApprovalsProps
         setIsOpen(false)
         setPassword("")
         setIsAuthenticated(true)
+        setAccessLevel(result.accessLevel || "lab")
       } else {
         setError("Invalid password")
       }
-    } catch (error) {
+    } catch {
       setError("Authentication failed")
     } finally {
       setLoading(false)
@@ -90,21 +133,21 @@ export default function ProtectedApprovals({ children }: ProtectedApprovalsProps
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Shield className="w-5 h-5 text-blue-600" />
-                Approval Dashboard Access
+                {lab?.name || "Lab"} — Approval Access
               </DialogTitle>
               <DialogDescription>
-                This area is restricted to authorized approvers only. Please enter the approval password to continue.
+                Enter your lab password or master password to continue.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label htmlFor="password">Approval Password</Label>
+                <Label htmlFor="password">Password</Label>
                 <Input
                   id="password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter approval password"
+                  placeholder="Enter password"
                   required
                   autoFocus
                 />
@@ -123,5 +166,5 @@ export default function ProtectedApprovals({ children }: ProtectedApprovalsProps
     )
   }
 
-  return <>{children}</>
+  return <>{children(accessLevel)}</>
 }
