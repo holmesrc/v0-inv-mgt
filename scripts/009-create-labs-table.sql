@@ -43,12 +43,12 @@ INSERT INTO labs (slug, name, config) VALUES
 }'::jsonb),
 ('boston', 'Boston Lab', '{
   "locations": { "prefix": "B", "defaultLocation": "B1-1" },
-  "suppliers": ["Mouser", "Digikey", "Newark"],
+  "suppliers": ["Mouser", "Digikey"],
   "slackWebhookUrl": ""
 }'::jsonb),
 ('la', 'Los Angeles Lab', '{
   "locations": { "prefix": "L", "defaultLocation": "L1-1" },
-  "suppliers": ["Mouser", "Digikey", "Arrow"],
+  "suppliers": ["Mouser", "Digikey"],
   "slackWebhookUrl": ""
 }'::jsonb)
 ON CONFLICT (slug) DO NOTHING;
