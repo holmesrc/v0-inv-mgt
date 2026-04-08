@@ -25,6 +25,7 @@ interface PendingChange {
 }
 
 export default function PendingChangesPage() {
+  const { lab: labSlug } = useParams()
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedChange, setSelectedChange] = useState<PendingChange | null>(null)

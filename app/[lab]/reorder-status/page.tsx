@@ -28,6 +28,7 @@ interface ReorderRequest {
 }
 
 export default function ReorderStatusPage() {
+  const { lab: labSlug } = useParams()
   const [requests, setRequests] = useState<ReorderRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedRequest, setSelectedRequest] = useState<ReorderRequest | null>(null)

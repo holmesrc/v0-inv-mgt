@@ -11,6 +11,7 @@ import { useParams } from "next/navigation"
 import { ReorderButton } from "@/components/reorder-button"
 
 export default function LowStockPage() {
+  const { lab: labSlug } = useParams()
   const [lowStockItems, setLowStockItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
