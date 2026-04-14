@@ -78,7 +78,7 @@ export function createLowStockAlertMessage(items: any[]) {
   // Add first 3 items
   displayItems.forEach((item) => {
     // Create a URL to our API endpoint with the item details
-    const baseUrl = `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://v0-inv-mgt.vercel.app"}/api/slack/purchase-request`;
+    const baseUrl = `${process.env.APP_URL || "https://v0-inv-mgt.vercel.app"}/api/slack/purchase-request`;
     const params = new URLSearchParams({
       partNumber: item.partNumber,
       description: item.description,
@@ -97,7 +97,7 @@ export function createLowStockAlertMessage(items: any[]) {
   if (remainingCount > 0) {
     message += `_...and ${remainingCount} more items need attention_\n\n`
     // Use the correct deployment URL
-    const deploymentUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://v0-inv-mgt.vercel.app"
+    const deploymentUrl = process.env.APP_URL || "https://v0-inv-mgt.vercel.app"
     message += `📄 <${deploymentUrl}/low-stock|📋 View All ${items.length} Low Stock Items>\n\n`
   }
 
@@ -114,7 +114,7 @@ export function createFullLowStockMessage(items: any[]) {
 
   items.forEach((item, index) => {
     // Create a URL to our API endpoint with the item details
-    const baseUrl = `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://v0-inv-mgt.vercel.app"}/api/slack/purchase-request`;
+    const baseUrl = `${process.env.APP_URL || "https://v0-inv-mgt.vercel.app"}/api/slack/purchase-request`;
     const params = new URLSearchParams({
       partNumber: item.partNumber,
       description: item.description,
@@ -210,7 +210,7 @@ export function createSimpleLowStockBlocks(items: any[]) {
     const description = item.description.length > 60 ? item.description.substring(0, 57) + "..." : item.description
     
     // Create a URL to our API endpoint with the item details
-    const baseUrl = `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://v0-inv-mgt.vercel.app"}/api/slack/purchase-request`;
+    const baseUrl = `${process.env.APP_URL || "https://v0-inv-mgt.vercel.app"}/api/slack/purchase-request`;
     const params = new URLSearchParams({
       partNumber: item.partNumber,
       description: description,
@@ -288,7 +288,7 @@ export function createSimpleFullLowStockBlocks(items: any[]) {
     const description = item.description.length > 50 ? item.description.substring(0, 47) + "..." : item.description
     
     // Create a URL to our API endpoint with the item details
-    const baseUrl = `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://v0-inv-mgt.vercel.app"}/api/slack/purchase-request`;
+    const baseUrl = `${process.env.APP_URL || "https://v0-inv-mgt.vercel.app"}/api/slack/purchase-request`;
     const params = new URLSearchParams({
       partNumber: item.partNumber,
       description: description,
@@ -395,7 +395,7 @@ export function createTextOnlyLowStockAlert(items: any[]) {
 
   displayItems.forEach((item, index) => {
     // Create a URL to our API endpoint with the item details
-    const baseUrl = `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://v0-inv-mgt.vercel.app"}/api/slack/purchase-request`;
+    const baseUrl = `${process.env.APP_URL || "https://v0-inv-mgt.vercel.app"}/api/slack/purchase-request`;
     const params = new URLSearchParams({
       partNumber: item.partNumber,
       description: item.description,
@@ -412,7 +412,7 @@ export function createTextOnlyLowStockAlert(items: any[]) {
 
   if (remainingCount > 0) {
     message += `_...and ${remainingCount} more items need attention_\n\n`
-    message += `To see all low stock items, click here: <${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://v0-inv-mgt.vercel.app"}/low-stock|View All Low Stock Items>\n\n`
+    message += `To see all low stock items, click here: <${process.env.APP_URL || "https://v0-inv-mgt.vercel.app"}/low-stock|View All Low Stock Items>\n\n`
   }
 
   message += `📋 *Instructions:*\n`
@@ -429,7 +429,7 @@ export function createTextOnlyFullLowStockAlert(items: any[]) {
 
   items.forEach((item, index) => {
     // Create a URL to our API endpoint with the item details
-    const baseUrl = `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://v0-inv-mgt.vercel.app"}/api/slack/purchase-request`;
+    const baseUrl = `${process.env.APP_URL || "https://v0-inv-mgt.vercel.app"}/api/slack/purchase-request`;
     const params = new URLSearchParams({
       partNumber: item.partNumber,
       description: item.description,
@@ -492,7 +492,7 @@ export function createPrefillPurchaseRequestUrl(item: {
   
   // Create a URL that will trigger our API endpoint with the item details
   // This is for use in Slack messages - when clicked, it will open a page that automatically sends the request
-  const baseUrl = `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://v0-inv-mgt.vercel.app"}/api/slack/purchase-request`;
+  const baseUrl = `${process.env.APP_URL || "https://v0-inv-mgt.vercel.app"}/api/slack/purchase-request`;
   const params = new URLSearchParams({
     partNumber: details.partNumber,
     description: details.description,
