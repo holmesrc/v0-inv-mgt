@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
         const userName = payload.user.name || payload.user.username || "Unknown User"
 
         // Call the approve API
-        const approveResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/inventory/approve`, {
+        const approveResponse = await fetch(`${process.env.APP_URL}/api/inventory/approve`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

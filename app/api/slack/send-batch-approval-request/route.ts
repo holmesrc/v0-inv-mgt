@@ -63,7 +63,7 @@ Supplier: ${supplier}`
       .join("\n")
 
     // Get the base app URL (without any path)
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://v0-inv-mgt.vercel.app"
+    const appUrl = process.env.APP_URL || "https://v0-inv-mgt.vercel.app"
     // Remove any trailing slashes and ensure we don't duplicate /approvals
     const baseUrl = appUrl.replace(/\/+$/, "") // Remove trailing slashes
     const approvalUrl = baseUrl.endsWith("/approvals") ? baseUrl : `${baseUrl}/approvals`
