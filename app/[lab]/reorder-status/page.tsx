@@ -40,8 +40,8 @@ export default function ReorderStatusPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   useEffect(() => {
-    loadReorderRequests()
-  }, [])
+    if (lab) loadReorderRequests()
+  }, [lab])
 
   const loadReorderRequests = async () => {
     try {

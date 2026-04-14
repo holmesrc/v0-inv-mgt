@@ -20,8 +20,8 @@ export default function LowStockPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    loadLowStockItems()
-  }, [])
+    if (lab) loadLowStockItems()
+  }, [lab])
 
   const loadLowStockItems = async () => {
     try {

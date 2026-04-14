@@ -37,8 +37,8 @@ export default function PendingChangesPage() {
   const [reviewAction, setReviewAction] = useState<'approve' | 'deny'>('approve')
 
   useEffect(() => {
-    loadPendingChanges()
-  }, [])
+    if (lab) loadPendingChanges()
+  }, [lab])
 
   const loadPendingChanges = async () => {
     try {
