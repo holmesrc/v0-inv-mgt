@@ -9,9 +9,12 @@ import { ShoppingCart, AlertTriangle, Upload, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { ReorderButton } from "@/components/reorder-button"
+import { useLab } from "@/lib/lab-context"
+import { labApiUrl } from "@/lib/lab-utils"
 
 export default function LowStockPage() {
   const { lab: labSlug } = useParams()
+  const { lab } = useLab()
   const [lowStockItems, setLowStockItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -25,7 +28,7 @@ export default function LowStockPage() {
       setLoading(true)
 
       // Try to load from Excel file first
-      const response = await fetch("/api/excel", { method: "PUT" })
+      const response = await fetch(labApiUrl(lab?.id, "/api/excel"), { method: "PUT" })
       const result = await response.json()
 
       if (result.success && result.inventory.length > 0) {
@@ -37,7 +40,7 @@ export default function LowStockPage() {
         setLowStockItems(lowStock)
       } else {
         // Fallback to database API
-        const dbResponse = await fetch("/api/inventory")
+        const dbResponse = await fetch(labApiUrl(lab?.id, "/api/inventory"))
         const dbResult = await dbResponse.json()
 
         if (dbResult.success && dbResult.data.length > 0) {

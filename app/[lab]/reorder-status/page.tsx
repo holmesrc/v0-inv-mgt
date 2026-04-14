@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ShoppingCart, Clock, CheckCircle, XCircle, MessageSquare, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import { useLab } from "@/lib/lab-context"
+import { labApiUrl } from "@/lib/lab-utils"
 
 interface ReorderRequest {
   id: string
@@ -29,6 +31,7 @@ interface ReorderRequest {
 
 export default function ReorderStatusPage() {
   const { lab: labSlug } = useParams()
+  const { lab } = useLab()
   const [requests, setRequests] = useState<ReorderRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedRequest, setSelectedRequest] = useState<ReorderRequest | null>(null)
@@ -43,7 +46,7 @@ export default function ReorderStatusPage() {
   const loadReorderRequests = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/reorder-requests')
+      const response = await fetch(labApiUrl(lab?.id, '/api/reorder-requests'))
       const result = await response.json()
       
       if (result.success) {
@@ -69,7 +72,7 @@ export default function ReorderStatusPage() {
     if (!selectedRequest) return
 
     try {
-      const response = await fetch('/api/reorder-requests/update-status', {
+      const response = await fetch(labApiUrl(lab?.id, '/api/reorder-requests/update-status'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

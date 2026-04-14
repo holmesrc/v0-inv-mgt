@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { CheckCircle, XCircle, Clock, Eye, MessageSquare, RefreshCw, FileText } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import { useLab } from "@/lib/lab-context"
+import { labApiUrl } from "@/lib/lab-utils"
 
 interface PendingChange {
   id: string
@@ -26,6 +28,7 @@ interface PendingChange {
 
 export default function PendingChangesPage() {
   const { lab: labSlug } = useParams()
+  const { lab } = useLab()
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedChange, setSelectedChange] = useState<PendingChange | null>(null)
@@ -40,7 +43,7 @@ export default function PendingChangesPage() {
   const loadPendingChanges = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/inventory/pending')
+      const response = await fetch(labApiUrl(lab?.id, '/api/inventory/pending'))
       const result = await response.json()
       
       if (result.success) {
@@ -66,7 +69,7 @@ export default function PendingChangesPage() {
     if (!selectedChange) return
 
     try {
-      const response = await fetch('/api/inventory/pending/review', {
+      const response = await fetch(labApiUrl(lab?.id, '/api/inventory/pending/review'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -107,7 +110,7 @@ export default function PendingChangesPage() {
     }
 
     try {
-      const response = await fetch('/api/inventory/pending/batch-review', {
+      const response = await fetch(labApiUrl(lab?.id, '/api/inventory/pending/batch-review'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
