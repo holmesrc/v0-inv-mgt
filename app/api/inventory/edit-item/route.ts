@@ -1,3 +1,4 @@
+import { getLabId } from "@/lib/api-utils"
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
@@ -51,6 +52,7 @@ export async function POST(request: NextRequest) {
         change_type: 'add',  // Using allowed value
         requested_by: requester,
         status: 'pending',
+        ...(getLabId(request) && { lab_id: getLabId(request) }),
         item_data: {
           // Fields for display system
           part_number: changes.partNumber,

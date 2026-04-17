@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient, canUseSupabase } from "@/lib/supabase"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     if (!canUseSupabase()) {
       return NextResponse.json(
@@ -14,8 +14,12 @@ export async function GET() {
     }
 
     const supabase = createServerSupabaseClient()
+    const labId = request.nextUrl.searchParams.get("lab_id")
 
-    const { data: inventory, error } = await supabase.from("inventory").select("*").order("part_number")
+    let query = supabase.from("inventory").select("*").order("part_number")
+    if (labId) query = query.eq("lab_id", labId)
+
+    const { data: inventory, error } = await query
 
     if (error) {
       console.error("Supabase error:", error)
@@ -91,6 +95,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { inventory, packageNote, filename } = requestBody
+    const labId = request.nextUrl.searchParams.get("lab_id")
 
     // Step 3: Validate inventory data
     console.log("Step 3: Validating inventory data...")
@@ -175,13 +180,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Step 6: Clear existing inventory
+    // Step 6: Clear existing inventory (scoped to lab)
     console.log("Step 6: Clearing existing inventory...")
     try {
-      const { error: deleteError } = await supabase
+      let deleteQuery = supabase
         .from("inventory")
         .delete()
         .neq("id", "00000000-0000-0000-0000-000000000000")
+      if (labId) deleteQuery = deleteQuery.eq("lab_id", labId)
+
+      const { error: deleteError } = await deleteQuery
 
       if (deleteError) {
         console.error("❌ Error clearing existing inventory:", deleteError)
@@ -228,6 +236,7 @@ export async function POST(request: NextRequest) {
           package: String(item.Package || "").trim(),
           reorder_point: isNaN(Number(item.reorderPoint)) ? 10 : Math.max(0, Number(item.reorderPoint)),
           last_updated: new Date().toISOString(),
+          ...(labId && { lab_id: labId }),
         }
       })
 

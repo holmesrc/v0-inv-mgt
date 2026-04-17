@@ -27,6 +27,9 @@ import FileUpload from "./file-upload"
 import SupplierLookup from "./supplier-lookup"
 import HelpModal from "./help-modal"
 import InteractiveTour from "./interactive-tour"
+import { useLab } from "@/lib/lab-context"
+import { labApiUrl } from "@/lib/lab-utils"
+import Link from "next/link"
 
 // Types
 interface InventoryItem {
@@ -59,6 +62,8 @@ interface PendingChange {
 }
 
 export default function InventoryDashboard() {
+  const { lab } = useLab()
+  const api = (url: string) => labApiUrl(lab?.id, url)
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [packageNote, setPackageNote] = useState<string>("")
   const [searchTerm, setSearchTerm] = useState("")
@@ -318,19 +323,19 @@ export default function InventoryDashboard() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  // Extract unique suppliers from inventory
+  // Extract unique suppliers from inventory, merged with lab-configured suppliers
   useEffect(() => {
-    const uniqueSuppliers = Array.from(new Set(
+    const inventorySuppliers = Array.from(new Set(
       inventory
         .map(item => item.Supplier)
         .filter(supplier => supplier && supplier.trim() !== "")
         .map(supplier => supplier.trim())
-    )).sort()
+    ))
     
-    // Remove any duplicates that might exist
-    const cleanSuppliers = Array.from(new Set(uniqueSuppliers))
+    const labSuppliers = lab?.config?.suppliers || []
+    const cleanSuppliers = Array.from(new Set([...labSuppliers, ...inventorySuppliers])).sort()
     setSuppliers(cleanSuppliers)
-  }, [inventory])
+  }, [inventory, lab])
 
   // Location suggestion logic
   useEffect(() => {
@@ -350,7 +355,7 @@ export default function InventoryDashboard() {
       // Get all pending locations from pending changes
       let pendingLocations: string[] = []
       try {
-        const response = await fetch("/api/inventory/pending")
+        const response = await fetch(api("/api/inventory/pending"))
         if (response.ok) {
           const result = await response.json()
           if (result.success && Array.isArray(result.data)) {
@@ -400,8 +405,9 @@ export default function InventoryDashboard() {
       console.log("📍 Total unique locations found:", uniqueAllLocations.length)
 
       if (uniqueAllLocations.length === 0) {
-        console.log("📍 No locations found, defaulting to H1-1")
-        setSuggestedLocation("H1-1")
+        const defaultLoc = "H1-1"
+        console.log(`📍 No locations found, defaulting to ${defaultLoc}`)
+        setSuggestedLocation(defaultLoc)
         return
       }
 
@@ -560,7 +566,7 @@ export default function InventoryDashboard() {
 
   const checkSlackConfiguration = async () => {
     try {
-      const response = await fetch("/api/slack/test")
+      const response = await fetch(api("/api/slack/test"))
       if (response.ok) {
         const result = await response.json()
         setSlackConfigured(result.configured)
@@ -576,7 +582,7 @@ export default function InventoryDashboard() {
   const loadInventoryFromDatabase = async () => {
     try {
       setLoading(true)
-      const response = await fetch("/api/inventory")
+      const response = await fetch(api("/api/inventory"))
       if (response.ok) {
         const result = await response.json()
         if (result.success && Array.isArray(result.data)) {
@@ -616,7 +622,7 @@ export default function InventoryDashboard() {
 
   const loadSettingsFromDatabase = async () => {
     try {
-      const response = await fetch("/api/settings")
+      const response = await fetch(api("/api/settings"))
       if (response.ok) {
         const result = await response.json()
         if (result.success && result.data) {
@@ -637,7 +643,7 @@ export default function InventoryDashboard() {
 
   const loadPendingChanges = async () => {
     try {
-      const response = await fetch("/api/inventory/pending")
+      const response = await fetch(api("/api/inventory/pending"))
       if (response.ok) {
         const result = await response.json()
         if (result.success && Array.isArray(result.data)) {
@@ -654,7 +660,7 @@ export default function InventoryDashboard() {
       setSyncing(true)
       setError(null)
 
-      const response = await fetch("/api/inventory", {
+      const response = await fetch(api("/api/inventory"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -690,7 +696,7 @@ export default function InventoryDashboard() {
 
   const saveSettingsToDatabase = async (settings: AlertSettings) => {
     try {
-      const response = await fetch("/api/settings", {
+      const response = await fetch(api("/api/settings"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -714,7 +720,7 @@ export default function InventoryDashboard() {
 
   const addInventoryItem = async (newItemData: Omit<InventoryItem, "id" | "lastUpdated">, requester: string) => {
     try {
-      const response = await fetch("/api/inventory/add-item", {
+      const response = await fetch(api("/api/inventory/add-item"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -744,7 +750,7 @@ export default function InventoryDashboard() {
 
   const updateItemQuantity = async (itemId: string, newQuantity: number, requester: string) => {
     try {
-      const response = await fetch("/api/inventory/update-quantity", {
+      const response = await fetch(api("/api/inventory/update-quantity"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -775,7 +781,7 @@ export default function InventoryDashboard() {
 
   const deleteInventoryItem = async (itemId: string, requester: string) => {
     try {
-      const response = await fetch("/api/inventory/delete", {
+      const response = await fetch(api("/api/inventory/delete"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -871,12 +877,14 @@ export default function InventoryDashboard() {
 
   const sendLowStockAlert = async () => {
     try {
-      const response = await fetch("/api/slack/send", {
+      const response = await fetch(api("/api/slack/send"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "low_stock",
-          items: lowStockItems
+          items: lowStockItems,
+          labName: lab?.name,
+          labSlug: lab?.slug
         })
       })
 
@@ -893,11 +901,13 @@ export default function InventoryDashboard() {
 
   const sendFullAlert = async () => {
     try {
-      const response = await fetch("/api/slack/send-full-alert", {
+      const response = await fetch(api("/api/slack/send-full-alert"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: lowStockItems
+          items: lowStockItems,
+          labName: lab?.name,
+          labSlug: lab?.slug
         })
       })
 
@@ -917,7 +927,7 @@ export default function InventoryDashboard() {
     if (!password) return
 
     try {
-      const response = await fetch("/api/auth/upload", {
+      const response = await fetch(api("/api/auth/upload"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password, type: "approval" })
@@ -941,7 +951,7 @@ export default function InventoryDashboard() {
     if (!password) return
 
     try {
-      const response = await fetch("/api/auth/upload", {
+      const response = await fetch(api("/api/auth/upload"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password, type: "approval" })
@@ -980,7 +990,7 @@ export default function InventoryDashboard() {
 
   const updateReorderPoint = async (itemId: string, newReorderPoint: number, requester: string) => {
     try {
-      const response = await fetch("/api/inventory/update-reorder-point", {
+      const response = await fetch(api("/api/inventory/update-reorder-point"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1176,7 +1186,7 @@ export default function InventoryDashboard() {
       }
 
       // Submit the entire batch as a single batch request
-      const response = await fetch("/api/inventory/batch-add", {
+      const response = await fetch(api("/api/inventory/batch-add"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1341,7 +1351,7 @@ export default function InventoryDashboard() {
     try {
       console.log('Submitting edit with data:', { itemId, formData, requesterName })
       
-      const response = await fetch("/api/inventory/edit-item", {
+      const response = await fetch(api("/api/inventory/edit-item"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1403,7 +1413,7 @@ export default function InventoryDashboard() {
 
     // Check pending approvals
     try {
-      const response = await fetch("/api/inventory/pending")
+      const response = await fetch(api("/api/inventory/pending"))
       if (response.ok) {
         const result = await response.json()
         if (result.success && Array.isArray(result.data)) {
@@ -1507,7 +1517,7 @@ export default function InventoryDashboard() {
         
         console.log('Request body:', requestBody)
         
-        const response = await fetch("/api/inventory/add-stock", {
+        const response = await fetch(api("/api/inventory/add-stock"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1534,7 +1544,7 @@ export default function InventoryDashboard() {
         
       } else if (duplicateInfo.source === 'pending') {
         // Add stock to pending approval item
-        const response = await fetch("/api/inventory/add-stock-pending", {
+        const response = await fetch(api("/api/inventory/add-stock-pending"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1986,7 +1996,7 @@ export default function InventoryDashboard() {
     }
 
     try {
-      const response = await fetch("/api/reorder-requests", {
+      const response = await fetch(api("/api/reorder-requests"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2009,7 +2019,7 @@ export default function InventoryDashboard() {
         
         // Send Slack notification
         try {
-          await fetch("/api/slack/send", {
+          await fetch(api("/api/slack/send"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -2052,8 +2062,9 @@ export default function InventoryDashboard() {
     )
   }
 
-  // Show upload screen if no data
-  if (showUpload) {
+  // Show upload screen if no data and no lab context (legacy behavior)
+  // With lab context, always show dashboard so labs can use Add Item or upload
+  if (showUpload && !lab) {
     return <FileUpload onDataLoaded={handleDataLoaded} />
   }
 
@@ -2068,7 +2079,8 @@ export default function InventoryDashboard() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Inventory Management System</h1>
+          <Link href="/" className="text-sm text-muted-foreground hover:text-primary mb-1 inline-block">← All Labs</Link>
+          <h1 className="text-2xl md:text-3xl font-bold">{lab?.name || "Inventory Management System"}</h1>
           <p className="text-muted-foreground text-sm md:text-base">Managing {inventory.length} inventory items</p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -2096,8 +2108,7 @@ export default function InventoryDashboard() {
             <Download className="h-4 w-4" />
             Download Excel
           </Button>
-          <Button
- 
+          <Button 
             variant="outline" 
             onClick={handleManualSync}
             disabled={syncing}
@@ -2114,7 +2125,7 @@ export default function InventoryDashboard() {
             <Package className="h-4 w-4" />
             Send Full Alert
           </Button>
-          <Button variant="outline" onClick={() => window.open('/reorder-status', '_blank')}>
+          <Button variant="outline" onClick={() => window.open(`/${lab?.slug}/reorder-status`, '_blank')}>
             Reorder Status
           </Button>
           <Button variant="outline" onClick={handleEndpointsAccess}>
@@ -2185,7 +2196,7 @@ export default function InventoryDashboard() {
               variant="outline" 
               size="sm"
               className="mt-2 w-full"
-              onClick={() => window.open('/low-stock', '_blank')}
+              onClick={() => window.open(`/${lab?.slug}/low-stock`, '_blank')}
             >
               View Low Stock Page
             </Button>
@@ -2202,7 +2213,7 @@ export default function InventoryDashboard() {
               variant="outline" 
               size="sm"
               className="mt-2 w-full"
-              onClick={() => window.open('/approvals', '_blank')}
+              onClick={() => window.open(`/${lab?.slug}/approvals`, '_blank')}
             >
               View Approvals Page
             </Button>
@@ -2221,7 +2232,7 @@ export default function InventoryDashboard() {
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => window.open('/approvals', '_blank')}
+              onClick={() => window.open(`/${lab?.slug}/approvals`, '_blank')}
             >
               View Approvals Page
             </Button>
@@ -2273,7 +2284,7 @@ export default function InventoryDashboard() {
                   <Button 
                     variant="ghost" 
                     size="sm"
-                    onClick={() => window.open('/approvals', '_blank')}
+                    onClick={() => window.open(`/${lab?.slug}/approvals`, '_blank')}
                     className="text-blue-600 hover:text-blue-700"
                   >
                     View {pendingChanges.filter(change => change.status === 'pending').length - 10} more pending changes...
@@ -2358,14 +2369,14 @@ export default function InventoryDashboard() {
                 <table className="w-full border-collapse">
                   <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
                     <tr>
-                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-gray-900 dark:text-gray-100">Part Number</th>
-                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-gray-900 dark:text-gray-100">Description</th>
-                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-gray-900 dark:text-gray-100">Quantity</th>
-                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-gray-900 dark:text-gray-100">Location</th>
-                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-gray-900 dark:text-gray-100">Supplier</th>
-                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-gray-900 dark:text-gray-100">Package</th>
-                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-gray-900 dark:text-gray-100">Status</th>
-                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-gray-900 dark:text-gray-100">Actions</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Part Number</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Description</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Quantity</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Location</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Supplier</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Package</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Status</th>
+                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2377,10 +2388,10 @@ export default function InventoryDashboard() {
                   
                   return (
                     <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="border border-gray-300 dark:border-gray-600 p-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                      <td className="border border-gray-300 dark:border-gray-600 p-2 font-mono text-sm">
                         {item["Part number"]}
                       </td>
-                      <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-gray-100">
+                      <td className="border border-gray-300 dark:border-gray-600 p-2">
                         {item["Part description"]}
                       </td>
                       <td className="border border-gray-300 dark:border-gray-600 p-2">
@@ -2395,10 +2406,10 @@ export default function InventoryDashboard() {
                           )}
                         </div>
                       </td>
-                      <td className="border border-gray-300 p-2">{item.Location}</td>
-                      <td className="border border-gray-300 p-2">{item.Supplier}</td>
-                      <td className="border border-gray-300 p-2">{item.Package}</td>
-                      <td className="border border-gray-300 p-2">
+                      <td className="border border-gray-300 dark:border-gray-600 p-2">{item.Location}</td>
+                      <td className="border border-gray-300 dark:border-gray-600 p-2">{item.Supplier}</td>
+                      <td className="border border-gray-300 dark:border-gray-600 p-2">{item.Package}</td>
+                      <td className="border border-gray-300 dark:border-gray-600 p-2">
                         {awaitingApproval ? (
                           <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300">
                             Awaiting Approval
@@ -2421,7 +2432,7 @@ export default function InventoryDashboard() {
                           </>
                         )}
                       </td>
-                      <td className="border border-gray-300 p-2">
+                      <td className="border border-gray-300 dark:border-gray-600 p-2">
                         <div className="flex gap-1 flex-wrap">
                           <Button
                             size="sm"
@@ -2942,7 +2953,7 @@ export default function InventoryDashboard() {
                           }
 
                           return (
-                            <tr key={index} className="border-t border-gray-200 hover:bg-gray-50">
+                            <tr key={index} className="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
                               {/* Part Number */}
                               <td className="p-3 border-r border-gray-200">
                                 {renderEditableCell('partNumber', item.partNumber, 'text', 'font-mono text-xs break-all')}
@@ -3601,7 +3612,7 @@ export default function InventoryDashboard() {
             <Button variant="outline" onClick={() => setShowPendingChanges(false)}>
               Close
             </Button>
-            <Button onClick={() => window.open('/approvals', '_blank')}>
+            <Button onClick={() => window.open(`/${lab?.slug}/approvals`, '_blank')}>
               Open Approvals Page
             </Button>
           </DialogFooter>

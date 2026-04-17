@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Construct the approval dashboard URL properly
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://v0-inv-mgt.vercel.app"
+    const appUrl = process.env.APP_URL || "https://v0-inv-mgt.vercel.app"
     const cleanAppUrl = appUrl.replace(/\/approvals$/, "") // Remove /approvals if it exists
     const approvalUrl = `${cleanAppUrl}/approvals`
 
