@@ -47,7 +47,6 @@ interface InventoryItem {
 
 interface AlertSettings {
   defaultReorderPoint: number
-  lowStockThreshold: number
   enableSlackNotifications: boolean
   slackWebhookUrl: string
 }
@@ -75,7 +74,6 @@ export default function InventoryDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [alertSettings, setAlertSettings] = useState<AlertSettings>({
     defaultReorderPoint: 10,
-    lowStockThreshold: 5,
     enableSlackNotifications: false,
     slackWebhookUrl: "",
   })
@@ -629,7 +627,6 @@ export default function InventoryDashboard() {
           // Merge with defaults to ensure all properties exist
           setAlertSettings(prev => ({
             defaultReorderPoint: result.data.defaultReorderPoint ?? prev.defaultReorderPoint,
-            lowStockThreshold: result.data.lowStockThreshold ?? prev.lowStockThreshold,
             enableSlackNotifications: result.data.enableSlackNotifications ?? prev.enableSlackNotifications,
             slackWebhookUrl: result.data.slackWebhookUrl ?? prev.slackWebhookUrl,
           }))
@@ -3321,18 +3318,6 @@ export default function InventoryDashboard() {
                 onChange={(e) => setAlertSettings(prev => ({
                   ...prev,
                   defaultReorderPoint: parseInt(e.target.value) || 10
-                }))}
-              />
-            </div>
-            <div>
-              <Label htmlFor="low-stock-threshold">Low Stock Threshold</Label>
-              <Input
-                id="low-stock-threshold"
-                type="number"
-                value={alertSettings.lowStockThreshold}
-                onChange={(e) => setAlertSettings(prev => ({
-                  ...prev,
-                  lowStockThreshold: parseInt(e.target.value) || 5
                 }))}
               />
             </div>
