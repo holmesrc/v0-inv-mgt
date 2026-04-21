@@ -875,31 +875,7 @@ export default function InventoryDashboard() {
     window.URL.revokeObjectURL(url)
   }
 
-  const sendLowStockAlert = async () => {
-    try {
-      const response = await fetch(api("/api/slack/send"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "low_stock",
-          items: lowStockItems,
-          labName: lab?.name,
-          labSlug: lab?.slug
-        })
-      })
-
-      if (response.ok) {
-        alert("✅ Low stock alert sent successfully!")
-      } else {
-        throw new Error("Failed to send alert")
-      }
-    } catch (error) {
-      console.error("Failed to send low stock alert:", error)
-      alert("❌ Failed to send low stock alert")
-    }
-  }
-
-  const sendFullAlert = async () => {
+  const sendSlackAlert = async () => {
     try {
       const response = await fetch(api("/api/slack/send-full-alert"), {
         method: "POST",
@@ -912,13 +888,13 @@ export default function InventoryDashboard() {
       })
 
       if (response.ok) {
-        alert("✅ Full inventory alert sent successfully!")
+        alert("✅ Low stock alert sent to Slack!")
       } else {
-        throw new Error("Failed to send full alert")
+        throw new Error("Failed to send alert")
       }
     } catch (error) {
-      console.error("Failed to send full alert:", error)
-      alert("❌ Failed to send full inventory alert")
+      console.error("Failed to send Slack alert:", error)
+      alert("❌ Failed to send Slack alert")
     }
   }
 
@@ -2117,13 +2093,9 @@ export default function InventoryDashboard() {
             <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
             {syncing ? 'Syncing...' : 'Sync to Database'}
           </Button>
-          <Button variant="outline" onClick={sendLowStockAlert} className="flex items-center gap-2">
+          <Button variant="outline" onClick={sendSlackAlert} className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4" />
-            Send Alert Now
-          </Button>
-          <Button variant="outline" onClick={sendFullAlert} className="flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            Send Full Alert
+            Send Slack Alert
           </Button>
           <Button variant="outline" onClick={() => window.open(`/${lab?.slug}/reorder-status`, '_blank')}>
             Reorder Status
