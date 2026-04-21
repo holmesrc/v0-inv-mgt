@@ -10,11 +10,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Slack webhook URL not configured" }, { status: 500 })
     }
 
+    // Map raw inventory items to the shape expected by the message formatter
+    const mappedItems = items.map((item: any) => ({
+      partNumber: item.partNumber || item["Part number"] || "Unknown",
+      description: item.description || item["Part description"] || "No description",
+      currentStock: item.currentStock ?? item.QTY ?? 0,
+      reorderPoint: item.reorderPoint || 10,
+      supplier: item.supplier || item.Supplier || "",
+      location: item.location || item.Location || "",
+    }))
+
     // Import the message creation function
     const { createFullLowStockMessage } = await import("@/lib/slack")
     const labLabel = labName ? ` — ${labName}` : ""
     const labPrefix = labSlug ? `/${labSlug}` : ""
-    const message = createFullLowStockMessage(items)
+    const message = createFullLowStockMessage(mappedItems)
       .replace("Complete Low Stock Report", `Complete Low Stock Report${labLabel}`)
       .replace(/\/low-stock/g, `${labPrefix}/low-stock`)
 
