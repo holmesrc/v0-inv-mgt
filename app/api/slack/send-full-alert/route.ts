@@ -45,10 +45,11 @@ export async function POST(request: NextRequest) {
       message += `   🛒 <${purchaseRequestUrl}|Create Purchase Request>\n\n`
     })
 
+    const lowStockUrl = `${appUrl}/${labSlug || ""}/low-stock`
     if (remainingCount > 0) {
-      const lowStockUrl = `${appUrl}/${labSlug || ""}/low-stock`
-      message += `_...and ${remainingCount} more item${remainingCount === 1 ? '' : 's'}_ 🔗 <${lowStockUrl}|View ${labLabel} Low Stock Items>`
+      message += `_...and ${remainingCount} more item${remainingCount === 1 ? '' : 's'}_ `
     }
+    message += `🔗 <${lowStockUrl}|View ${labLabel} Low Stock Items>`
 
     const response = await fetch(webhookUrl, {
       method: "POST",
