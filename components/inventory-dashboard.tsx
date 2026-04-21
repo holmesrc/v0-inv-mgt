@@ -20,7 +20,6 @@ import { AlertTriangle, Package, TrendingDown, Upload, Settings, RefreshCw, Down
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import FileUpload from "./file-upload"
@@ -47,8 +46,6 @@ interface InventoryItem {
 
 interface AlertSettings {
   defaultReorderPoint: number
-  enableSlackNotifications: boolean
-  slackWebhookUrl: string
 }
 
 interface PendingChange {
@@ -74,8 +71,6 @@ export default function InventoryDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [alertSettings, setAlertSettings] = useState<AlertSettings>({
     defaultReorderPoint: 10,
-    enableSlackNotifications: false,
-    slackWebhookUrl: "",
   })
   const [showUpload, setShowUpload] = useState(false)
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([])
@@ -627,8 +622,6 @@ export default function InventoryDashboard() {
           // Merge with defaults to ensure all properties exist
           setAlertSettings(prev => ({
             defaultReorderPoint: result.data.defaultReorderPoint ?? prev.defaultReorderPoint,
-            enableSlackNotifications: result.data.enableSlackNotifications ?? prev.enableSlackNotifications,
-            slackWebhookUrl: result.data.slackWebhookUrl ?? prev.slackWebhookUrl,
           }))
         }
       }
@@ -3321,32 +3314,6 @@ export default function InventoryDashboard() {
                 }))}
               />
             </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="slack-notifications"
-                checked={alertSettings.enableSlackNotifications}
-                onCheckedChange={(checked) => setAlertSettings(prev => ({
-                  ...prev,
-                  enableSlackNotifications: checked
-                }))}
-              />
-              <Label htmlFor="slack-notifications">Enable Slack Notifications</Label>
-            </div>
-            {alertSettings.enableSlackNotifications && (
-              <div>
-                <Label htmlFor="slack-webhook">Slack Webhook URL</Label>
-                <Input
-                  id="slack-webhook"
-                  type="url"
-                  value={alertSettings.slackWebhookUrl}
-                  onChange={(e) => setAlertSettings(prev => ({
-                    ...prev,
-                    slackWebhookUrl: e.target.value
-                  }))}
-                  placeholder="https://hooks.slack.com/..."
-                />
-              </div>
-            )}
             <Separator />
             <div>
               <Label className="text-sm font-medium mb-2 block">Admin Actions</Label>
