@@ -2064,28 +2064,12 @@ export default function InventoryDashboard() {
             <Play className="h-4 w-4" />
             Take Tour
           </Button>
-          <Button variant="outline" onClick={handleDownloadExcel} className="flex items-center gap-2">
-            <Download className="h-4 w-4" />
-            Download Excel
-          </Button>
-          <Button 
-            variant="outline" 
-            onClick={handleManualSync}
-            disabled={syncing}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing...' : 'Sync to Database'}
-          </Button>
           <Button variant="outline" onClick={sendSlackAlert} className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4" />
             Send Slack Alert
           </Button>
           <Button variant="outline" onClick={() => window.open(`/${lab?.slug}/reorder-status`, '_blank')}>
             Reorder Status
-          </Button>
-          <Button variant="outline" onClick={handleEndpointsAccess}>
-            All Endpoints
           </Button>
           <Button variant="outline" onClick={() => setShowSettings(true)} className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
@@ -3312,17 +3296,52 @@ export default function InventoryDashboard() {
             <Separator />
             <div>
               <Label className="text-sm font-medium mb-2 block">Admin Actions</Label>
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  setShowSettings(false)
-                  handleUploadAccess()
-                }} 
-                className="w-full flex items-center justify-center gap-2"
-              >
-                <Upload className="h-4 w-4" />
-                Upload New File
-              </Button>
+              <div className="space-y-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowSettings(false)
+                    handleUploadAccess()
+                  }} 
+                  className="w-full flex items-center justify-center gap-2"
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload New File
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowSettings(false)
+                    handleDownloadExcel()
+                  }}
+                  className="w-full flex items-center justify-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download Excel
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowSettings(false)
+                    handleManualSync()
+                  }}
+                  disabled={syncing}
+                  className="w-full flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+                  {syncing ? 'Syncing...' : 'Sync to Database'}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowSettings(false)
+                    handleEndpointsAccess()
+                  }}
+                  className="w-full flex items-center justify-center gap-2"
+                >
+                  All Endpoints
+                </Button>
+              </div>
             </div>
           </div>
           <DialogFooter>
