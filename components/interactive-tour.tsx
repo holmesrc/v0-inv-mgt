@@ -112,21 +112,21 @@ export default function InteractiveTour({ isActive, onComplete, onSkip }: Intera
             left = rect.left + scrollLeft + (rect.width / 2) - 200
             break
           case "top":
-            top = rect.top + scrollTop - 10
+            top = rect.top + scrollTop - 310
             left = rect.left + scrollLeft + (rect.width / 2) - 200
             break
           case "right":
-            top = rect.top + scrollTop + (rect.height / 2) - 100
+            top = rect.top + scrollTop + (rect.height / 2) - 150
             left = rect.right + scrollLeft + 10
             break
           case "left":
-            top = rect.top + scrollTop + (rect.height / 2) - 100
+            top = rect.top + scrollTop + (rect.height / 2) - 150
             left = rect.left + scrollLeft - 410
             break
         }
         
         // Keep tooltip on screen
-        top = Math.max(10, Math.min(top, window.innerHeight - 200))
+        top = Math.max(10, Math.min(top, window.innerHeight + window.scrollY - 350))
         left = Math.max(10, Math.min(left, window.innerWidth - 410))
         
         setTourPosition({ top, left })
