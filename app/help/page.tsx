@@ -355,7 +355,7 @@ export default function HelpPage() {
   )
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-background p-4">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -367,14 +367,14 @@ export default function HelpPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Help & Documentation</h1>
-              <p className="text-gray-600">Complete guide to using the Inventory Management System</p>
+              <h1 className="text-3xl font-bold">Help & Documentation</h1>
+              <p className="text-muted-foreground">Complete guide to using the Inventory Management System</p>
             </div>
           </div>
 
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
               placeholder="Search help topics..."
               value={searchTerm}
@@ -423,12 +423,12 @@ export default function HelpPage() {
               <CardContent className="space-y-6">
                 {section.content.map((item, index) => (
                   <div key={index}>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">{item.title}</h3>
-                    <p className="text-gray-600 mb-3">{item.description}</p>
-                    <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold mb-2">{item.title}</h3>
+                    <p className="text-muted-foreground mb-3">{item.description}</p>
+                    <div className="bg-muted p-4 rounded-lg">
                       <ul className="space-y-2">
                         {item.details.map((detail, detailIndex) => (
-                          <li key={detailIndex} className="text-sm text-gray-700">
+                          <li key={detailIndex} className="text-sm text-muted-foreground">
                             {detail.includes('**') ? (
                               <span dangerouslySetInnerHTML={{
                                 __html: detail
@@ -450,7 +450,7 @@ export default function HelpPage() {
         </div>
 
         {/* Footer */}
-        <div className="mt-12 text-center text-gray-500">
+        <div className="mt-12 text-center text-muted-foreground">
           <p>Need more help? Contact your system administrator.</p>
           <p className="text-sm mt-2">Last updated: {new Date().toLocaleDateString()}</p>
         </div>
