@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, Package, Plus, RefreshCw, Globe, AlertTriangle, Download, Settings, ExternalLink } from "lucide-react"
+import { Search, Package, Plus, RefreshCw, Globe, AlertTriangle, Download, Settings, ExternalLink, Bell } from "lucide-react"
 
 interface HelpModalProps {
   open: boolean
@@ -69,7 +69,18 @@ export default function HelpModal({ open, onOpenChange }: HelpModalProps) {
         "🟡 Approaching: Within 50% above",
         "⚪ Good Stock: Well above reorder point",
         "Set custom reorder points per item",
-        "Weekly automatic alerts"
+        "Default reorder point configurable in Settings"
+      ]
+    },
+    {
+      title: "Slack Alerts",
+      icon: <Bell className="h-4 w-4" />,
+      content: [
+        "Click 'Send Slack Alert' on dashboard",
+        "Sends top 10 low stock items to #inventory-alerts",
+        "Includes part details, stock levels, and purchase links",
+        "Links to full low stock page if more than 10 items",
+        "Weekly automatic alerts also run via cron"
       ]
     },
     {
@@ -107,7 +118,7 @@ export default function HelpModal({ open, onOpenChange }: HelpModalProps) {
         <div className="space-y-4">
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
               placeholder="Search help topics..."
               value={searchTerm}
@@ -126,7 +137,7 @@ export default function HelpModal({ open, onOpenChange }: HelpModalProps) {
                 </div>
                 <ul className="space-y-1">
                   {item.content.map((line, lineIndex) => (
-                    <li key={lineIndex} className="text-xs text-gray-600">
+                    <li key={lineIndex} className="text-xs text-muted-foreground">
                       • {line}
                     </li>
                   ))}
@@ -138,7 +149,7 @@ export default function HelpModal({ open, onOpenChange }: HelpModalProps) {
           {/* Common Issues */}
           <div className="border-t pt-4">
             <h3 className="font-semibold mb-2">Common Issues</h3>
-            <div className="space-y-2 text-sm text-gray-600">
+            <div className="space-y-2 text-sm text-muted-foreground">
               <div>
                 <strong>Auto-populate not working?</strong>
                 <ul className="ml-4 mt-1 space-y-1">
