@@ -2311,7 +2311,7 @@ export default function InventoryDashboard() {
       </div>
 
       {/* Inventory Table */}
-      <Card>
+      <Card data-tour="inventory-table">
         <CardHeader>
           <CardTitle>Inventory Items</CardTitle>
           <CardDescription>
@@ -2336,7 +2336,7 @@ export default function InventoryDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                {filteredInventory.map((item) => {
+                {filteredInventory.map((item, index) => {
                   const stockStatus = getStockStatus(item)
                   const displayQuantity = getDisplayQuantity(item)
                   const hasChanges = hasTempChanges(item.id)
@@ -2406,6 +2406,7 @@ export default function InventoryDashboard() {
                             onClick={() => handleReorderClick(item)}
                             className="h-6 px-1 text-xs"
                             title="Request reorder"
+                            {...(index === 0 ? { "data-tour": "reorder-btn" } : {})}
                           >
                             Reorder
                           </Button>
