@@ -17,7 +17,6 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { AlertTriangle, Package, TrendingDown, Upload, Settings, RefreshCw, Download, Plus, Edit, Trash2, Check, X, Search, Filter, ArrowUpDown, Globe, HelpCircle, Play } from "lucide-react"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Separator } from "@/components/ui/separator"
@@ -2036,11 +2035,6 @@ export default function InventoryDashboard() {
 
   return (
     <TooltipProvider>
-      {/* Theme Toggle - Fixed Top Right */}
-      <div className="fixed top-4 right-4 z-50">
-        <ThemeToggle />
-      </div>
-      
       <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">

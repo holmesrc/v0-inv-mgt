@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
+import { GlobalThemeToggle } from '@/components/global-theme-toggle'
 
 export const metadata: Metadata = {
   title: 'v0 App',
@@ -22,6 +23,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <GlobalThemeToggle />
           {children}
         </ThemeProvider>
       </body>
