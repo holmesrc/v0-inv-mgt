@@ -35,8 +35,8 @@ export default function HelpPage() {
             "**Add Item**: Create new inventory entries (manual or auto-populate)",
             "**Supplier Lookup**: Research parts across Digi-Key and Mouser",
             "**Download Excel**: Export your complete inventory data",
-            "**Settings**: Configure default reorder points and Slack notifications",
-            "**Send Alert Now**: Manually trigger low stock notifications"
+            "**Settings**: Configure default reorder points",
+            "**Send Slack Alert**: Manually send low stock report to Slack (top 10 items + link to full list)"
           ]
         }
       ]
@@ -227,7 +227,7 @@ export default function HelpPage() {
             "**Default reorder point**: 10 units (configurable in Settings)",
             "**Item-specific points**: Set custom reorder points per item",
             "**Automatic alerts**: System sends weekly low stock reports",
-            "**Manual alerts**: Click 'Send Alert Now' for immediate notification",
+            "**Manual alerts**: Click 'Send Slack Alert' for immediate notification",
             "**Smart defaults**: Urgent priority for zero-stock items"
           ]
         },
@@ -254,20 +254,21 @@ export default function HelpPage() {
           description: "Keeping track of inventory levels",
           details: [
             "**Dashboard indicator**: Red number shows low stock count",
-            "**View Low Stock Page**: Click to see all items needing reorder",
-            "**Automatic weekly alerts**: Sent every Monday at 10 AM EST",
-            "**Manual alerts**: 'Send Alert Now' for immediate notification",
-            "**Slack integration**: Notifications sent to your team channel"
+            "**View Low Stock Page**: Click to see all items needing reorder (shows lab name in title)",
+            "**Automatic weekly alerts**: Sent weekly via Vercel cron job",
+            "**Manual alerts**: Click 'Send Slack Alert' to send top 10 low stock items with a link to the full list",
+            "**Slack integration**: Notifications sent to #inventory-alerts",
+            "**Lab-specific**: Each lab has its own low stock page and reorder status page"
           ]
         },
         {
           title: "Alert Settings",
           description: "Configuring notification preferences",
           details: [
-            "**Default reorder point**: Set global minimum stock level",
-            "**Slack notifications**: Enable/disable automatic alerts",
-            "**Custom reorder points**: Set per-item minimum levels",
-            "**Alert frequency**: Currently weekly (Mondays)",
+            "**Default reorder point**: Set global minimum stock level (default: 10)",
+            "**Custom reorder points**: Set per-item minimum levels when adding or editing items",
+            "**Slack alert format**: Shows up to 10 low stock items with part details, stock levels, and purchase request links",
+            "**More items link**: If more than 10 items are low, a link to the full low stock page is included",
             "**Access settings**: Click Settings button in main navigation"
           ]
         }
@@ -293,11 +294,11 @@ export default function HelpPage() {
           title: "Data Sync",
           description: "Keeping data synchronized",
           details: [
-            "**Auto-sync**: Changes save automatically to database",
-            "**Manual sync**: 'Sync to Database' button for manual refresh",
+            "**Auto-sync**: Individual changes (add, edit, approve) save automatically to the database",
+            "**Manual sync**: 'Sync to Database' button pushes all current in-memory inventory to the database",
+            "**When to use manual sync**: If you suspect the database is out of sync with what's displayed, or after a file upload",
             "**Pending changes**: Items awaiting approval shown separately",
-            "**Real-time updates**: Multiple users see changes immediately",
-            "**Data persistence**: All changes permanently stored"
+            "**Data persistence**: All changes permanently stored in Supabase"
           ]
         }
       ]
@@ -323,9 +324,9 @@ export default function HelpPage() {
             "  • Use 'Add Custom Supplier' option if needed",
             "",
             "**Slack notifications not working**:",
-            "  • Check Settings → Slack notifications enabled",
-            "  • Verify webhook URL is configured",
-            "  • Test with 'Send Alert Now' button"
+            "  • Verify SLACK_WEBHOOK_URL is set in Vercel environment variables",
+            "  • Test with 'Send Slack Alert' button on the dashboard",
+            "  • Check the #inventory-alerts channel in Slack"
           ]
         },
         {
