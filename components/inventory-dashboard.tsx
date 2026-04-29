@@ -126,6 +126,14 @@ export default function InventoryDashboard() {
   const [suppliers, setSuppliers] = useState<string[]>([])
   const [showCustomSupplierInput, setShowCustomSupplierInput] = useState(false)
   const [customSupplierValue, setCustomSupplierValue] = useState("")
+  const [showIntegrationRequestDialog, setShowIntegrationRequestDialog] = useState(false)
+  const [integrationRequest, setIntegrationRequest] = useState({
+    supplierName: "",
+    supplierWebsite: "",
+    apiDocsUrl: "",
+    requester: "",
+    notes: "",
+  })
   const [showSupplierLookup, setShowSupplierLookup] = useState(false)
   const [supplierLookupPartNumber, setSupplierLookupPartNumber] = useState("")
   const [autoLookupTimeout, setAutoLookupTimeout] = useState<NodeJS.Timeout | null>(null)
@@ -2653,6 +2661,8 @@ export default function InventoryDashboard() {
                   onValueChange={(value) => {
                     if (value === "custom") {
                       setShowCustomSupplierInput(true)
+                    } else if (value === "request-integration") {
+                      setShowIntegrationRequestDialog(true)
                     } else {
                       handleFormFieldChange('supplier', value)
                     }
@@ -2668,6 +2678,7 @@ export default function InventoryDashboard() {
                       </SelectItem>
                     ))}
                     <SelectItem value="custom">+ Add Custom Supplier</SelectItem>
+                    <SelectItem value="request-integration">🔌 Request API Integration</SelectItem>
                   </SelectContent>
                 </Select>
               )}
@@ -3353,6 +3364,96 @@ export default function InventoryDashboard() {
               setShowSettings(false)
             }}>
               Save Settings
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Supplier Integration Request Dialog */}
+      <Dialog open={showIntegrationRequestDialog} onOpenChange={setShowIntegrationRequestDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Request Supplier API Integration</DialogTitle>
+            <DialogDescription>
+              Submit a request to add a new supplier with auto-populate support (like Digi-Key and Mouser).
+              An admin will review and set up the integration.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="int-supplier-name">Supplier Name *</Label>
+              <Input
+                id="int-supplier-name"
+                value={integrationRequest.supplierName}
+                onChange={(e) => setIntegrationRequest(prev => ({ ...prev, supplierName: e.target.value }))}
+                placeholder="e.g., Newark, Arrow Electronics"
+              />
+            </div>
+            <div>
+              <Label htmlFor="int-website">Supplier Website</Label>
+              <Input
+                id="int-website"
+                value={integrationRequest.supplierWebsite}
+                onChange={(e) => setIntegrationRequest(prev => ({ ...prev, supplierWebsite: e.target.value }))}
+                placeholder="https://www.supplier.com"
+              />
+            </div>
+            <div>
+              <Label htmlFor="int-api-docs">API Documentation URL</Label>
+              <Input
+                id="int-api-docs"
+                value={integrationRequest.apiDocsUrl}
+                onChange={(e) => setIntegrationRequest(prev => ({ ...prev, apiDocsUrl: e.target.value }))}
+                placeholder="https://developer.supplier.com/docs"
+              />
+            </div>
+            <div>
+              <Label htmlFor="int-requester">Your Name *</Label>
+              <Input
+                id="int-requester"
+                value={integrationRequest.requester}
+                onChange={(e) => setIntegrationRequest(prev => ({ ...prev, requester: e.target.value }))}
+                placeholder="Your name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="int-notes">Notes</Label>
+              <Input
+                id="int-notes"
+                value={integrationRequest.notes}
+                onChange={(e) => setIntegrationRequest(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Why this supplier? Any specific part number patterns?"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowIntegrationRequestDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={async () => {
+              if (!integrationRequest.supplierName || !integrationRequest.requester) {
+                alert("Please fill in supplier name and your name.")
+                return
+              }
+              try {
+                const response = await fetch(api("/api/suppliers/integration-request"), {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ ...integrationRequest, labId: lab?.id }),
+                })
+                const result = await response.json()
+                if (result.success) {
+                  alert("✅ Integration request submitted! An admin will review it.")
+                  setShowIntegrationRequestDialog(false)
+                  setIntegrationRequest({ supplierName: "", supplierWebsite: "", apiDocsUrl: "", requester: "", notes: "" })
+                } else {
+                  alert("❌ Failed to submit: " + result.error)
+                }
+              } catch {
+                alert("❌ Failed to submit request")
+              }
+            }}>
+              Submit Request
             </Button>
           </DialogFooter>
         </DialogContent>
