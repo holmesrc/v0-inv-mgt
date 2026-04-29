@@ -64,7 +64,7 @@ export default function LowStockPage() {
       <div className="container mx-auto p-6 space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold">Low Stock Items</h1>
+            <h1 className="text-3xl font-bold">Low Stock Items — {lab?.name || "Unknown Lab"}</h1>
             <p className="text-muted-foreground">Unable to load inventory data</p>
           </div>
           <Link href={`/${labSlug}`}>
@@ -95,7 +95,7 @@ export default function LowStockPage() {
       <div className="container mx-auto p-6 space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold">Low Stock Items</h1>
+            <h1 className="text-3xl font-bold">Low Stock Items — {lab?.name || "Unknown Lab"}</h1>
             <p className="text-muted-foreground">No items below reorder point</p>
           </div>
           <div className="flex gap-2">
@@ -130,7 +130,7 @@ export default function LowStockPage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Low Stock Items</h1>
+          <h1 className="text-3xl font-bold">Low Stock Items — {lab?.name || "Unknown Lab"}</h1>
           <p className="text-muted-foreground">{lowStockItems.length} items below reorder point</p>
         </div>
         <div className="flex gap-2">

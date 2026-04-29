@@ -17,10 +17,8 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { AlertTriangle, Package, TrendingDown, Upload, Settings, RefreshCw, Download, Plus, Edit, Trash2, Check, X, Search, Filter, ArrowUpDown, Globe, HelpCircle, Play } from "lucide-react"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import FileUpload from "./file-upload"
@@ -47,9 +45,6 @@ interface InventoryItem {
 
 interface AlertSettings {
   defaultReorderPoint: number
-  lowStockThreshold: number
-  enableSlackNotifications: boolean
-  slackWebhookUrl: string
 }
 
 interface PendingChange {
@@ -75,9 +70,6 @@ export default function InventoryDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [alertSettings, setAlertSettings] = useState<AlertSettings>({
     defaultReorderPoint: 10,
-    lowStockThreshold: 5,
-    enableSlackNotifications: false,
-    slackWebhookUrl: "",
   })
   const [showUpload, setShowUpload] = useState(false)
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([])
@@ -629,9 +621,6 @@ export default function InventoryDashboard() {
           // Merge with defaults to ensure all properties exist
           setAlertSettings(prev => ({
             defaultReorderPoint: result.data.defaultReorderPoint ?? prev.defaultReorderPoint,
-            lowStockThreshold: result.data.lowStockThreshold ?? prev.lowStockThreshold,
-            enableSlackNotifications: result.data.enableSlackNotifications ?? prev.enableSlackNotifications,
-            slackWebhookUrl: result.data.slackWebhookUrl ?? prev.slackWebhookUrl,
           }))
         }
       }
@@ -875,31 +864,7 @@ export default function InventoryDashboard() {
     window.URL.revokeObjectURL(url)
   }
 
-  const sendLowStockAlert = async () => {
-    try {
-      const response = await fetch(api("/api/slack/send"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "low_stock",
-          items: lowStockItems,
-          labName: lab?.name,
-          labSlug: lab?.slug
-        })
-      })
-
-      if (response.ok) {
-        alert("✅ Low stock alert sent successfully!")
-      } else {
-        throw new Error("Failed to send alert")
-      }
-    } catch (error) {
-      console.error("Failed to send low stock alert:", error)
-      alert("❌ Failed to send low stock alert")
-    }
-  }
-
-  const sendFullAlert = async () => {
+  const sendSlackAlert = async () => {
     try {
       const response = await fetch(api("/api/slack/send-full-alert"), {
         method: "POST",
@@ -912,13 +877,13 @@ export default function InventoryDashboard() {
       })
 
       if (response.ok) {
-        alert("✅ Full inventory alert sent successfully!")
+        alert("✅ Low stock alert sent to Slack!")
       } else {
-        throw new Error("Failed to send full alert")
+        throw new Error("Failed to send alert")
       }
     } catch (error) {
-      console.error("Failed to send full alert:", error)
-      alert("❌ Failed to send full inventory alert")
+      console.error("Failed to send Slack alert:", error)
+      alert("❌ Failed to send Slack alert")
     }
   }
 
@@ -2070,11 +2035,6 @@ export default function InventoryDashboard() {
 
   return (
     <TooltipProvider>
-      {/* Theme Toggle - Fixed Top Right */}
-      <div className="fixed top-4 right-4 z-50">
-        <ThemeToggle />
-      </div>
-      
       <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
@@ -2104,32 +2064,12 @@ export default function InventoryDashboard() {
             <Play className="h-4 w-4" />
             Take Tour
           </Button>
-          <Button variant="outline" onClick={handleDownloadExcel} className="flex items-center gap-2">
-            <Download className="h-4 w-4" />
-            Download Excel
-          </Button>
-          <Button 
-            variant="outline" 
-            onClick={handleManualSync}
-            disabled={syncing}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing...' : 'Sync to Database'}
-          </Button>
-          <Button variant="outline" onClick={sendLowStockAlert} className="flex items-center gap-2">
+          <Button variant="outline" onClick={sendSlackAlert} className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4" />
-            Send Alert Now
-          </Button>
-          <Button variant="outline" onClick={sendFullAlert} className="flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            Send Full Alert
+            Send Slack Alert
           </Button>
           <Button variant="outline" onClick={() => window.open(`/${lab?.slug}/reorder-status`, '_blank')}>
             Reorder Status
-          </Button>
-          <Button variant="outline" onClick={handleEndpointsAccess}>
-            All Endpoints
           </Button>
           <Button variant="outline" onClick={() => setShowSettings(true)} className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
@@ -2355,7 +2295,7 @@ export default function InventoryDashboard() {
       </div>
 
       {/* Inventory Table */}
-      <Card>
+      <Card data-tour="inventory-table">
         <CardHeader>
           <CardTitle>Inventory Items</CardTitle>
           <CardDescription>
@@ -2380,7 +2320,7 @@ export default function InventoryDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                {filteredInventory.map((item) => {
+                {filteredInventory.map((item, index) => {
                   const stockStatus = getStockStatus(item)
                   const displayQuantity = getDisplayQuantity(item)
                   const hasChanges = hasTempChanges(item.id)
@@ -2450,6 +2390,7 @@ export default function InventoryDashboard() {
                             onClick={() => handleReorderClick(item)}
                             className="h-6 px-1 text-xs"
                             title="Request reorder"
+                            {...(index === 0 ? { "data-tour": "reorder-btn" } : {})}
                           >
                             Reorder
                           </Button>
@@ -3352,58 +3293,55 @@ export default function InventoryDashboard() {
                 }))}
               />
             </div>
-            <div>
-              <Label htmlFor="low-stock-threshold">Low Stock Threshold</Label>
-              <Input
-                id="low-stock-threshold"
-                type="number"
-                value={alertSettings.lowStockThreshold}
-                onChange={(e) => setAlertSettings(prev => ({
-                  ...prev,
-                  lowStockThreshold: parseInt(e.target.value) || 5
-                }))}
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="slack-notifications"
-                checked={alertSettings.enableSlackNotifications}
-                onCheckedChange={(checked) => setAlertSettings(prev => ({
-                  ...prev,
-                  enableSlackNotifications: checked
-                }))}
-              />
-              <Label htmlFor="slack-notifications">Enable Slack Notifications</Label>
-            </div>
-            {alertSettings.enableSlackNotifications && (
-              <div>
-                <Label htmlFor="slack-webhook">Slack Webhook URL</Label>
-                <Input
-                  id="slack-webhook"
-                  type="url"
-                  value={alertSettings.slackWebhookUrl}
-                  onChange={(e) => setAlertSettings(prev => ({
-                    ...prev,
-                    slackWebhookUrl: e.target.value
-                  }))}
-                  placeholder="https://hooks.slack.com/..."
-                />
-              </div>
-            )}
             <Separator />
             <div>
               <Label className="text-sm font-medium mb-2 block">Admin Actions</Label>
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  setShowSettings(false)
-                  handleUploadAccess()
-                }} 
-                className="w-full flex items-center justify-center gap-2"
-              >
-                <Upload className="h-4 w-4" />
-                Upload New File
-              </Button>
+              <div className="space-y-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowSettings(false)
+                    handleUploadAccess()
+                  }} 
+                  className="w-full flex items-center justify-center gap-2"
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload New File
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowSettings(false)
+                    handleDownloadExcel()
+                  }}
+                  className="w-full flex items-center justify-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download Excel
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowSettings(false)
+                    handleManualSync()
+                  }}
+                  disabled={syncing}
+                  className="w-full flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+                  {syncing ? 'Syncing...' : 'Sync to Database'}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowSettings(false)
+                    handleEndpointsAccess()
+                  }}
+                  className="w-full flex items-center justify-center gap-2"
+                >
+                  All Endpoints
+                </Button>
+              </div>
             </div>
           </div>
           <DialogFooter>

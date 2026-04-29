@@ -5,7 +5,6 @@ export interface LabConfig {
   password?: string
   alertSettings?: {
     defaultReorderPoint: number
-    lowStockThreshold: number
   }
 }
 
